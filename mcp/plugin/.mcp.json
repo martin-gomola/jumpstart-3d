@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jumpstart": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "server/stdio-proxy.mjs"
+      ],
+      "cwd": "."
+    }
+  }
+}

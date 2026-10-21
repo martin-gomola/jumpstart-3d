@@ -1,0 +1,27 @@
+version: 1
+status: not-run
+cases:
+  - prompt: "Use $3d-model to make an 86 mm square spacer, 10 mm high."
+    expected: invoke
+    mode: explicit
+  - prompt: "Create a wall switch spacer in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Resize the imported STL lid to 105 mm across."
+    expected: invoke
+    mode: implicit
+  - prompt: "Change this native bracket's width parameter to 80 mm."
+    expected: invoke
+    mode: implicit
+  - prompt: "Render a photorealistic 3D illustration of a switch."
+    expected: do-not-invoke
+    neighbor: imagegen
+  - prompt: "Design a website for a CAD shop."
+    expected: do-not-invoke
+    neighbor: ui
+  - prompt: "Research the best 3D printers."
+    expected: do-not-invoke
+    neighbor: research
+  - prompt: "Make this bigger."
+    expected: clarify-target
+    mode: ambiguous

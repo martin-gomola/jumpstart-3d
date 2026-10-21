@@ -1,0 +1,11 @@
+interface:
+  display_name: "3D Model"
+  short_description: "Create and revise CAD parts through JumpStart"
+  default_prompt: "Use $3d-model to create or revise this part in JumpStart."
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "jumpstart"
+      description: "Local JumpStart editor MCP, configured by the plugin"

@@ -1,0 +1,27 @@
+version: 1
+owner: JumpStart 3D self-hosted maintainers
+sources:
+  - id: portable-format
+    url: https://agentskills.io/specification
+    trust: "Official Agent Skills format authority; portable frontmatter only."
+    mutable: true
+  - id: codex-metadata
+    url: https://developers.openai.com/codex/skills/
+    trust: "Official Codex skill discovery and metadata guidance; host-specific boundary."
+    mutable: true
+  - id: tool-contracts
+    path: mcp/server/tool-contracts.mjs
+    trust: "Repository's typed tool contracts, reviewed with this package."
+    mutable: true
+  - id: server
+    path: mcp/server/server.mjs
+    trust: "Repository tool dispatch, editor selection, and export implementation."
+    mutable: true
+  - id: modeling-contract
+    path: mcp/README.md
+    trust: "Repository's documented parameter, Lathe, preview, and frame semantics."
+    mutable: true
+  - id: user-workflow
+    locator: "User spacer and plugin-bundle requests in this development conversation."
+    trust: "User's requested local modeling workflow and measured/assumed distinction."
+    mutable: false

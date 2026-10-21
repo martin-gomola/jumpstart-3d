@@ -1,0 +1,130 @@
+{
+  "gap": {
+    "$type": "dimension",
+    "$value": "0.375rem"
+  },
+  "font": {
+    "$type": "dimension",
+    "$value": "0.75rem"
+  },
+  "target": {
+    "$type": "dimension",
+    "$value": "2rem"
+  },
+  "light": {
+    "$type": "dimension",
+    "$value": "0.375rem"
+  },
+  "radius": {
+    "$type": "dimension",
+    "$value": "0.25rem"
+  },
+  "stroke": {
+    "$type": "dimension",
+    "$value": "0.125rem"
+  },
+  "tooltipWidth": {
+    "$type": "dimension",
+    "$value": "20rem"
+  },
+  "tooltipPadding": {
+    "$type": "dimension",
+    "$value": "0.625rem"
+  },
+  "tooltipOffset": {
+    "$type": "dimension",
+    "$value": "0.375rem"
+  },
+  "panelTop": {
+    "$type": "dimension",
+    "$value": "2.875rem"
+  },
+  "panelWidth": {
+    "$type": "dimension",
+    "$value": "24rem"
+  },
+  "panelPadding": {
+    "$type": "dimension",
+    "$value": "1rem"
+  },
+  "panelGap": {
+    "$type": "dimension",
+    "$value": "0.75rem"
+  },
+  "panelBorder": {
+    "$type": "dimension",
+    "$value": "1px"
+  },
+  "panelTitleSize": {
+    "$type": "dimension",
+    "$value": "1rem"
+  },
+  "panelTracking": {
+    "$type": "dimension",
+    "$value": "0.08em"
+  },
+  "panelKickerTracking": {
+    "$type": "dimension",
+    "$value": "0.12em"
+  },
+  "panelSmallLine": {
+    "$type": "number",
+    "$value": 1.2
+  },
+  "panelBodyLine": {
+    "$type": "number",
+    "$value": 1.45
+  },
+  "panelStatusHeight": {
+    "$type": "dimension",
+    "$value": "1.25em"
+  },
+  "panelLayer": {
+    "$type": "number",
+    "$value": 80
+  },
+  "pressOffset": {
+    "$type": "dimension",
+    "$value": "0.0625rem"
+  },
+  "hiddenSize": {
+    "$type": "dimension",
+    "$value": "0.0625rem"
+  },
+  "feedback": {
+    "$type": "duration",
+    "$value": "8000ms"
+  },
+  "surface": {
+    "$type": "color",
+    "$value": "#1c232b"
+  },
+  "ink": {
+    "$type": "color",
+    "$value": "#e9eef4"
+  },
+  "muted": {
+    "$type": "color",
+    "$value": "#bdc7d2"
+  },
+  "pending": {
+    "$type": "color",
+    "$value": "#f3ce7d"
+  },
+  "connected": {
+    "$type": "color",
+    "$value": "#80d8af"
+  },
+  "activity": {
+    "$type": "color",
+    "$value": "#9bcaff"
+  },
+  "error": {
+    "$type": "color",
+    "$value": "#ffaaa6"
+  },
+  "focus": {
+    "$type": "color",
+    "$value": "#a4d3ff"
+  }
+}

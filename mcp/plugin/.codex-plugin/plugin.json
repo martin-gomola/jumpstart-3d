@@ -1,0 +1,16 @@
+{
+  "name": "jumpstart-3d",
+  "version": "0.1.0",
+  "description": "Create and revise local CAD models with JumpStart MCP and the 3d-model skill.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "JumpStart 3D",
+    "shortDescription": "Design and revise 3D models in the local editor.",
+    "developerName": "JumpStart MCP contributors",
+    "category": "Productivity",
+    "websiteURL": "https://github.com/martin-gomola/jumpstart-3d",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "defaultPrompt": ["Create a 3D model", "Revise the current model", "Inspect a model before export"]
+  }
+}

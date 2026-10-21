@@ -1,0 +1,30 @@
+version: 1
+scope: "Source paths resolve from repository root; URLs remain mutable."
+rules:
+  - instruction: "Use current tool schemas rather than guessing fields or relying on a copied catalog."
+    sources: [tool-contracts, server]
+    locator: "extendMcpTools and typed tools definitions"
+  - instruction: "Model coordinates are millimetres."
+    sources: [server]
+    locator: "MCP initialize instructions"
+  - instruction: "Ask which editor when the target is ambiguous."
+    sources: [server]
+    locator: "host(args) rejects multiple editors without editorId"
+  - instruction: "An imported STL remains a mesh."
+    sources: [modeling-contract]
+    locator: "Imported meshes and resize limitations"
+  - instruction: "Apply only the successful `previewId` using `jumpstart_apply_model` against the same editor."
+    sources: [server, modeling-contract]
+    locator: "apply_model dispatch and preview/apply revision guards"
+  - instruction: "Never claim physical fit from an image, nominal product size, or a successful mesh export."
+    sources: [user-workflow, modeling-contract]
+    locator: "Spacer assumptions, frame inspection limits, fit requirements"
+  - instruction: "Never bypass the MCP transport through raw HTTP, arbitrary JavaScript, or UI clicks."
+    sources: [user-workflow]
+    locator: "Explicit MCP-only modeling scope and local validated operations"
+  - instruction: "Native parameters and MCP template parameters are separate systems."
+    sources: [modeling-contract]
+    locator: "Native 2.0 compatibility"
+  - instruction: "Its persisted recipe is editable mesh generation, not a sketch-based CAD feature tree."
+    sources: [modeling-contract]
+    locator: "Native 2.0 compatibility; Lathe recipe semantics"

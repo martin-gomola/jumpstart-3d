@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI status component fixture</title>
+<style>
+:root { --fixture-inset: 1rem; --fixture-font: system-ui, sans-serif; --fixture-header: #10171d; --fixture-page: #f4f6f8; --panel: #fff; --panel-2: #f7f8fa; --ink: #18202a; --ink-2: #485361; --ink-3: #7c8794; --line: #d8dde3; --line-2: #e7eaee; --block: #1b232d; --block-ink: #e9eef4; --r: 6px; --shadow: rgba(20,30,45,.16); --f-ui: var(--fixture-font); --f-label: system-ui, sans-serif; --f-mono: ui-monospace, monospace; }
+body { margin: 0; background: var(--fixture-page); color: var(--ink); font-family: var(--f-ui); }
+.fixture-toolbar { display: flex; justify-content: flex-end; align-items: center; box-sizing: border-box; height: 2.875rem; padding-inline: var(--fixture-inset); background: var(--fixture-header); }
+main { padding: var(--fixture-inset); }
+</style></head>
+<body><header class="fixture-toolbar" aria-label="Editor toolbar">
+<button id="ai-status" class="ai-status" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="ai-setup-panel" aria-live="polite" aria-atomic="true" aria-label="Checking AI bridge" aria-describedby="ai-status-tooltip">
+<span class="ai-status-light" aria-hidden="true"></span><span class="ai-status-full">Checking AI bridge</span><span class="ai-status-short" aria-hidden="true">AI linking</span><span id="ai-status-tooltip" class="ai-status-tooltip" role="tooltip" aria-live="off"></span>
+</button></header>
+<aside id="ai-setup-panel" class="ai-setup-panel" hidden role="dialog" aria-modal="false" aria-labelledby="ai-setup-title">
+<header class="ai-setup-header"><h2 id="ai-setup-title">Connect an AI client</h2><button id="ai-setup-close" class="ai-setup-close" type="button">Close</button></header>
+<div class="ai-setup-body">
+<section class="ai-setup-current" aria-live="polite"><span class="ai-setup-kicker">JumpStart MCP</span><strong id="ai-setup-state">Checking AI bridge</strong><p id="ai-setup-detail">Checking the local MCP bridge.</p></section>
+<p class="ai-setup-note">Start JumpStart with <code>make up</code>, then sign in to your AI client. No model API key is needed.</p>
+<section class="ai-setup-client"><h3>Codex</h3><p>From the JumpStart project root, run:</p><pre><code id="ai-setup-codex">make codex-install</code></pre><div class="ai-setup-copy-row"><button class="ai-setup-copy" type="button" data-copy-target="ai-setup-codex">Copy command</button></div></section>
+<section class="ai-setup-client"><h3>Claude Code</h3><p>From the JumpStart project root, run:</p><pre><code id="ai-setup-claude">claude mcp add --scope user --transport stdio jumpstart -- node "$(pwd)/mcp/server/stdio-proxy.mjs"</code></pre><div class="ai-setup-copy-row"><button class="ai-setup-copy" type="button" data-copy-target="ai-setup-claude">Copy command</button></div></section>
+<section class="ai-setup-client"><h3>Antigravity CLI</h3><p>Add this entry to <code>~/.gemini/config/mcp_config.json</code>. Replace the sample path with the absolute path to this checkout:</p><pre><code id="ai-setup-antigravity">{
+  "mcpServers": {
+    "jumpstart": {
+      "command": "node",
+      "args": ["/absolute/path/to/jumpstart-3d/mcp/server/stdio-proxy.mjs"]
+    }
+  }
+}</code></pre><div class="ai-setup-copy-row"><button class="ai-setup-copy" type="button" data-copy-target="ai-setup-antigravity">Copy config</button></div><p>In <code>agy</code>, run <code>/mcp</code> to check the connection.</p></section>
+<p id="ai-setup-copy-status" class="ai-setup-copy-status" role="status" aria-live="polite"></p>
+</div>
+</aside>
+<main><h1>AI connection status</h1><p>Focus or hover the label to read its state. Open AI setup for client instructions.</p></main>
+<script type="module">
+import { AI_STATUS_CSS, initAgentStatus, initAiSetupPanel } from "../../browser/ai-status.js";
+const style = document.createElement("style"); style.textContent = AI_STATUS_CSS; document.head.append(style);
+window.setStatus = initAgentStatus(); initAiSetupPanel(); window.setStatus({online:true,connected:true});
+</script></body></html>

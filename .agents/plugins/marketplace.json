@@ -1,0 +1,12 @@
+{
+  "name": "jumpstart-3d",
+  "interface": { "displayName": "JumpStart 3D" },
+  "plugins": [
+    {
+      "name": "jumpstart-3d",
+      "source": { "source": "local", "path": "./mcp/plugin" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_USE" },
+      "category": "Productivity"
+    }
+  ]
+}

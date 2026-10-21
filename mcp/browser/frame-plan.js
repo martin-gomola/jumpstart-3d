@@ -1,6 +1,6 @@
 import { compileMcpModel } from './models.js';
 import { validateToolInput } from '../shared/schema.js';
-import { framePlanSchema } from '../server/frame-contracts.mjs';
+import { framePlanSchema } from '../shared/frame-schema.mjs';
 import { inspectTriangleMesh, sampleSolidIntervals } from '../shared/geometry.js';
 
 /** Compile a frame into existing primitives, boolean history and saved parameters. */

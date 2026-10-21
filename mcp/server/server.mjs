@@ -12,7 +12,7 @@ import { inspectTriangleMesh } from "../shared/geometry.js";
 import { clientPresence } from "./presence.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const DOCS = join(ROOT, "docs");
+const DOCS = join(ROOT, "build", "site");
 const EXPORTS = join(ROOT, "exports");
 const HOST = process.env.JUMPSTART_MCP_HOST || "127.0.0.1";
 const BROWSER_HOST = "localhost";

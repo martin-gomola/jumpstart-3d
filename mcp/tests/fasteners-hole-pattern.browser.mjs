@@ -5,8 +5,7 @@ import { watchErrors } from "../../test/helpers.mjs";
 
 let broker, baseURL, requestId = 0;
 
-test.beforeAll(async ({}, info) => {
-  if (info.project.name !== "site") return;
+test.beforeAll(async () => {
   broker = spawn(process.execPath, ["mcp/server/server.mjs"], {
     cwd: new URL("../..", import.meta.url),
     env: { ...process.env, JUMPSTART_MCP_HOST: "127.0.0.1", JUMPSTART_MCP_PORT: "0", JUMPSTART_MCP_HTTP_ONLY: "1" },
@@ -64,7 +63,6 @@ async function editor(page) {
 }
 
 test("hole patterns preview actual geometry, apply once, reject stale previews and undo", async ({ page }, info) => {
-  test.skip(info.project.name !== "site", "The offline single-file build intentionally has no local MCP broker");
   const errors = watchErrors(page);
   const editorId = await editor(page);
   const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });
@@ -103,7 +101,6 @@ test("hole patterns preview actual geometry, apply once, reject stale previews a
 });
 
 test("fastener preview produces a native thread and apply keeps it editable", async ({ page }, info) => {
-  test.skip(info.project.name !== "site", "The offline single-file build intentionally has no local MCP broker");
   const errors = watchErrors(page);
   const editorId = await editor(page);
   const before = await tool("jumpstart_get_document", { editorId, includeGeometry: true });

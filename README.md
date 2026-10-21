@@ -6,11 +6,10 @@ JumpStart setup does not require a model API key.
 
 ## Start locally
 
-Requirements: Docker Compose, Make, and Node.js 22 or newer on the host for MCP
-clients.
+Requirements: Docker Compose and Make. Node.js 22 or newer is needed on the host
+for clients that launch the stdio proxy.
 
 ```sh
-npm ci
 make up
 ```
 
@@ -40,8 +39,9 @@ npm run build
 npm test
 ```
 
-The build produces a local web app and the standalone HTML artifact. MCP test
-commands and browser prerequisites are listed in the MCP guide.
+`npm run build` generates the browser app in `build/site/`; Docker includes it
+in the runtime image. Generated assets stay out of Git. MCP test commands and
+browser prerequisites are listed in the MCP guide.
 
 ## Source and license
 

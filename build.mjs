@@ -1,15 +1,4 @@
-// Builds JumpStart 3D from the readable source in src/ into:
-//   docs/                  the GitHub Pages site (app, worker and kernel as separate files)
-//   dist/jumpstart-3d.html one self-contained file, works offline from disk
-//
-//   npm install   (once; installs the pinned esbuild)
-//   node build.mjs
-//
-// This is the author's app/dist.sh + app/standalone.py from the v2.0 source
-// release, written in Node. The helper pages (src/flexigen.html,
-// src/meshstep.html, src/chisel.html) are committed already built; see
-// tools/helpers/README.md to regenerate them.
-
+// Build the browser app consumed by the local MCP server.
 import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { build } from "esbuild";
@@ -18,9 +7,7 @@ import { AI_STATUS_CSS } from "./mcp/browser/ai-status.js";
 const root = new URL(".", import.meta.url).pathname;
 const src = join(root, "src");
 const tp = join(root, "third_party");
-const docs = join(root, "docs");
-const dist = join(root, "dist");
-const out = join(root, "build");
+const site = join(root, "build", "site");
 
 const alias = {
   replicad: join(tp, "replicad/src/index.ts"),
@@ -33,47 +20,19 @@ const alias = {
   three: join(tp, "three/build/three.module.js"),
 };
 const common = { bundle: true, minify: true, legalComments: "eof", target: "es2020", alias, logLevel: "warning" };
-
 const wasm = join(src, "occt-gz.wasm");
-const wasmSize = statSync(wasm).size; // the loading bar's total
+const wasmSize = statSync(wasm).size;
 
-rmSync(out, { recursive: true, force: true });
-await build({ ...common, entryPoints: [join(src, "app.js")], format: "esm", outfile: join(out, "app.js"),
+rmSync(site, { recursive: true, force: true });
+mkdirSync(site, { recursive: true });
+await build({ ...common, entryPoints: [join(src, "app.js")], format: "esm", outfile: join(site, "app.js"),
   loader: { ".html": "text" }, define: { __WASM_PARTS__: JSON.stringify([{ url: "occt-gz.wasm", gz: true, size: wasmSize }]) } });
-await build({ ...common, entryPoints: [join(src, "worker.js")], format: "esm", outfile: join(out, "worker.js"), external: ["node:*"] });
-await build({ ...common, entryPoints: [join(src, "worker.js")], format: "iife", outfile: join(out, "worker.iife.js"), external: ["node:*"],
-  logOverride: { "empty-import-meta": "silent" } }); // the loader's import.meta.url is never used in the single file
+await build({ ...common, entryPoints: [join(src, "worker.js")], format: "esm", outfile: join(site, "worker.js"), external: ["node:*"] });
 
-const read = (p) => readFileSync(p, "utf8");
-const shell = read(join(src, "index.html")).replace("<style>", () => `<style>\n${AI_STATUS_CSS}`);
-const appTag = '<script type="module" src="app.js"></script>\n';
-if (!shell.includes(appTag)) throw new Error("src/index.html is missing the app.js script tag");
-const app = read(join(out, "app.js"));
-const worker = read(join(out, "worker.iife.js"));
-for (const s of [app, worker]) if (/<\/script/i.test(s)) throw new Error("a bundle contains </script>, which would end the inline block");
-
-// ---------- site ----------
-rmSync(docs, { recursive: true, force: true });
-mkdirSync(docs, { recursive: true });
-writeFileSync(join(docs, "index.html"), shell);
-writeFileSync(join(docs, "app.js"), app);
-cpSync(join(out, "worker.js"), join(docs, "worker.js"));
-cpSync(wasm, join(docs, "occt-gz.wasm"));
-writeFileSync(join(docs, ".nojekyll"), "");
-
-// ---------- single file ----------
-mkdirSync(dist, { recursive: true });
-const wasmB64 = readFileSync(wasm).toString("base64");
-// Replacement callbacks everywhere: a replacement *string* would interpret "$'" and "$$" inside the code.
-const single = shell.replace(
-  appTag,
-  () =>
-    '<script type="text/plain" id="wp-worker-src">' + worker + "</script>\n" +
-    '<script type="text/plain" id="wp-occt">' + wasmB64 + "</script>\n" +
-    '<script type="module">' + app + "</script>\n"
-);
-writeFileSync(join(dist, "jumpstart-3d.html"), single);
+const shell = readFileSync(join(src, "index.html"), "utf8").replace("<style>", () => `<style>\n${AI_STATUS_CSS}`);
+if (!shell.includes('<script type="module" src="app.js"></script>\n')) throw new Error("src/index.html is missing the app.js script tag");
+writeFileSync(join(site, "index.html"), shell);
+cpSync(wasm, join(site, "occt-gz.wasm"));
 
 const mb = (n) => (n / 1048576).toFixed(2) + " MB";
-console.log("docs/app.js:", mb(app.length), " docs/worker.js:", mb(statSync(join(docs, "worker.js")).size), " docs/occt-gz.wasm:", mb(wasmSize));
-console.log("dist/jumpstart-3d.html:", mb(Buffer.byteLength(single)));
+console.log("build/site/app.js:", mb(statSync(join(site, "app.js")).size), " build/site/worker.js:", mb(statSync(join(site, "worker.js")).size), " build/site/occt-gz.wasm:", mb(wasmSize));

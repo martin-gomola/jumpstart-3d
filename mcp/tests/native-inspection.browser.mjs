@@ -7,8 +7,7 @@ import { loadDoc, watchErrors } from "../../test/helpers.mjs";
 const fixture = JSON.parse(readFileSync(new URL("../../test/projects/parametric-plate.json", import.meta.url), "utf8"));
 let broker, baseURL, requestId = 0;
 
-test.beforeAll(async ({}, info) => {
-  if (info.project.name !== "site") return;
+test.beforeAll(async () => {
   broker = spawn(process.execPath, ["mcp/server/server.mjs"], {
     cwd: new URL("../..", import.meta.url),
     env: { ...process.env, JUMPSTART_MCP_HOST: "127.0.0.1", JUMPSTART_MCP_PORT: "0", JUMPSTART_MCP_HTTP_ONLY: "1" },
@@ -53,7 +52,6 @@ async function tool(name, args = {}, expectError = false, includeImages = false)
 }
 
 test("bare broker URL activates MCP and exposes native parameter bindings without editing", async ({ page }, info) => {
-  test.skip(info.project.name !== "site", "The offline single-file build intentionally has no MCP broker");
   const errors = watchErrors(page);
   await page.goto(baseURL);
   await page.waitForFunction(() => window.__app?.kernel?.ready, null, { timeout: 90_000 });

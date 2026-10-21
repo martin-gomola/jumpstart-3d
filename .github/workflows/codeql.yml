@@ -1,5 +1,5 @@
-# CodeQL code scanning, scoped to maintained app, MCP, build and test code. docs/ holds
-# built bundles and third_party/ holds pinned libraries, so both are left out; the helper
+# CodeQL code scanning, scoped to maintained app, MCP, build and test code. build/ holds
+# generated assets and third_party/ holds pinned libraries, so both are left out; the helper
 # pages in src/*.html embed a minified three.js each and are left out for the same reason.
 # Results appear under Security > Code scanning. Public repository: free.
 name: codeql

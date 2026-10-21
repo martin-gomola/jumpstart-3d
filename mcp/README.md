@@ -50,7 +50,7 @@ this product. Do not merge either repository directly. Record the source commit,
 compare files, and adapt selected changes into this tree. See
 [SOURCES.md](../SOURCES.md) for the current pins and workflow.
 
-Regenerate `docs/` with `npm run build`; do not edit generated bundles by hand.
+Regenerate `build/site/` with `npm run build`; do not edit generated bundles by hand.
 Run focused checks and a local MCP smoke check after changes to document,
 kernel, selector, persistence, or export behavior. Keep tool contracts,
 `/__mcp` routes, revision checks, and loopback binding stable unless an explicit
@@ -62,10 +62,11 @@ JumpStart exposes the running local editor through a stdio MCP server. The serve
 
 ## Start
 
-Build the app, then add the MCP server to your client configuration:
+For development outside Docker, build the app and then add the MCP server to
+your client configuration:
 
 ```sh
-npm install
+npm ci
 npm run build
 ```
 
@@ -406,8 +407,8 @@ geometry acceptance.
   `mcp/tests/mcp-geometry.test.mjs`, `mcp/tests/mcp-inspection.test.mjs`,
   `mcp/tests/mcp-server.test.mjs` and `mcp/tests/agent-benchmark.test.mjs`: contracts,
   negative cases and regression coverage.
-- `package.json`, `README.md` and generated `docs/app.js`: commands,
-  local workflow documentation and the rebuilt browser bundle.
+- `package.json` and `README.md`: build commands and local workflow
+  documentation. Generated browser files stay under ignored `build/`.
 
 ## Tutorial benchmark
 
@@ -514,12 +515,11 @@ export remains outside the MCP interface.
 The MCP parameter list is optional in the document; reads report an empty list
 when it is absent without adding metadata to the saved document. The bridge
 activates on loopback HTTP pages served by the local MCP server, or with
-explicit `?mcp=1`. Static and offline builds do not poll an absent broker.
+explicit `?mcp=1`. App files served without the MCP bridge do not poll a broker.
 
 After `npm ci`, install browser prerequisites with `npx playwright install chromium`.
 `npm test` builds once, runs MCP contract checks, then runs MCP browser checks
-against the site and standalone artifacts. Native inspection is limited to the
-site build because the offline artifact intentionally has no local broker.
+against the Docker app bundle.
 
 ## Rectangular frame preset
 

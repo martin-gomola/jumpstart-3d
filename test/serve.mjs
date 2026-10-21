@@ -1,5 +1,4 @@
 // Tiny static file server for the test runs: node test/serve.mjs <dir> <port>
-// Playwright starts it for docs/ (the site); the single file is opened from disk.
 import { createServer } from "node:http";
 import { createReadStream, statSync } from "node:fs";
 import { join, normalize, extname } from "node:path";

@@ -38,6 +38,7 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     const listing = await send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     const names = listing.result.tools.map((tool) => tool.name);
     assert.deepEqual(names, [
+      "jumpstart_list_imports",
       "jumpstart_list_editors",
       "jumpstart_get_document",
       "jumpstart_preview_model",
@@ -61,12 +62,31 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     ]);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.type, "object");
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.primitives.items.properties.kind.enum.includes("tube"), true);
-    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.length, 7);
+    const profileVariants = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.sketches.items.properties.profile.oneOf;
+    const contour = profileVariants.find((profile) => profile.properties.type.const === "contour");
+    assert.ok(contour);
+    assert.deepEqual(contour.properties.segments.items.oneOf.map((segment) => segment.properties.type.const), ["line", "arc", "spline"]);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.length, 13);
+    const importOperation = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find((operation) => operation.properties.type.const === "import");
+    assert.equal(importOperation.properties.assetId.pattern, "^[a-f0-9]{64}$");
+    assert.equal(importOperation.properties.units.description.includes("Required for STL"), true);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "gear"), true);
+    const gearSchema = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find((operation) => operation.properties.type.const === "gear");
+    assert.deepEqual(gearSchema.properties.gearType.enum, ["spur", "rack", "bevel"]);
+    assert.deepEqual([gearSchema.properties.coneAngle.oneOf[0].minimum, gearSchema.properties.coneAngle.oneOf[0].maximum], [5, 80]);
+    assert.match(gearSchema.properties.coneAngle.oneOf[0].description, /mating accuracy is not certified/);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "mirror"), true);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "splitBody"), true);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "pathPattern"), true);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "featurePattern"), true);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_resize_body").inputSchema.properties.size.additionalProperties, false);
     const invalid = await send({ jsonrpc: "2.0", id: 20, method: "tools/call", params: { name: "jumpstart_preview_parameters", arguments: { modelId: "x", values: { diameter: -1 }, arbitraryCode: "bad" } } });
     assert.equal(invalid.result.isError, true);
     const capabilities = await send({ jsonrpc: "2.0", id: 21, method: "tools/call", params: { name: "jumpstart_get_capabilities", arguments: {} } });
-    assert.equal(JSON.parse(capabilities.result.content[0].text).schemaVersion, 1);
+    const capabilityData = JSON.parse(capabilities.result.content[0].text);
+    assert.equal(capabilityData.schemaVersion, 1);
+    assert.equal(capabilityData.limits.importFileBytes, 24 * 1024 * 1024);
+    assert.ok(capabilityData.operations.includes("operator-managed STL/3MF/STEP/STP imports by digest id"));
 
     const portReady = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Server did not report its port: ${stderr}`)), 5_000);
@@ -109,6 +129,8 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     const result = JSON.parse(editors.result.content[0].text);
     assert.equal(result.editors[0].editorId, "test-editor");
     assert.ok(result.editors[0].lastSeenAt);
+    const imports = await send({ jsonrpc: "2.0", id: 32, method: "tools/call", params: { name: "jumpstart_list_imports", arguments: {} } });
+    assert.deepEqual(JSON.parse(imports.result.content[0].text).assets, []);
     await fetch(`http://127.0.0.1:${port}/__mcp/heartbeat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ editorId: "second-tab", documentId: "doc-1", documentName: "Same design", focused: true }),

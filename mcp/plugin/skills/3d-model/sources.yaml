@@ -21,6 +21,18 @@ sources:
     path: mcp/README.md
     trust: "Repository's documented parameter, Lathe, preview, and frame semantics."
     mutable: true
+  - id: model-plan
+    path: mcp/browser/model-plan.js
+    trust: "Typed model-plan normalization and native feature compilation; current implementation source."
+    mutable: true
+  - id: managed-imports
+    path: mcp/server/imports.mjs
+    trust: "Operator-managed import directory, asset digests, file allowlist, and resource limits."
+    mutable: true
+  - id: household-acceptance
+    path: mcp/tests/household-acceptance.browser.mjs
+    trust: "Measured geometry acceptance fixtures; illustrative test dimensions, not real product fit requirements."
+    mutable: true
   - id: user-workflow
     locator: "User spacer and plugin-bundle requests in this development conversation."
     trust: "User's requested local modeling workflow and measured/assumed distinction."

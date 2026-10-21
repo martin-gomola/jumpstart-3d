@@ -28,3 +28,12 @@ rules:
   - instruction: "Its persisted recipe is editable mesh generation, not a sketch-based CAD feature tree."
     sources: [modeling-contract]
     locator: "Native 2.0 compatibility; Lathe recipe semantics"
+  - instruction: "For repeated existing features, use `featurePattern` only for holes, planar embosses, and sketch-backed extrude/revolve/sweep booleans."
+    sources: [server, model-plan, modeling-contract]
+    locator: "featurePattern schema and patternableFeature validation"
+  - instruction: "Straight bevel gears are a conical loft approximation and do not establish tooth-contact accuracy."
+    sources: [server, modeling-contract]
+    locator: "Native straight-bevel gear operation limitations"
+  - instruction: "Import only by asset id from jumpstart_list_imports; do not pass host paths or file contents through model plans."
+    sources: [server, managed-imports, modeling-contract]
+    locator: "Managed read-only imports directory and typed digest references"

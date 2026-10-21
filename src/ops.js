@@ -25,6 +25,9 @@ export const PRIM_DEFAULTS = {
   paraboloid: { w: 20, d: 20, h: 20 },
   gem: { w: 20, d: 20, h: 20 },
   spring: { w: 20, d: 20, h: 30, turns: 5, wire: 2 },
+  gear: { module: 2, teeth: 20, pressureAngle: 20, thickness: 5, bore: 0 },
+  bevelgear: { module: 2, teeth: 20, pressureAngle: 20, thickness: 5, coneAngle: 45, bore: 0 },
+  rack: { module: 2, teeth: 20, pressureAngle: 20, thickness: 5, baseDepth: 4 },
   capsule: { w: 30, d: 12, h: 12 },
   arrow: { w: 30, d: 20, h: 5 },
 };

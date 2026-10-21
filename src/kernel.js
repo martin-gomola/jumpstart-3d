@@ -90,11 +90,96 @@ function roundOff(shape, p) {
   return shape;
 }
 
+function gearInvolute(angle) { return Math.tan(angle) - angle; }
+function buildGear(kind, p) {
+  const module = p.module, teeth = p.teeth, pressure = p.pressureAngle * Math.PI / 180, thickness = p.thickness;
+  if (!Number.isFinite(module) || module < 0.2 || module > 50) throw new Error("Gear module must be 0.2 to 50 mm");
+  if (!Number.isInteger(teeth) || teeth < 6 || teeth > 120) throw new Error("Gear tooth count must be an integer from 6 to 120");
+  if (!Number.isFinite(pressure) || pressure < 14 * Math.PI / 180 || pressure > 30 * Math.PI / 180) throw new Error("Gear pressure angle must be 14 to 30 degrees");
+  if (!Number.isFinite(thickness) || thickness < 0.1 || thickness > 10000) throw new Error("Gear face width must be 0.1 to 10000 mm");
+  const pitch = Math.PI * module;
+  if (kind === "rack") {
+    const length = pitch * teeth;
+    if (length > 10000) throw new Error("Rack length exceeds 10000 mm");
+    const addendum = module, dedendum = 1.25 * module;
+    const baseDepth = p.baseDepth ?? module * 2;
+    if (!Number.isFinite(baseDepth) || baseDepth < 0.1 || baseDepth > 10000 || baseDepth + addendum + dedendum > 10000) throw new Error("Rack base depth and tooth height must fit within 10000 mm");
+    const pitchHalf = pitch / 4;
+    const topHalf = pitchHalf - addendum * Math.tan(pressure);
+    const rootHalf = pitchHalf + dedendum * Math.tan(pressure);
+    if (topHalf <= 0 || rootHalf >= pitch / 2) throw new Error("Rack tooth proportions are invalid for this pressure angle");
+    const points = [[-length / 2, -dedendum]];
+    for (let i = 0; i < teeth; i++) {
+      const center = -length / 2 + pitch * (i + 0.5);
+      points.push([center - rootHalf, -dedendum], [center - topHalf, addendum], [center + topHalf, addendum], [center + rootHalf, -dedendum]);
+    }
+    points.push([length / 2, -dedendum], [length / 2, -dedendum - baseDepth], [-length / 2, -dedendum - baseDepth]);
+    return polyDrawing(points).sketchOnPlane("XY").extrude(thickness);
+  }
+
+  const pitchRadius = module * teeth / 2;
+  const baseRadius = pitchRadius * Math.cos(pressure);
+  const rootRadius = pitchRadius - 1.25 * module;
+  const tipRadius = pitchRadius + module;
+  const bevel = kind === "bevelgear";
+  const coneAngle = bevel ? (p.coneAngle ?? 45) * Math.PI / 180 : 0;
+  const radialTaper = bevel ? thickness * Math.tan(coneAngle) : 0;
+  const endScale = bevel ? (pitchRadius - radialTaper) / pitchRadius : 1;
+  if (bevel && (!Number.isFinite(coneAngle) || coneAngle < 5 * Math.PI / 180 || coneAngle > 80 * Math.PI / 180 || !Number.isFinite(endScale) || endScale <= 0 || rootRadius * endScale <= 0.01)) {
+    throw new Error("Bevel gear face width and cone angle leave no usable small-end root");
+  }
+  const bore = p.bore ?? 0;
+  const minimumRootRadius = rootRadius * endScale;
+  if (!Number.isFinite(bore) || bore < 0 || rootRadius <= 0 || (bore > 0 && bore >= minimumRootRadius * 2 - 0.01)) throw new Error("Gear bore must be nonnegative and smaller than the smallest root diameter");
+  if (tipRadius * 2 > 10000) throw new Error("Gear outside diameter exceeds 10000 mm");
+  const baseHalf = Math.PI / (2 * teeth) + gearInvolute(pressure);
+  const inv = gearInvolute(pressure), points = [], flankSteps = 8, topSteps = 4, rootSteps = 3;
+  const halfAt = (radius) => {
+    const phi = Math.acos(Math.max(-1, Math.min(1, baseRadius / radius)));
+    return Math.PI / (2 * teeth) + inv - gearInvolute(phi);
+  };
+  const polar = (radius, angle) => [radius * Math.cos(angle), radius * Math.sin(angle)];
+  for (let i = 0; i < teeth; i++) {
+    const center = i * Math.PI * 2 / teeth;
+    points.push(polar(rootRadius, center - baseHalf));
+    points.push(polar(baseRadius, center - baseHalf));
+    for (let j = 1; j <= flankSteps; j++) {
+      const radius = baseRadius + (tipRadius - baseRadius) * j / flankSteps;
+      points.push(polar(radius, center - halfAt(radius)));
+    }
+    const tipHalf = halfAt(tipRadius);
+    for (let j = 1; j <= topSteps; j++) points.push(polar(tipRadius, center - tipHalf + 2 * tipHalf * j / topSteps));
+    for (let j = flankSteps - 1; j >= 0; j--) {
+      const radius = baseRadius + (tipRadius - baseRadius) * j / flankSteps;
+      points.push(polar(radius, center + halfAt(radius)));
+    }
+    points.push(polar(rootRadius, center + baseHalf));
+    const nextLeft = (i + 1) * Math.PI * 2 / teeth - baseHalf;
+    for (let j = 1; j < rootSteps; j++) points.push(polar(rootRadius, center + baseHalf + (nextLeft - center - baseHalf) * j / rootSteps));
+  }
+  let shape;
+  if (bevel) {
+    const largeEnd = polyDrawing(points).sketchOnPlane("XY");
+    const smallEnd = polyDrawing(points.map(([x, y]) => [x * endScale, y * endScale])).sketchOnPlane("XY", thickness);
+    try { shape = largeEnd.loftWith(smallEnd, { ruled: true }); }
+    catch (error) { throw new Error("Bevel gear tooth profiles could not be lofted into a solid"); }
+  } else {
+    shape = polyDrawing(points).sketchOnPlane("XY").extrude(thickness);
+  }
+  if (bore > 0) {
+    const cutter = R.drawCircle(bore / 2).sketchOnPlane("XY", -0.01).extrude(thickness + 0.02);
+    try { const cut = shape.cut(cutter); shape.delete(); cutter.delete(); shape = cut; }
+    catch (error) { shape.delete(); cutter.delete(); throw new Error("Gear bore could not be cut"); }
+  }
+  return shape;
+}
+
 // ---------------------------------------------------------------- primitives
 // Local frame: centered on X/Y, resting on Z = 0, Z up.
 function buildPrim(kind, p) {
   const w = clampPos(p.w), d = clampPos(p.d), h = clampPos(p.h);
   switch (kind) {
+    case "gear": case "rack": case "bevelgear": return buildGear(kind, p);
     case "box": {
       return roundOff(R.makeBaseBox(w, d, h), p);
     }
@@ -981,7 +1066,12 @@ function applyMod(shape, mod) {
     case "halfspace": {
       // Split body: keep the part of the body on one side of a plane (body coordinates)
       const p = mod.plane, n = Vec.norm(p.n).map((v) => v * (mod.side < 0 ? -1 : 1));
-      const B = 1e4;
+      const bounds = bboxOf(shape);
+      let B = 0;
+      for (const x of [bounds.min[0], bounds.max[0]]) for (const y of [bounds.min[1], bounds.max[1]]) for (const z of [bounds.min[2], bounds.max[2]]) {
+        B = Math.max(B, Math.hypot(x - p.o[0], y - p.o[1], z - p.o[2]));
+      }
+      B = Math.max(B + 1, 1);
       const x = perpTo(n, null);
       const sk = R.drawRectangle(2 * B, 2 * B).sketchOnPlane(new R.Plane(p.o, x, n));
       const slab = sk.extrude(B);
@@ -1107,7 +1197,10 @@ function applyMod(shape, mod) {
       let cur = shape;
       for (const q of mod.faces || []) {
         const faces = cur.faces;
-        let best = null, bd = Infinity;
+        const diagonal = Math.hypot(...bboxOf(cur).size);
+        const matchTolerance = Math.max(0.05, diagonal * 0.002);
+        const tieTolerance = Math.max(1e-6, diagonal * 1e-8);
+        const matches = [];
         for (const f of faces) {
           const t = f.geomType;
           if (q.t && t !== q.t) continue;
@@ -1117,9 +1210,19 @@ function applyMod(shape, mod) {
             if (n[0] * q.n[0] + n[1] * q.n[1] + n[2] * q.n[2] < 0.999) continue;
           }
           const d = dist(f.center.toTuple(), q.c);
-          if (d < bd) { bd = d; best = f; }
+          matches.push({ face: f, distance: d });
         }
-        if (!best) { faces.forEach((f) => f.delete()); throw new Error("Offset face: the picked face no longer exists"); }
+        matches.sort((a, b) => a.distance - b.distance);
+        const best = matches[0]?.face;
+        if (!best || matches[0].distance > matchTolerance) { faces.forEach((f) => f.delete()); throw new Error("Offset face: the picked face no longer exists"); }
+        const tied = matches.filter((candidate) => Math.abs(candidate.distance - matches[0].distance) <= tieTolerance);
+        if (tied.length > 1) {
+          const signature = surfaceSig(best);
+          if (!signature || tied.some((candidate) => !sameSurface(signature, surfaceSig(candidate.face)))) {
+            faces.forEach((f) => f.delete());
+            throw new Error("Offset face: the picked face signature is ambiguous");
+          }
+        }
         // a cylinder or sphere split into several faces is offset as one surface, like Fusion
         const sig = surfaceSig(best);
         const group = sig ? faces.filter((f) => f === best || sameSurface(surfaceSig(f), sig)) : [best];

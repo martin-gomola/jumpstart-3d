@@ -42,6 +42,8 @@ export function parseSTL(buffer) { return repairMesh(stlPositions(buffer)).mesh;
 // A 3MF file is a zip with an XML model inside: objects (meshes or groups of other
 // objects), placed by the build items, with the units written in the file.
 const inflateRaw = inflate;
+export const MAX_3MF_ENTRY_BYTES = 48 * 1024 * 1024;
+export const MAX_3MF_TOTAL_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;
 function readZip(buf) {
   const u8 = new Uint8Array(buf), dv = new DataView(buf);
   let e = -1;
@@ -51,13 +53,19 @@ function readZip(buf) {
   let off = dv.getUint32(e + 16, true);
   const dec = new TextDecoder();
   const entries = new Map();
+  const expandedEntries = new Map();
+  let totalUncompressed = 0;
+  let actualUncompressed = 0;
   for (let k = 0; k < n; k++) {
     if (off + 46 > u8.length || dv.getUint32(off, true) !== 0x02014b50) break;
-    const method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true);
+    const method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true), usize = dv.getUint32(off + 24, true);
     const nl = dv.getUint16(off + 28, true), xl = dv.getUint16(off + 30, true), cl = dv.getUint16(off + 32, true);
     const lho = dv.getUint32(off + 42, true);
     const name = dec.decode(u8.subarray(off + 46, off + 46 + nl)).replace(/^\/+/, "");
-    entries.set(name.toLowerCase(), { name, method, csize, lho });
+    if (usize > MAX_3MF_ENTRY_BYTES) throw new Error(`This 3MF file contains an entry larger than ${MAX_3MF_ENTRY_BYTES} bytes.`);
+    totalUncompressed += usize;
+    if (totalUncompressed > MAX_3MF_TOTAL_UNCOMPRESSED_BYTES) throw new Error(`This 3MF file expands beyond the ${MAX_3MF_TOTAL_UNCOMPRESSED_BYTES} byte import limit.`);
+    entries.set(name.toLowerCase(), { name, method, csize, usize, lho });
     off += 46 + nl + xl + cl;
   }
   return {
@@ -65,12 +73,24 @@ function readZip(buf) {
     async get(name) {
       const ent = entries.get(name.replace(/^\/+/, "").toLowerCase());
       if (!ent) throw new Error("This 3MF file is missing a part: " + name);
+      if (expandedEntries.has(ent)) return expandedEntries.get(ent);
       const l = ent.lho;
+      if (l + 30 > u8.length || dv.getUint32(l, true) !== 0x04034b50) throw new Error("This 3MF file has a damaged local entry header.");
       const start = l + 30 + dv.getUint16(l + 26, true) + dv.getUint16(l + 28, true);
+      if (start + ent.csize > u8.length) throw new Error("This 3MF file's compressed entry is truncated.");
       const data = u8.subarray(start, start + ent.csize);
-      if (ent.method === 0) return data;
-      if (ent.method === 8) return inflateRaw(data);
-      throw new Error("This 3MF file uses a kind of compression that isn't supported.");
+      let expanded;
+      if (ent.method === 0) {
+        if (ent.csize !== ent.usize) throw new Error("This 3MF file has inconsistent stored entry sizes.");
+        expanded = data;
+      } else if (ent.method === 8) {
+        expanded = await inflateRaw(data, ent.usize, MAX_3MF_ENTRY_BYTES);
+      } else throw new Error("This 3MF file uses a kind of compression that isn't supported.");
+      if (actualUncompressed + expanded.byteLength > MAX_3MF_TOTAL_UNCOMPRESSED_BYTES) throw new Error(`This 3MF file expands beyond the ${MAX_3MF_TOTAL_UNCOMPRESSED_BYTES} byte import limit.`);
+      actualUncompressed += expanded.byteLength;
+      if (expanded.byteLength !== ent.usize) throw new Error("This 3MF file has inconsistent expanded entry sizes.");
+      expandedEntries.set(ent, expanded);
+      return expanded;
     },
   };
 }

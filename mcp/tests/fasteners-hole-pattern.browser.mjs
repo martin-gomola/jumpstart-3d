@@ -100,6 +100,46 @@ test("hole patterns preview actual geometry, apply once, reject stale previews a
   expect(errors).toEqual([]);
 });
 
+test("square, hex and slot patterns preview and apply editable sketch cuts", async ({ page }) => {
+  const errors = watchErrors(page);
+  const editorId = await editor(page);
+  const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  const before = await get();
+  const shapes = [
+    { id: "square", type: "square", width: 6, area: 36 },
+    { id: "hex", type: "hex", width: 6, area: Math.sqrt(3) * 18 },
+    { id: "slot", type: "slot", width: 4, length: 10, area: (10 - 4) * 4 + Math.PI * 4 },
+  ];
+  const plan = {
+    name: "Shaped mounting holes",
+    primitives: shapes.map(({ id }, index) => ({ id: `${id}-plate`, kind: "box", parameters: { w: 30, d: 30, h: 6 }, position: [(index - 1) * 40, 0, 0] })),
+    operations: shapes.map(({ id, type, width, length }) => ({ id, type: "holePattern", target: `${id}-plate`, face: "+z", layout: { type: "grid", cols: 1, rows: 1 }, shape: type, width, ...(length ? { length } : {}) })),
+  };
+  const preview = await tool("jumpstart_preview_model", { editorId, expectedRevision: before.revision, plan, includeImage: false });
+  expect(preview.valid, JSON.stringify(preview.errors)).toBe(true);
+  expect(preview.holePatterns.map(({ shape }) => shape)).toEqual(["square", "hex", "slot"]);
+  for (const pattern of preview.holePatterns) {
+    expect(pattern).toMatchObject({ holes: 1, total: 1, dropped: 0 });
+    const body = preview.bodies.find(({ id }) => id === pattern.bodyId);
+    const shape = shapes.find(({ type }) => type === pattern.shape);
+    expect(body.volume).toBeCloseTo(30 * 30 * 6 - 6 * shape.area, 0);
+    expect(body.featureTree.mods[0]).toMatchObject({ t: "bool", op: "cut", tool: { t: "extrude", profiles: expect.any(Array) } });
+    expect(body.featureTree.mods[0].tool.profiles).toHaveLength(1);
+    const inspection = await tool("jumpstart_inspect_geometry", { editorId, bodyId: body.id, previewId: preview.previewId, mesh: true });
+    expect(inspection.meshValidation.valid).toBe(true);
+  }
+  expect((await get()).revision).toBe(before.revision);
+  const applied = await tool("jumpstart_apply_model", { editorId, previewId: preview.previewId });
+  const saved = await get();
+  expect(saved.bodies).toHaveLength(3);
+  expect(saved.bodies.every((body) => body.featureTree.mods[0].tool.t === "extrude")).toBe(true);
+  expect(saved.sketches).toHaveLength(3);
+  expect(saved.sketches.some((sketch) => sketch.entities.some((entity) => entity.t === "arc"))).toBe(true);
+  await tool("jumpstart_undo", { editorId, expectedRevision: applied.revision });
+  expect((await get()).bodies).toHaveLength(0);
+  expect(errors).toEqual([]);
+});
+
 test("fastener preview produces a native thread and apply keeps it editable", async ({ page }, info) => {
   const errors = watchErrors(page);
   const editorId = await editor(page);

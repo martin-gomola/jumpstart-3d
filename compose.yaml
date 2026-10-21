@@ -6,6 +6,7 @@ services:
       - "127.0.0.1:3210:3210"
     volumes:
       - ./exports:/app/exports
+      - ./imports:/app/imports:ro
     restart: unless-stopped
     healthcheck:
       test:

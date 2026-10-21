@@ -31,8 +31,19 @@ no shell commands, external uploads, or additional network services.
   the measured opening, wall samples, and open centre. Read the
   [modeling workflows](references/modeling-workflows.md) for the worked example.
 - For general CAD, use `jumpstart_preview_model` with supported primitives,
-  dimensioned sketches, features, transforms, patterns, and boolean operations.
-  Discover feature limits through capabilities before promising an operation.
+  dimensioned circle, polygon, rounded-rectangle, or line/arc/spline contour
+  sketches, extrude/revolve/loft/sweep/pipe/coil features, transforms, body and
+  feature patterns, booleans, fasteners, and round or shaped hole patterns.
+  The plan also supports plane-based body splits, linked or joined mirrors,
+  face modifiers, and native spur, straight-bevel, and rack gears. Read
+  `jumpstart_get_capabilities` for current limits and supported feature types.
+- For gear models, supply module, tooth count, pressure angle, face width, bore,
+  cone angle, and placement as needed. Straight bevel gears are a conical loft
+  approximation; do not claim tooth-contact accuracy or a matched gear pair.
+- For repeated existing features, use `featurePattern` only for holes, planar
+  embosses, and sketch-backed extrude/revolve/sweep booleans. Use `pathPattern`
+  for repeated editable bodies along a typed line/arc path. Other feature types
+  are rejected; do not substitute arbitrary scripts.
 - For a native rectangle with parameter-bound extrusion, use
   `jumpstart_preview_native_model` on a blank document; revise using
   `jumpstart_preview_native_parameters`. Native parameters and MCP template
@@ -41,9 +52,14 @@ no shell commands, external uploads, or additional network services.
 - For turned parts, use `jumpstart_preview_lathe`. Its persisted recipe is editable
   mesh generation, not a sketch-based CAD feature tree. Inspect sampled thickness
   and resolution; requested hollow-bottom thickness can be quantized.
-- An imported STL remains a mesh. Use `jumpstart_preview_resize_body` for resizing
-  and distinguish uniform scaling from independent-axis resizing. Do not claim to
-  have recovered the original parametric features.
+- To import a file, call `jumpstart_list_imports` and choose a listed digest id.
+  The operator places files in the local `imports/` directory. Use a typed
+  `import` operation with that `assetId`; never request or invent a host path or
+  send file bytes. STL requires explicit `units` (`mm`, `cm`, or `in`). Leave
+  `units` out for 3MF and STEP so file semantics are preserved. Plans support at
+  most four imports and 24 MiB total. STL and 3MF remain editable mesh bodies;
+  STEP/STP become native STEP bodies. Use `jumpstart_preview_resize_body` for
+  resizing an imported body, and do not claim parametric reconstruction.
 
 ## Preview, inspect, then apply
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildModelPlan, normalizeModelPlan, resizeBodyDocument } from "../browser/model-plan.js";
+import { applyFeaturePatterns, buildModelPlan, normalizeModelPlan, resizeBodyDocument } from "../browser/model-plan.js";
 
 function doc() {
   return { id: "doc-1", name: "Untitled", mode: "beginner", seq: 0, sketches: [], bodies: [], planes: [], joints: [] };
@@ -27,6 +27,101 @@ test("compiles a dimensioned revolve into the native sketch and feature model", 
     mods: [], axis: "Z", angle: 360,
   });
   assert.deepEqual(result.affectedBodyIds, result.createdBodyIds);
+});
+
+test("rounded rectangles compile to a closed native line and quarter-arc profile", () => {
+  const result = buildModelPlan(doc(), {
+    name: "Rounded tray",
+    sketches: [{ id: "outline", plane: "XY", origin: [0, 0, 0], profile: { type: "roundedRect", width: 30, height: 20, radius: 4, center: [3, -2] } }],
+    features: [{ id: "body", type: "extrude", sketch: "outline", distance: 5 }],
+  }, ids());
+  const sketch = result.document.sketches[0];
+  const edges = sketch.ents.map(({ id, ...entity }) => entity);
+  assert.equal(sketch.ents.length, 8);
+  assert.equal(sketch.ents.filter(({ t }) => t === "line").length, 4);
+  assert.equal(sketch.ents.filter(({ t }) => t === "arc").length, 4);
+  const endpoints = sketch.ents.map(({ a, b }) => [a, b]);
+  for (let i = 0; i < endpoints.length; i++) assert.equal(endpoints[i][1], endpoints[(i + 1) % endpoints.length][0]);
+  const profile = result.document.bodies[0].node.profiles[0];
+  assert.deepEqual(profile, { key: sketch.ents.map(({ id }) => id).sort().join(","), pt: [3, -2] });
+  assert.equal(result.document.bodies[0].node.sketch, sketch.id);
+  assert.ok(edges.every(({ t }) => t === "line" || t === "arc"));
+});
+
+test("rounded rectangle profile validates positive sizes, bounded radius and strict keys", () => {
+  const base = { name: "Rounded", sketches: [{ id: "outline", plane: "XY", origin: [0, 0, 0], profile: { type: "roundedRect", width: 30, height: 20, radius: 4 } }], features: [{ id: "body", type: "extrude", sketch: "outline", distance: 2 }] };
+  assert.throws(() => normalizeModelPlan({ ...base, sketches: [{ ...base.sketches[0], profile: { ...base.sketches[0].profile, width: 0 } }] }), /width must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ ...base, sketches: [{ ...base.sketches[0], profile: { ...base.sketches[0].profile, height: -1 } }] }), /height must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ ...base, sketches: [{ ...base.sketches[0], profile: { ...base.sketches[0].profile, radius: 10.01 } }] }), /radius must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ ...base, sketches: [{ ...base.sketches[0], profile: { ...base.sketches[0].profile, extra: true } }] }), /extra is not supported/);
+});
+
+test("managed imports compile to native mesh and STEP nodes and require STL units", () => {
+  const assetId = "a".repeat(64);
+  const current = { ...doc(), assets: {
+    [assetId]: { kind: "mesh", name: "housing.stl", data: "AA==" },
+    ["b".repeat(64)]: { kind: "mesh", name: "housing.3mf", data: "AA==" },
+    ["c".repeat(64)]: { kind: "step", name: "bracket.stp", data: "AA==" },
+  } };
+  const stl = buildModelPlan(current, { name: "Housing", operations: [{ id: "housing", type: "import", assetId, units: "in", position: [1, 2, 3] }] }, ids());
+  assert.equal(stl.document.bodies[0].node.t, "mesh");
+  assert.equal(stl.document.bodies[0].node.asset, assetId);
+  assert.equal(stl.document.bodies[0].node.k, 25.4);
+  assert.deepEqual(stl.document.bodies[0].m.slice(12, 15), [1, 2, 3]);
+  assert.throws(() => buildModelPlan(current, { name: "Missing units", operations: [{ id: "housing", type: "import", assetId }] }, ids()), /requires explicit STL units/);
+  const threeMf = buildModelPlan(current, { name: "3MF", operations: [{ id: "housing", type: "import", assetId: "b".repeat(64) }] }, ids());
+  assert.equal(threeMf.document.bodies[0].node.t, "mesh");
+  assert.equal(threeMf.document.bodies[0].node.k, undefined);
+  const step = buildModelPlan(current, { name: "STEP", operations: [{ id: "bracket", type: "import", assetId: "c".repeat(64) }] }, ids());
+  assert.equal(step.document.bodies[0].node.t, "step");
+  assert.throws(() => buildModelPlan(current, { name: "STEP units", operations: [{ id: "bracket", type: "import", assetId: "c".repeat(64), units: "mm" }] }, ids()), /must preserve units/);
+  assert.throws(() => buildModelPlan(doc(), { name: "Missing asset", operations: [{ id: "housing", type: "import", assetId }] }, ids()), /managed import catalog/);
+});
+
+test("ordered contours compile line, arc, and fit-point spline segments as editable native entities", () => {
+  const result = buildModelPlan(doc(), {
+    name: "Curved tray",
+    sketches: [{ id: "outline", plane: "XY", origin: [0, 0, 0], profile: { type: "contour", segments: [
+      { type: "line", start: [0, 0], end: [10, 0] },
+      { type: "arc", start: [10, 0], through: [12, 2], end: [10, 4] },
+      { type: "spline", points: [[10, 4], [5, 6], [0, 4]] },
+      { type: "line", start: [0, 4], end: [0, 0] },
+    ] } }],
+    features: [{ id: "tray", type: "extrude", sketch: "outline", distance: 3 }],
+  }, ids());
+  const sketch = result.document.sketches[0];
+  assert.deepEqual(sketch.ents.map(({ t }) => t), ["line", "arc", "spline", "line"]);
+  assert.deepEqual(sketch.ents[2].pts.map((id) => {
+    const point = sketch.pts.find(({ id: pointId }) => pointId === id);
+    return [point.x, point.y];
+  }), [[10, 4], [5, 6], [0, 4]]);
+  assert.equal(sketch.ents[2].closed, false);
+  assert.deepEqual(result.document.bodies[0].node.profiles[0].key.split(",").sort(), sketch.ents.map(({ id }) => id).sort());
+});
+
+test("a closed fit-point spline compiles to one native closed sketch entity", () => {
+  const result = buildModelPlan(doc(), {
+    sketches: [{ id: "outline", plane: "XY", origin: [0, 0, 0], profile: { type: "contour", segments: [{ type: "spline", closed: true, points: [[0, 0], [8, 0], [8, 8], [0, 8]] }] } }],
+    features: [{ id: "body", type: "extrude", sketch: "outline", distance: 2 }],
+  }, ids());
+  assert.deepEqual(result.document.sketches[0].ents.map(({ t, closed }) => [t, closed]), [["spline", true]]);
+});
+
+test("contours reject disconnected, degenerate, oversized, and malformed segments", () => {
+  const base = { name: "Contour", sketches: [{ id: "outline", plane: "XY", origin: [0, 0, 0], profile: { type: "contour", segments: [
+    { type: "line", start: [0, 0], end: [10, 0] }, { type: "line", start: [10, 0], end: [10, 10] },
+    { type: "line", start: [10, 10], end: [0, 10] }, { type: "line", start: [0, 10], end: [0, 0] },
+  ] } }], features: [{ id: "body", type: "extrude", sketch: "outline", distance: 2 }] };
+  const profile = (segments) => ({ ...base, sketches: [{ ...base.sketches[0], profile: { type: "contour", segments } }] });
+  assert.throws(() => normalizeModelPlan(profile([])), /1 to 64 ordered contour segments/);
+  assert.throws(() => normalizeModelPlan(profile([{ type: "line", start: [0, 0], end: [10, 0] }, { type: "line", start: [10.01, 0], end: [0, 0] }])), /connect in order and close/);
+  assert.throws(() => normalizeModelPlan(profile([{ type: "line", start: [0, 0], end: [10, 0] }, { type: "line", start: [10, 0], end: [0, 0] }])), /zero area/);
+  assert.throws(() => normalizeModelPlan(profile([{ type: "spline", points: [[0, 0], [1, 1]] }])), /3 to 128 fit points/);
+  assert.throws(() => normalizeModelPlan(profile([{ type: "spline", points: [[0, 0], [1, 1], [1, 1]] }])), /consecutive duplicate fit points/);
+  assert.throws(() => normalizeModelPlan(profile([{ type: "spline", closed: "yes", points: [[0, 0], [1, 1], [2, 0]] }])), /closed must be a boolean/);
+  assert.throws(() => normalizeModelPlan(profile([{ type: "spline", closed: true, points: [[0, 0], [1, 1], [2, 0]] }, ...base.sketches[0].profile.segments.slice(1)])), /closed spline must be the only/);
+  assert.throws(() => normalizeModelPlan(profile([{ type: "spline", points: Array.from({ length: 129 }, (_, i) => [i, Math.sin(i)]) }])), /3 to 128 fit points/);
+  assert.throws(() => normalizeModelPlan(profile(Array.from({ length: 65 }, (_, i) => ({ type: "line", start: [i, 0], end: [i + 1, 0] })))), /1 to 64 ordered contour segments/);
 });
 
 test("compiles patterned extrude cutters into one native boolean feature", () => {
@@ -154,6 +249,146 @@ test("builds typed primitives, transforms, linear patterns, and cut groups", () 
   assert.ok(Math.abs(positions[3][1] - Math.sqrt(50)) < 1e-8);
 });
 
+test("feature patterns remap native hole points and sketch-backed boolean transforms in body coordinates", () => {
+  const current = { ...doc(), mode: "advanced" };
+  const plan = {
+    name: "Repeated vents",
+    primitives: [{ id: "plate", kind: "box", parameters: { w: 20, d: 10, h: 8 }, position: [10, 0, 0] }],
+    sketches: [{ id: "cutter", plane: "XY", origin: [0, 0, 0], profile: { type: "circle", center: [0, 0], radius: 1 } }],
+    features: [{ id: "sketch-cut", type: "extrude", sketch: "cutter", distance: 8, operation: "cut", target: "plate" }],
+    operations: [
+      { id: "mount-hole", type: "modifier", target: "plate", modifier: { type: "hole", at: [{ p: [0, 0, 8], n: [0, 0, 1] }], diameter: 2, through: true } },
+      { id: "repeat", type: "featurePattern", target: "plate", features: ["mount-hole", "sketch-cut"], mode: "linear", axis: "X", count: 3, spacing: 6, symmetric: true },
+    ],
+  };
+  const makeId = ids();
+  const compiled = buildModelPlan(current, plan, makeId);
+  const body = compiled.document.bodies[0];
+  assert.equal(body.node.mods.length, 2);
+  assert.equal(compiled.pendingFeaturePatterns.length, 1);
+  assert.deepEqual(compiled.pendingFeaturePatterns[0].featureRefs, ["mount-hole", "sketch-cut"]);
+  const summaries = applyFeaturePatterns(compiled.document, compiled.pendingFeaturePatterns, makeId);
+  assert.deepEqual(summaries, [{ id: "repeat", bodyId: body.id, sourceFeatures: ["mount-hole", "sketch-cut"], instances: 5, featureCopies: 8 }]);
+  const holes = body.node.mods.filter((mod) => mod.t === "hole");
+  assert.equal(holes.length, 5);
+  assert.deepEqual(holes.map((mod) => mod.at[0].p[0]).sort((a, b) => a - b), [-12, -6, 0, 6, 12]);
+  assert.ok(holes.every((mod) => mod.at[0].n.join(",") === "0,0,1"));
+  const cuts = body.node.mods.filter((mod) => mod.t === "bool");
+  assert.equal(cuts.length, 5);
+  assert.ok(cuts.every((mod) => mod.tool.sketch === compiled.document.sketches[0].id));
+  assert.deepEqual(cuts.map((mod) => mod.m[12] + 10).sort((a, b) => a - b), [-12, -6, 0, 6, 12]);
+  assert.equal(new Set(body.node.mods.map((mod) => mod.id)).size, body.node.mods.length);
+  assert.ok(body.node.mods.every((mod) => Number.isInteger(mod.seq)));
+});
+
+test("feature patterns reject unknown, unsupported, duplicate, and excessive references", () => {
+  const base = { name: "Feature pattern", primitives: [{ id: "plate", kind: "box" }], operations: [{ id: "repeat", type: "featurePattern", target: "plate", features: ["feature"], mode: "linear", axis: "X", count: 3, spacing: 4 }] };
+  assert.throws(() => buildModelPlan(doc(), base, ids()), /references unknown feature/);
+  const unsupported = { ...base, operations: [{ id: "shell", type: "modifier", target: "plate", modifier: { type: "shell", thickness: 1, faces: [] } }, base.operations[0]] };
+  unsupported.operations[1] = { ...base.operations[0], features: ["shell"] };
+  assert.throws(() => buildModelPlan(doc(), unsupported, ids()), /unsupported feature type shell/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], features: ["feature", "feature"] }] }), /must not contain duplicates/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], count: 13 }] }), /count must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], mode: "linear", symmetric: true, count: 12, features: Array.from({ length: 12 }, (_, index) => `f${index}`) }] }), /more than 256 feature copies/);
+});
+
+test("feature patterns accept inspected native feature ids on existing bodies", () => {
+  const current = { ...doc(), mode: "advanced", bodies: [{ id: "existing", name: "Existing", seq: 1, m: [1,0,0,0,0,1,0,0,0,0,1,0,10,0,0,1], node: { t: "prim", kind: "box", p: { w: 20, d: 10, h: 8 }, mods: [{ id: "native-hole", seq: 2, t: "hole", dia: 2, through: true, at: [{ p: [0, 0, 4], n: [0, 0, 1] }] }] } }] };
+  const compiled = buildModelPlan(current, { name: "Vent plate", operations: [{ id: "vents", type: "featurePattern", target: "existing", features: ["native-hole"], mode: "linear", axis: "X", count: 3, spacing: 3 }] }, ids());
+  applyFeaturePatterns(compiled.document, compiled.pendingFeaturePatterns, ids());
+  const holes = compiled.document.bodies[0].node.mods;
+  assert.equal(holes.length, 3);
+  assert.deepEqual(holes.map((mod) => mod.at[0].p.map((value) => +value.toFixed(6))), [[0, 0, 4], [3, 0, 4], [6, 0, 4]]);
+  assert.equal(new Set(holes.map((mod) => mod.id)).size, 3);
+});
+
+test("splits one body into native halfspace bodies and maps the operation to both", () => {
+  const result = buildModelPlan(doc(), {
+    name: "Split box",
+    primitives: [{ id: "box", kind: "box", parameters: { w: 20, d: 20, h: 20 }, position: [10, 0, 0] }],
+    operations: [{ id: "halves", type: "splitBody", target: "box", plane: { origin: [10, 0, 0], normal: [0, 0, 4] } }],
+  }, ids());
+  const [source, other] = result.document.bodies;
+  assert.equal(source.id, "b-1");
+  assert.equal(source.node.mods.at(-1).t, "halfspace");
+  assert.equal(source.node.mods.at(-1).side, 1);
+  assert.deepEqual(source.node.mods.at(-1).plane, { o: [0, 0, 0], n: [0, 0, 1] });
+  assert.equal(other.node.mods.at(-1).t, "halfspace");
+  assert.equal(other.node.mods.at(-1).side, -1);
+  assert.equal(other.m[12], source.m[12]);
+  assert.deepEqual(result.featureBodyIds.halves, [source.id, other.id]);
+  assert.deepEqual(result.affectedBodyIds, [source.id, other.id]);
+  assert.deepEqual(result.createdBodyIds, [source.id, other.id]);
+});
+
+test("patterns native bodies along typed open and closed paths while preserving the source transform", () => {
+  const open = buildModelPlan(doc(), {
+    name: "Clip row",
+    primitives: [{ id: "clip", kind: "box", parameters: { w: 4, d: 3, h: 2 }, position: [5, 2, 0] }],
+    sketches: [{ id: "route", plane: "XY", origin: [0, 0, 0], segments: [{ type: "line", start: [0, 0], end: [20, 0] }] }],
+    operations: [{ id: "clips", type: "pathPattern", source: "clip", path: "route", mode: "fit", count: 3 }],
+  }, ids());
+  assert.equal(open.document.bodies.length, 3);
+  assert.deepEqual(open.document.bodies.map((body) => body.m.slice(12, 15)), [[5, 2, 0], [12.5, 2, 0], [20, 2, 0]]);
+  assert.equal(open.document.bodies[0].node.kind, "box");
+  assert.deepEqual(open.featureBodyIds.clips, open.document.bodies.map((body) => body.id));
+  assert.deepEqual(open.affectedBodyIds, open.createdBodyIds);
+
+  const closed = buildModelPlan(doc(), {
+    name: "Perimeter clips",
+    primitives: [{ id: "clip", kind: "box", parameters: { w: 4, d: 3, h: 2 }, position: [10, 0, 0] }],
+    sketches: [{ id: "loop", plane: "XY", origin: [0, 0, 0], segments: [
+      { type: "line", start: [10, 0], end: [0, 10] }, { type: "line", start: [0, 10], end: [-10, 0] },
+      { type: "line", start: [-10, 0], end: [0, -10] }, { type: "line", start: [0, -10], end: [10, 0] },
+    ] }],
+    operations: [{ id: "clips", type: "pathPattern", source: "clip", path: "loop", mode: "fit", count: 4, direction: "reverse" }],
+  }, ids());
+  assert.equal(closed.document.bodies.length, 4);
+  assert.deepEqual(closed.document.bodies.map((body) => body.m.slice(12, 15)), [[10, 0, 0], [0, -10, 0], [-10, 0, 0], [0, 10, 0]]);
+
+  const followed = buildModelPlan(doc(), {
+    name: "Bend clips",
+    primitives: [{ id: "clip", kind: "box", position: [0, 0, 0] }],
+    sketches: [{ id: "route", plane: "XY", origin: [0, 0, 0], segments: [
+      { type: "line", start: [0, 0], end: [10, 0] }, { type: "arc", start: [10, 0], through: [15, 5], end: [10, 10] },
+    ] }],
+    operations: [{ id: "clips", type: "pathPattern", source: "clip", path: "route", mode: "fit", count: 2, orientation: "follow-path" }],
+  }, ids());
+  assert.ok(Math.abs(followed.document.bodies[1].m[0] + 1) < 1e-8);
+});
+
+test("path patterns validate path references, fit limits, spacing, anchor and orientation", () => {
+  const base = {
+    name: "Path clips",
+    primitives: [{ id: "clip", kind: "box" }],
+    sketches: [{ id: "route", plane: "XY", origin: [0, 0, 0], segments: [{ type: "line", start: [0, 0], end: [10, 0] }] }],
+    operations: [{ id: "copies", type: "pathPattern", source: "clip", path: "route", mode: "spacing", spacing: 3, count: 3 }],
+  };
+  assert.equal(normalizeModelPlan(base).operations[0].spacing, 3);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], path: "missing" }] }), /earlier path sketch/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], mode: "fit", spacing: 3 }] }), /only supported in spacing mode/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], mode: "spacing", spacing: undefined }] }), /spacing is required/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], count: 13 }] }), /count must be a finite number between 2 and 12/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], orientation: "free" }] }), /orientation must be same or follow-path/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], anchor: [0, 0, Infinity] }] }), /finite number/);
+  assert.throws(() => buildModelPlan(doc(), { ...base, operations: [{ ...base.operations[0], spacing: 6 }] }, ids()), /exceeds the available length/);
+  const full = doc(); full.bodies = Array.from({ length: 128 }, (_, i) => ({ id: `b${i}`, name: "Full", m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], node: { t: "prim", kind: "box", mods: [] } }));
+  assert.throws(() => buildModelPlan(full, { ...base, operations: [{ ...base.operations[0], source: "b0" }] }, ids()), /would exceed 128 document bodies/);
+});
+
+test("split validates strict planes, target uniqueness, locks, and output limits", () => {
+  const base = { name: "Split", primitives: [{ id: "box", kind: "box" }], operations: [{ id: "halves", type: "splitBody", target: "box", plane: { origin: [0, 0, 0], normal: [0, 0, 1] } }] };
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], plane: { origin: [0, 0, 0], normal: [0, 0, 0] } }] }), /normal must not be zero/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], plane: { normal: [0, 0, 1] } }] }), /plane.origin/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], plane: { origin: [0, 0, 0], normal: [0, 0, 1], side: 1 } }] }), /side is not supported/);
+  assert.throws(() => buildModelPlan(doc(), { ...base, operations: [{ ...base.operations[0], target: "missing" }] }, ids()), /unknown or later body/);
+  assert.throws(() => buildModelPlan(doc(), { ...base, operations: [{ id: "first", type: "splitBody", target: "box", plane: base.operations[0].plane }, { id: "again", type: "splitBody", target: "first", plane: base.operations[0].plane }] }, ids()), /exactly one unambiguous target/);
+  const locked = doc(); locked.bodies = [{ id: "locked", name: "Locked", locked: true, m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], node: { t: "prim", kind: "box", p: { w: 2, d: 2, h: 2 }, mods: [] } }];
+  assert.throws(() => buildModelPlan(locked, { name: "Locked split", operations: [{ id: "halves", type: "splitBody", target: "locked", plane: base.operations[0].plane }] }, ids()), /Unlock body/);
+  const full = doc(); full.bodies = Array.from({ length: 128 }, (_, i) => ({ id: `b${i}`, name: "Full", m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], node: { t: "prim", kind: "box", mods: [] } }));
+  assert.throws(() => buildModelPlan(full, { name: "Full split", operations: [{ id: "halves", type: "splitBody", target: "b0", plane: base.operations[0].plane }] }, ids()), /would exceed 128 document bodies/);
+});
+
 test("builds native loft, shell, thread, and emboss features from validated plan operations", () => {
   const result = buildModelPlan(doc(), {
     name: "Tutorial vase",
@@ -183,6 +418,39 @@ test("builds native loft, shell, thread, and emboss features from validated plan
   assert.deepEqual(detailed.document.bodies[0].node.mods.map((mod) => mod.t), ["thread", "emboss"]);
 });
 
+test("coil features compile to native editable nodes with body placement and new/join/cut operations", () => {
+  const result = buildModelPlan(doc(), {
+    name: "Coil features",
+    primitives: [{ id: "base", kind: "box", parameters: { w: 30, d: 30, h: 4 } }],
+    features: [
+      { id: "spring", type: "coil", d: 12, turns: 4.5, mode: "pitch", pitch: 4, section: "square", size: 2, pos: "on", left: true, position: [40, 0, 0], rotation: [0, 90, 0] },
+      { id: "joined", type: "coil", operation: "join", target: "base", d: 12, turns: 4, mode: "height", h: 20, section: "triangle-in", size: 2, pos: "on" },
+      { id: "cut", type: "coil", operation: "cut", target: "base", d: 12, turns: 4, mode: "pitch", pitch: 4, section: "circle", size: 2, pos: "on" },
+    ],
+  }, ids());
+  const spring = result.document.bodies.find((body) => body.node.t === "coil");
+  assert.deepEqual(spring.node, { t: "coil", d: 12, turns: 4.5, mode: "pitch", pitch: 4, angle: 0, section: "square", size: 2, pos: "on", left: true, mods: [] });
+  assert.equal(spring.m[12], 40);
+  assert.ok(Math.abs(spring.m[8] - 1) < 1e-8, "Y rotation directs the local +Z coil axis toward +X");
+  const base = result.document.bodies.find((body) => body.node.t === "prim");
+  assert.deepEqual(base.node.mods.map((mod) => mod.op), ["join", "cut"]);
+  assert.deepEqual(base.node.mods.map((mod) => mod.tool.t), ["coil", "coil"]);
+  assert.deepEqual({ spring: result.featureBodyIds.spring, joined: result.featureBodyIds.joined, cut: result.featureBodyIds.cut }, { spring: spring.id, joined: base.id, cut: base.id });
+});
+
+test("coil plans reject invalid dimensions, modes, clearance, and collapsed tapered ends", () => {
+  const base = { name: "Invalid coil", features: [{ id: "coil", type: "coil" }] };
+  for (const override of [
+    { d: 0 }, { size: -1 }, { turns: 101 }, { turns: 0.1 }, { mode: "distance" },
+    { section: "pentagon" }, { pos: "center" }, { left: "yes" }, { angle: 61 },
+    { mode: "pitch", pitch: 1 }, { mode: "height", h: 8 },
+    { d: 4, size: 2, mode: "pitch", pitch: 4, pos: "inside" },
+    { d: 12, size: 2, mode: "pitch", pitch: 4, angle: -20 },
+  ]) {
+    assert.throws(() => buildModelPlan(doc(), { ...base, features: [{ ...base.features[0], ...override }] }, ids()), /coil|features\[0\]/i, JSON.stringify(override));
+  }
+});
+
 test("adds typed modifiers to an existing body without replacing its source geometry", () => {
   const current = doc();
   current.mode = "advanced";
@@ -197,6 +465,32 @@ test("adds typed modifiers to an existing body without replacing its source geom
   assert.equal(result.document.bodies[0].node.mods[0].t, "scale");
   assert.deepEqual(result.createdBodyIds, []);
   assert.deepEqual(result.affectedBodyIds, ["imported"]);
+});
+
+test("compiles signed face offsets to an editable native modifier using geometric signatures", () => {
+  const result = buildModelPlan(doc(), {
+    name: "Offset block face",
+    primitives: [{ id: "block", kind: "box", parameters: { w: 20, d: 20, h: 10 } }],
+    operations: [{ id: "press-pull", type: "modifier", target: "block", modifier: { type: "offset", distance: -2, faces: [{ c: [0, 0, 5], n: [0, 0, 1], t: "PLANE" }] } }],
+  }, ids());
+  assert.deepEqual(result.document.bodies[0].node.mods[0], {
+    id: "f-2", seq: 2, t: "offset", d: -2, faces: [{ c: [0, 0, 5], n: [0, 0, 1], t: "PLANE" }],
+  });
+  assert.deepEqual(result.affectedBodyIds, [result.document.bodies[0].id]);
+
+  const curved = normalizeModelPlan({ name: "Offset cylinder", primitives: [{ id: "cylinder", kind: "cylinder" }], operations: [{ id: "offset", type: "modifier", target: "cylinder", modifier: { type: "offset", distance: 1, faces: [{ c: [0, 0, 10], t: "CYLINDRE" }] } }] });
+  assert.deepEqual(curved.operations[0].modifier.faces, [{ c: [0, 0, 10], t: "CYLINDRE" }]);
+});
+
+test("offset modifiers reject zero distances, unsupported surfaces, missing selectors, and face indexes", () => {
+  const base = { name: "Offset", primitives: [{ id: "block", kind: "box" }], operations: [{ id: "offset", type: "modifier", target: "block", modifier: { type: "offset", distance: 1, faces: [{ c: [0, 0, 10], t: "PLANE" }] } }] };
+  for (const modifier of [
+    { ...base.operations[0].modifier, distance: 0 },
+    { ...base.operations[0].modifier, faces: [] },
+    { ...base.operations[0].modifier, faces: [{ c: [0, 0, 10], t: "CONE" }] },
+    { ...base.operations[0].modifier, faces: [{ c: [0, 0, 10], t: "PLANE", n: [0, 0, 0] }] },
+    { ...base.operations[0].modifier, faces: [{ index: 2, c: [0, 0, 10], t: "PLANE" }] },
+  ]) assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], modifier }] }), /offset|faces|distance|not supported/i);
 });
 
 test("rejects unsupported plan fields and ambiguous modifier inputs", () => {

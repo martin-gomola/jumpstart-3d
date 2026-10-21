@@ -81,8 +81,15 @@ make up
 
 This builds and starts the container, then prints
 `http://localhost:3210/?mcp=1`. The port is published on loopback only. MCP
-exports are written to this checkout's `exports/` directory. Stop the container
-with `make down`; use `make logs` to inspect its output.
+exports are written to this checkout's `exports/` directory. Put STL, 3MF, STEP,
+or STP files you want the agent to import in this checkout's `imports/`
+directory. Compose mounts it read-only at `/app/imports`; MCP imports use digest
+ids from `jumpstart_list_imports`, never host paths or file bytes. Each file and
+each plan's combined imports are limited to 24 MiB, with at most four files per
+plan. The catalog lists up to 128 files and reports when it is truncated. STL
+plans require explicit `mm`, `cm`, or `in` units. 3MF and STEP retain units
+encoded in the file. Stop the container with `make down`; use `make logs` to
+inspect its output.
 
 For Codex, run `make codex-install` with host Node.js 22 or newer and the Codex
 CLI on PATH. It installs the MCP proxy and modeling skill as a
@@ -155,6 +162,55 @@ Keep the app open at `http://localhost:3210/?mcp=1` while modeling. If using a
 different port, set `JUMPSTART_MCP_HTTP_URL` in the client server environment to
 the matching `http://127.0.0.1:<port>/__mcp/rpc` endpoint.
 
+## Tool reference
+
+The MCP exposes these tools. Model previews leave the document unchanged;
+apply commits a successful preview as one undoable edit.
+
+| Tool | Purpose |
+| --- | --- |
+| `jumpstart_list_imports` | List operator-managed CAD files by metadata and SHA-256 asset id; returns no file contents. |
+| `jumpstart_list_editors` | List connected editor tabs and their connection state. |
+| `jumpstart_get_document` | Read the current document, revision, bodies, features, and optional geometry selectors. |
+| `jumpstart_get_capabilities` | Read tool schemas, modeling operations, limits, and unsupported features. |
+| `jumpstart_preview_model` | Preview a typed model plan with primitives, sketches, features, operations, and digest-referenced managed imports. |
+| `jumpstart_preview_resize_body` | Preview an exact body resize while preserving its base, center, or corner anchor. |
+| `jumpstart_preview_new_document` | Preview an empty document as a recoverable edit. |
+| `jumpstart_preview_native_model` | Preview a dimensioned rectangle and expression-bound extrusion using native document parameters. |
+| `jumpstart_preview_native_parameters` | Preview changes to native document parameters. |
+| `jumpstart_preview_parameters` | Preview parameter changes to a saved MCP model template. |
+| `jumpstart_preview_frame` | Preview a rectangular spacer frame. |
+| `jumpstart_preview_lathe` | Preview a turned part from an axial profile, with optional hollowing and scale. |
+| `jumpstart_inspect_geometry` | Measure live or preview geometry, including dimensions, sections, samples, and mesh checks. |
+| `jumpstart_select_geometry` | Find native edges or faces by geometric properties; reports ambiguity instead of guessing. |
+| `jumpstart_apply_model` | Apply a successful preview as one undoable edit; duplicate applies are ignored. |
+| `jumpstart_undo` | Undo one edit when the document revision still matches. |
+| `jumpstart_save_document` | Save the current document to browser-local project storage; optionally save a version. |
+| `jumpstart_reopen_document` | Reopen the current project's saved document as a recoverable edit. |
+| `jumpstart_export_model` | Export visible solid bodies as STL, STEP, or 3MF. |
+| `jumpstart_start_tutorial` | Start native tutorial checks on the current blank document. |
+| `jumpstart_get_tutorial_status` | Read observed tutorial checks; manual steps are not certified. |
+
+`jumpstart_preview_model` also accepts a typed `gear` operation for editable
+spur gears, straight bevel gears, and racks. A spur gear uses module, tooth
+count, pressure angle, face width, and an optional center bore. A straight
+bevel gear adds a pitch cone angle (5–80°, default 45°) and tapers its sampled
+involute tooth section from the large end to the small end with a ruled loft;
+this is an editable geometric approximation, not a tooth-contact-accurate
+gear design. Its bore must fit inside the small-end root diameter. Its
+`thickness` is axial face width. A rack
+uses module, tooth count, pressure angle, face width, and backing depth
+(`baseDepth`, defaulting to twice the module). Each becomes a native primitive
+node whose parameters remain editable through the editor timeline. Spiral
+bevel teeth and automatic gear-pair placement are not provided.
+
+The typed plan does not yet provide spiral bevel gears, generic patterns of existing
+feature modifiers, Split Face, or asset import. Split Face's current editor
+implementation cannot be edited and its kernel selector can choose a nearby
+face after topology changes. Imported STL/STEP/3MF bodies can be inspected,
+resized, and exported through the existing tools, but MCP does not open a file
+picker or accept host file paths.
+
 ## Agent workflow
 
 The top-bar AI indicator uses a visible state label such as `AI ready` or
@@ -174,7 +230,7 @@ permissions.
 
 1. Call `jumpstart_list_editors`; specify `editorId` if more than one editor is open, even if one reports focus. Listings include `lastSeenAt`, `connectionState`, and the number of tabs sharing a document id. After a tab reload or disconnect, relist and verify its document before editing.
 2. Call `jumpstart_get_document({ includeGeometry: true })` to read the current revision, world bounds, body-local dimensions, sketches, feature nodes, and capped edge/face selectors.
-3. Call `jumpstart_preview_model` with a typed plan. Plans support JumpStart primitives, explicit circle/polygon sketches, extrude/revolve/loft features, body transforms, linear/circular patterns, groups, booleans, metric/inch fasteners, fitted planar hole patterns, and native fillet/shell/hole/thread/emboss/scale modifiers. They can add bodies or edit existing bodies by id. For a direct imported-body size change, `jumpstart_preview_resize_body` remains the shortest form.
+3. Call `jumpstart_preview_model` with a typed plan. Plans support JumpStart primitives, circle/polygon/rounded-rectangle/line-arc-spline contour profiles, reusable line/arc path sketches, extrude/revolve/loft/sweep/pipe/coil features, native spur, straight bevel, and rack gears, body transforms, linked or joined body mirrors, linear/circular/path body patterns, patterns of editable hole, emboss, and sketch-backed boolean features, plane-based body splits, groups, booleans, metric/inch fasteners, fitted planar hole patterns, and native fillet/chamfer/offset/shell/hole/thread/emboss/scale modifiers. They can add bodies or edit existing bodies by id. For a direct imported-body size change, `jumpstart_preview_resize_body` remains the shortest form.
 4. Inspect preview validity, errors, dimensions, and the returned image before applying.
 5. Call `jumpstart_apply_model` with the returned `previewId`. Applying the same id twice does not duplicate the edit.
 6. Read the new revision before calling `jumpstart_undo`. The revision check prevents undoing a later user edit.
@@ -184,9 +240,82 @@ All coordinates, radii, distances, and feature parameters are in millimeters. `u
 
 ## Plan shape
 
-A plan contains typed primitive bodies, sketches, CAD features, and operations. Sketches have a local plane (`XY`, `XZ`, or `YZ`), origin, and one closed circle or polygon profile; sketch coordinates and all feature parameters use millimeters. Features can extrude, revolve, or loft those profiles. Boolean joins/cuts can reference earlier bodies. Linear patterns use `count` as instances per side when `symmetric` is true, so count 4 creates 7 total instances. Circular patterns use `count` including the source; a partial total angle includes both endpoints, while 360 degrees spaces instances around the complete circle.
+A plan contains typed primitive bodies, sketches, CAD features, and operations. Profile sketches have a local plane (`XY`, `XZ`, or `YZ`), origin, and one closed circle, polygon, rounded rectangle, or explicit contour. A rounded rectangle uses `width`, `height`, `radius`, and an optional local `center` (default `[0, 0]`); its radius must be positive and no larger than half the shorter side. It compiles to native line and quarter-arc sketch entities. A contour is an ordered `profile.segments` list of lines (`start`, `end`), three-point arcs (`start`, `through`, `end`), and spline fit-point segments (`points`). Segment endpoints must connect and close within 0.001 mm. An open spline segment must begin and end at adjacent segment endpoints; a single spline can instead set `closed: true` and form the whole contour. Contours allow up to 64 segments and 128 input points. They compile to editable native line, arc, and spline entities. Preview delegates exact curve and face construction to the CAD kernel; MCP does not provide an independent analytic self-intersection proof for arbitrary splines. Path sketches use the same plane and origin with an ordered `segments` list of lines and three-point arcs; endpoints must connect within 0.001 mm. Sketch coordinates and all feature parameters use millimeters. Features can extrude, revolve, loft, sweep a profile along a path, or create a pipe along a path. Pipes support circle, square, or triangle sections and optional hollow walls. Sweep and pipe paths are editable native sketches, and these features support `new`, `join`, or `cut` operations. Sweep taper, twist, and edge-picked paths are not part of this input. Boolean joins/cuts can reference earlier bodies. Linear patterns use `count` as instances per side when `symmetric` is true, so count 4 creates 7 total instances. Circular patterns use `count` including the source; a partial total angle includes both endpoints, while 360 degrees spaces instances around the complete circle.
+
+`featurePattern` copies selected modifiers on exactly one body. `features` accepts stable ids from earlier modifier, boolean-feature, or hole-pattern operations, and native modifier ids returned by geometry inspection. Axes and origins are world-space; copied hole points and normals, emboss frames, and boolean tool transforms are mapped into the body's local coordinates. Supported modifiers are holes, planar embosses, and sketch-backed extrude, revolve, or sweep booleans. Unsupported feature types are rejected. Linear/circular count follows body pattern semantics, and each operation is limited to 256 generated modifier copies.
+
+### Path body patterns and body splits
+
+`pathPattern` copies one or more earlier bodies along a typed path sketch. It creates separate bodies with copied native feature trees, so each instance remains editable. `count` is 2 to 12 and includes the unchanged source. For an open path, `mode: "fit"` spreads copies from the anchor station to the endpoint selected by `direction`; `mode: "spacing"` requires `spacing` and rejects copies that exceed that endpoint. For a closed path, fit spaces instances around one full loop without repeating the first station. The optional world-space `anchor` is projected to the nearest point on the path. When omitted, the source body's transformed local origin is used. The original transform is preserved. `orientation: "same"` keeps each copy's rotation; `"follow-path"` rotates copies by the path tangent change from the first station.
+
+```json
+{
+  "name": "Clips along a cable guide",
+  "primitives": [
+    { "id": "clip", "kind": "box", "parameters": { "w": 8, "d": 6, "h": 4 }, "position": [0, 0, 0] }
+  ],
+  "sketches": [
+    { "id": "route", "plane": "XY", "origin": [0, 0, 0], "segments": [
+      { "type": "line", "start": [0, 0], "end": [20, 0] },
+      { "type": "arc", "start": [20, 0], "through": [25, 5], "end": [20, 10] }
+    ] }
+  ],
+  "operations": [
+    { "id": "clips", "type": "pathPattern", "source": "clip", "path": "route", "mode": "fit", "count": 4, "orientation": "follow-path" }
+  ]
+}
+```
+
+`splitBody` divides one editable body with a world-space plane and returns two editable bodies. The positive-normal side keeps the target body id; the opposite side gets a new id. It fails if either side has no solid volume or the document body limit would be exceeded.
+
+```json
+{
+  "name": "Halved enclosure",
+  "primitives": [{ "id": "case", "kind": "box", "parameters": { "w": 40, "d": 30, "h": 20 } }],
+  "operations": [{ "id": "halves", "type": "splitBody", "target": "case", "plane": { "origin": [20, 0, 0], "normal": [1, 0, 0] } }]
+}
+```
+
+### Native coil
+
+Use a `coil` feature for an editable helical body. `d` is its diameter parameter, `turns` supports fractional turns, and `mode` chooses whether `h` (overall height) or `pitch` (rise per turn) controls the helix. Choose `section` from `circle`, `square`, `triangle`, or `triangle-in`; `size` is the section size. `pos` controls whether the section sits inside, on, or outside the nominal coil diameter. `angle` sets taper in degrees from -60 to 60, and `left` selects a left-handed helix. `position` and `rotation` place the coil, whose local axis starts along +Z. The input rejects turn overlap and taper that collapses the end radius.
+
+```json
+{
+  "name": "Replacement spring",
+  "features": [{ "id": "spring", "type": "coil", "d": 24, "turns": 7, "mode": "height", "h": 35, "section": "circle", "size": 2 }]
+}
+```
+
+Mirror an existing or newly created body across a plane using its origin and normal in millimeters. The default `behavior` is `linked`, which creates an editable mirror body that follows its source. Use `behavior: "join"` to merge a reflected snapshot into the source body. Nested linked mirrors are unsupported, and named-parameter models cannot mirror bodies from outside that model.
+
+```json
+{
+  "name": "Symmetric bracket",
+  "primitives": [{ "id": "arm", "kind": "box", "parameters": { "w": 40, "d": 8, "h": 6 }, "position": [20, 0, 0] }],
+  "operations": [{ "id": "other-arm", "type": "mirror", "source": "arm", "plane": { "origin": [0, 0, 0], "normal": [1, 0, 0] } }]
+}
+```
 
 ### Native fasteners and hole patterns
+
+The `gear` operation creates native spur, straight bevel, or rack primitives.
+Their stored module, tooth count, pressure angle, face width, and subtype
+parameters remain available in the editor's primitive editor. Spur and bevel
+tooth profiles use sampled involute flanks; bevel teeth taper between two
+matching conical sections. Racks use standard addendum and dedendum
+proportions. This operation does not create matched gear-pair placement or
+spiral bevel teeth, and does not certify bevel gear mating accuracy.
+
+```json
+{
+  "name": "Straight bevel gear and rack",
+  "operations": [
+    { "id": "drive", "type": "gear", "gearType": "bevel", "module": 1.5, "teeth": 24, "thickness": 6, "coneAngle": 45, "bore": 5, "position": [0, 0, 0] },
+    { "id": "slide", "type": "gear", "gearType": "rack", "module": 1.5, "teeth": 24, "thickness": 6, "baseDepth": 3, "position": [0, 30, 0] }
+  ]
+}
+```
 
 Add fasteners as operations in the same previewable plan. Supported sizes are M2.5 through M12 coarse metric, plus #6-32 through 1/2-20 UNC/UNF. `length` is required for bolts, rods, and cutters, and must provide at least three thread turns; nuts ignore it. Fasteners are native editable bodies: bolts use a hex head and threaded shank, nuts use a bored hex prism and internal thread, rods use an external thread, and cutters are threaded bodies marked as subtractive tools. `clearance` is a thread print offset from -1 to 0 mm. Position is in millimeters and rotation in degrees.
 
@@ -218,13 +347,21 @@ A `holePattern` operation adds one native Hole feature with all generated positi
 }
 ```
 
-Hole patterns support `simple`, `cbore`, `csink`, and `tapped` holes. For a tapped pattern, `diameter` is the tap-drill diameter and `pitch` sets the thread pitch. Pattern candidate counts are capped at 200; final feature limits are 200 simple holes, 130 counterbores, 130 countersinks, or 8 tapped holes. Preview first builds the target, computes positions from its planar-face mesh, then builds the native Hole feature. Inspect the preview geometry before applying as usual.
+Round hole patterns support `simple`, `cbore`, `csink`, and `tapped` holes. For a tapped pattern, `diameter` is the tap-drill diameter and `pitch` sets the thread pitch. Pattern candidate counts are capped at 200; final feature limits are 200 simple holes, 130 counterbores, 130 countersinks, or 8 tapped holes. Preview first builds the target, computes positions from its planar-face mesh, then builds the native Hole feature.
+
+For non-round cuts, set `shape` to `square`, `hex`, or `slot` and provide `width`. Hex width is measured across flats. Slots also require a `length` greater than `width`; on circular layouts, slots point toward the circle center. Omit `depth` for a through cut or provide it for a blind cut. Omit `hole`; shaped patterns compile to one native sketch and one editable extrusion cut.
+
+```json
+{ "id": "mount-slots", "type": "holePattern", "target": "plate", "face": "+z", "layout": { "type": "grid", "cols": 2, "rows": 2, "pitch": 16 }, "shape": "slot", "width": 4, "length": 10 }
+```
+
+Fit and spacing checks use the shape's bounding radius, so a pattern that barely fits may be rejected conservatively. Inspect the preview geometry before applying as usual.
 
 `jumpstart_preview_resize_body` changes the exact local X, Y, and/or Z size of an existing body by adding or updating JumpStart's native scale feature. It works on imported STL/3MF meshes and preserves their mesh source. Omitted dimensions stay unchanged. `base` keeps the bottom center fixed; `center` keeps the center fixed; `corner` keeps the minimum corner fixed. Imported meshes remain meshes: resize, placement, and feature-based cuts are editable, while the original triangle surface is not a parametric sketch or feature tree.
 
-For fillet and shell, first preview the base shape or read an existing body with `includeGeometry: true`, then use the returned local edge/face signatures in the modifier. Hole positions/normals, thread face centers, and emboss face frames are also body-local. Preview again after editing an earlier feature because edge and face references can change when geometry changes.
+For fillet and chamfer, use current local edge signatures. For offset and shell, use current face signatures from `get_document({ includeGeometry: true })` with center, surface type, and the planar normal where applicable. Offset distance is signed: positive pushes the face out; negative pulls it in. Offset rejects far or ambiguous face matches. Hole positions/normals, thread face centers, and emboss face frames are also body-local. Preview again after editing an earlier feature because edge and face references can change when geometry changes.
 
-The current MCP sketch input uses explicit point coordinates and circle radii. The general plan does not expose arbitrary solver constraints, arcs, splines, or arbitrary mirror planes. Native bound rectangles and 3MF export have separate supported paths. Preview validation reports OpenCascade build errors and mesh measurements; it does not prove a physical fit or replace a slicer/manifold check.
+The current MCP sketch input uses explicit point coordinates and circle radii, plus ordered line/arc/spline contours. It does not expose arbitrary solver constraints. Path sketches support only ordered line and three-point arc segments; they do not expose edge-picked paths. Contour curve intersections are not independently proven analytically; failed CAD-kernel face construction rejects the preview. Native bound rectangles and 3MF export have separate supported paths. Preview validation reports OpenCascade build errors and mesh measurements; it does not prove a physical fit or replace a slicer/manifold check.
 
 ## Inspection and parameter revisions
 
@@ -492,6 +629,31 @@ The recipe is editable, but it is not a sketch-based CAD feature tree.
 Native hollow bottoms are quantized to axial slices: `latheSampling.axialStepMm`
 reports the resolution before scaling. Inspect actual thickness rather than
 assuming the requested bottom dimension is exact.
+
+Managed imports are listed with `jumpstart_list_imports`; use the returned
+`assetId` in a typed `import` operation. STL operations require explicit
+`units: "mm"`, `"cm"`, or `"in"`. Omit `units` for 3MF and STEP so their file
+semantics remain authoritative. STL and 3MF become editable mesh bodies; STEP
+and STP become native STEP bodies. Imports use the same preview, geometry
+inspection, apply, revision, idempotency, and undo workflow as generated
+geometry. Only the operator-managed `imports/` directory is read, and Docker
+mounts it read-only.
+
+```json
+{"id":"housing","type":"import","assetId":"<sha256-from-list-imports>","units":"mm"}
+```
+
+The `gear` operation builds a native spur, straight bevel, or rack from
+persisted parameters. Spur and bevel outside diameter is `module × (teeth + 2)`;
+rack length is `module × teeth × π`. Tooth counts are limited to 6–120, module
+to 0.2–50 mm, pressure angle to 14–30 degrees, and face width to 0.1–10,000 mm.
+Bevel gears add a 5–80 degree pitch cone angle, defaulting to 45 degrees; their
+face width is axial, and a valid plan must leave a positive small-end root
+radius. Spur bores must fit below the dedendum root diameter; bevel bores must
+fit inside the smaller small-end root diameter. Rack `baseDepth` must be
+positive; the total rack height is `baseDepth + 2.25 × module`. The bevel
+profile is a conical loft approximation. Spiral bevel teeth, automatic gear-pair
+placement, and tooth-mating accuracy checks are not provided.
 
 All new previews use the existing apply/undo, revision and retry guards. No
 arbitrary document nodes, JavaScript, or UI clicks are accepted. Interactive

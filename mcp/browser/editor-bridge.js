@@ -1,6 +1,6 @@
 import { compileFramePlan } from "./frame-plan.js";
 import { store, resolveNode, newDoc } from "../../src/store.js";
-import { resizeBodyDocument } from "./model-plan.js";
+import { applyFeaturePatterns, resizeBodyDocument } from "./model-plan.js";
 import { getUnit } from "../../src/units.js";
 import { clone } from "../../src/util.js";
 import { compileMcpModel, refreshMcpModelBodyState, reviseMcpParameters } from "./models.js";
@@ -13,6 +13,7 @@ import { compileLathePlan } from "./lathe-plan.js";
 import { buildHolePattern } from "./hole-pattern.js";
 import { fitPreviewCamera } from "./preview-camera.js";
 import { tutorialSession } from "./tutorial-session.js";
+import { fromB64, isZip, packMesh, readMeshFile, simplify, toB64, MESH_LIMIT } from "../../src/meshimport.js";
 
 const BRIDGE = "/__mcp";
 const HEARTBEAT_MS = 5_000;
@@ -350,10 +351,16 @@ export function initMcp(app) {
         const generated = buildHolePattern(entry.body, entry.view.data, pattern);
         const target = compiled.document.bodies.find((body) => body.id === pattern.bodyId);
         target.node.mods = target.node.mods || [];
-        target.node.mods.push(generated.mod);
-        holePatterns.push({ id: pattern.id, bodyId: pattern.bodyId, faceIndex: generated.faceIndex, holes: generated.holes, total: generated.total, dropped: generated.dropped, fittedPitch: generated.fittedPitch });
+        if (generated.mod) target.node.mods.push(generated.mod);
+        else {
+          generated.sketch.seq = pattern.sketchSeq;
+          compiled.document.sketches.push(generated.sketch);
+          target.node.mods.push({ id: pattern.featureId, seq: pattern.seq, t: "bool", op: "cut", tool: generated.tool, m: IDENTITY.slice() });
+        }
+        holePatterns.push({ id: pattern.id, bodyId: pattern.bodyId, shape: generated.shape || "round", faceIndex: generated.faceIndex, holes: generated.holes, total: generated.total, dropped: generated.dropped, fittedPitch: generated.fittedPitch });
       }
-      if (holePatterns.length) {
+      const featurePatterns = applyFeaturePatterns(compiled.document, compiled.pendingFeaturePatterns || []);
+      if (holePatterns.length || featurePatterns.length) {
         refreshMcpModelBodyState(compiled.document, compiled.modelId);
         setCompiledPreview();
         results = await waitForBuild();
@@ -365,6 +372,7 @@ export function initMcp(app) {
         document: { id: store.doc.id, name: plan.name },
         modelId: compiled.modelId, parameters: compiled.parameters, diff: compiled.diff, designContext: compiled.designContext,
         ...(holePatterns.length ? { holePatterns } : {}),
+        ...(featurePatterns.length ? { featurePatterns } : {}),
         bodies: results.filter((entry) => entry.view).map(({ body, view }) => ({ ...bodyInfo(body, app, true), volume: view.data.volume, triangleCount: view.data.triangles.length / 3 })),
         ...extra,
       };
@@ -399,9 +407,50 @@ export function initMcp(app) {
     }
   }
 
-  async function previewModel(rawPlan, includeImage = true, replaceBodyIds = [], section, expectedRevision) {
+  async function prepareImportDocument(rawPlan, importAssets) {
+    const operations = (rawPlan.operations || []).filter((operation) => operation.type === "import");
+    if (!operations.length) {
+      if (importAssets?.length) throw new Error("Unexpected managed import bytes were supplied without import operations");
+      return store.doc;
+    }
+    if (!Array.isArray(importAssets) || importAssets.length !== operations.length || operations.length > 4) throw new Error("Managed import payload does not match the typed import operations");
+    const byId = new Map(importAssets.map((asset) => [asset.assetId, asset]));
+    if (byId.size !== operations.length || operations.some((operation) => !byId.has(operation.assetId))) throw new Error("Managed import payload ids do not match the typed plan");
+    const document = clone(store.doc);
+    document.assets ||= {};
+    let total = 0;
+    for (const operation of operations) {
+      const asset = byId.get(operation.assetId);
+      if (!/^[a-f0-9]{64}$/.test(asset.assetId) || typeof asset.name !== "string" || asset.name.includes("/") || asset.name.includes("\\") || !Number.isSafeInteger(asset.sizeBytes) || typeof asset.base64 !== "string") throw new Error("Managed import metadata is invalid");
+      const format = String(asset.format).toLowerCase();
+      const extension = asset.name.slice(asset.name.lastIndexOf(".") + 1).toLowerCase();
+      if (!["stl", "3mf", "step"].includes(format) || !(extension === format || (format === "step" && extension === "stp"))) throw new Error("Managed import file type does not match its filename");
+      if (asset.sizeBytes < 1 || asset.sizeBytes > 24 * 1024 * 1024 || asset.base64.length > 32 * 1024 * 1024) throw new Error("Managed import exceeds the 24 MiB file limit");
+      total += asset.sizeBytes;
+      if (total > 24 * 1024 * 1024) throw new Error("Managed imports exceed the 24 MiB per-plan limit");
+      const bytes = fromB64(asset.base64);
+      if (bytes.byteLength !== asset.sizeBytes) throw new Error("Managed import size does not match its metadata");
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
+      if (hash !== asset.assetId || hash !== operation.assetId) throw new Error("Managed import digest changed after listing; list the imports again");
+      let kind = "step", data = bytes;
+      if (format === "stl" || format === "3mf") {
+        if ((format === "3mf") !== isZip(bytes)) throw new Error(`The ${format.toUpperCase()} import contents do not match the declared file type`);
+        const parsed = await readMeshFile(bytes);
+        if (format === "3mf" && !parsed.unitFromFile) throw new Error("The 3MF import did not provide file units");
+        if (format === "stl" && operation.units !== "mm" && operation.units !== "cm" && operation.units !== "in") throw new Error("STL import requires explicit units: mm, cm, or in");
+        kind = "mesh";
+        const mesh = parsed.mesh.I.length / 3 > MESH_LIMIT ? simplify(parsed.mesh, MESH_LIMIT).mesh : parsed.mesh;
+        data = packMesh(mesh);
+      } else if (operation.units !== undefined) throw new Error("STEP import must preserve units encoded in its file");
+      document.assets[asset.assetId] = { kind, name: asset.name, data: toB64(data) };
+    }
+    return document;
+  }
+
+  async function previewModel(rawPlan, includeImage = true, replaceBodyIds = [], section, expectedRevision, importAssets = []) {
     assertIdle(); checkRevision(expectedRevision);
-    const compiled = compileMcpModel(store.doc, rawPlan, replaceBodyIds);
+    const sourceDocument = await prepareImportDocument(rawPlan, importAssets);
+    const compiled = compileMcpModel(sourceDocument, rawPlan, replaceBodyIds);
     return previewCompiled(compiled, compiled.plan, includeImage, section);
   }
 
@@ -518,7 +567,7 @@ export function initMcp(app) {
         const document = newDoc(p.name || "Untitled", p.mode || "beginner");
         return previewCompiled({ document, createdBodyIds: [], affectedBodyIds: [], featureBodyIds: {} }, { name: document.name, mode: document.mode }, false, undefined, { newDocument: { id: document.id, name: document.name, mode: document.mode }, replacesDocument: store.doc.id });
       }
-      case "preview_model": return previewModel(p.plan, p.includeImage !== false, p.replaceBodyIds || [], p.section, p.expectedRevision);
+      case "preview_model": return previewModel(p.plan, p.includeImage !== false, p.replaceBodyIds || [], p.section, p.expectedRevision, p.importAssets || []);
       case "preview_resize_body": return previewResizeBody(p.bodyId, p.size, p.anchor || "base", p.includeImage !== false, p.section, p.expectedRevision);
       case "preview_parameters": return previewParameters(p);
       case "inspect_geometry": {

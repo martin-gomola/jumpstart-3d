@@ -13,6 +13,18 @@ cases:
   - prompt: "Change this native bracket's width parameter to 80 mm."
     expected: invoke
     mode: implicit
+  - prompt: "Make a divided organizer tray with a swept cable hook in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Create an M2 straight bevel gear with a 24 tooth profile and 45 degree cone."
+    expected: invoke
+    mode: implicit
+  - prompt: "Pattern the selected mounting slots across this plate."
+    expected: invoke
+    mode: implicit
+  - prompt: "Import reference.stl through an arbitrary local path."
+    expected: invoke
+    mode: implicit
   - prompt: "Render a photorealistic 3D illustration of a switch."
     expected: do-not-invoke
     neighbor: imagegen

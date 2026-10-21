@@ -28,12 +28,17 @@ function fixed() {
   FIXED_D = huff(new Uint8Array(30).fill(5), 30);
 }
 
-export function inflateRaw(src, sizeHint) {
+export function inflateRaw(src, sizeHint, maxOutputBytes = Infinity) {
+  if (!(maxOutputBytes > 0)) throw new Error("Invalid decompressed data limit.");
+  if (Number.isFinite(sizeHint) && sizeHint > maxOutputBytes) throw new Error("Decompressed data exceeds the allowed size.");
   let pos = 0, bit = 0, nb = 0;
-  let out = new Uint8Array(Math.max(1024, sizeHint || src.length * 4)), op = 0;
+  let out = new Uint8Array(Math.min(maxOutputBytes, Math.max(1024, sizeHint || src.length * 4))), op = 0;
   const need = (n) => {
+    if (op + n > maxOutputBytes) throw new Error("Decompressed data exceeds the allowed size.");
     if (op + n <= out.length) return;
-    let m = out.length * 2; while (m < op + n) m *= 2;
+    let m = Math.min(maxOutputBytes, out.length * 2);
+    while (m < op + n) m = Math.min(maxOutputBytes, m * 2);
+    if (m < op + n) throw new Error("Decompressed data exceeds the allowed size.");
     const o = new Uint8Array(m); o.set(out.subarray(0, op)); out = o;
   };
   const bits = (n) => {
@@ -110,15 +115,39 @@ export function gunzipSync(u8) {
 }
 
 // async helpers: native stream when the browser has one, this decoder otherwise
-async function viaStream(u8, fmt) {
-  const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream(fmt));
-  return new Uint8Array(await new Response(s).arrayBuffer());
+async function viaStream(u8, fmt, maxOutputBytes = Infinity) {
+  const reader = new Blob([u8]).stream().pipeThrough(new DecompressionStream(fmt)).getReader();
+  const chunks = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.length;
+      if (length > maxOutputBytes) throw new Error("Decompressed data exceeds the allowed size.");
+      chunks.push(value);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  }
+  const output = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.length; }
+  return output;
 }
 export async function gunzip(u8) {
   if (typeof DecompressionStream !== "undefined") { try { return await viaStream(u8, "gzip"); } catch (e) { /* fall through */ } }
   return gunzipSync(u8);
 }
-export async function inflate(u8) {
-  if (typeof DecompressionStream !== "undefined") { try { return await viaStream(u8, "deflate-raw"); } catch (e) { /* fall through */ } }
-  return inflateRaw(u8);
+export async function inflate(u8, sizeHint, maxOutputBytes = Infinity) {
+  if (!(maxOutputBytes > 0)) throw new Error("Invalid decompressed data limit.");
+  if (Number.isFinite(sizeHint) && sizeHint > maxOutputBytes) throw new Error("Decompressed data exceeds the allowed size.");
+  if (typeof DecompressionStream !== "undefined") {
+    try { return await viaStream(u8, "deflate-raw", maxOutputBytes); }
+    catch (error) {
+      if (error.message === "Decompressed data exceeds the allowed size.") throw error;
+    }
+  }
+  return inflateRaw(u8, sizeHint, maxOutputBytes);
 }

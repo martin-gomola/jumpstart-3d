@@ -9,6 +9,15 @@ export function refreshMcpModelBodyState(document, modelId) {
   const model = document.mcpModels?.find((entry) => entry.id === modelId);
   if (!model) return;
   model.bodyState = state(document, model.bodyIds, "bodies");
+  const sketchIds = new Set(model.sketchIds || []);
+  for (const body of document.bodies.filter((entry) => model.bodyIds.includes(entry.id))) {
+    JSON.stringify(body.node, (key, value) => {
+      if (key === "sketch" && typeof value === "string") sketchIds.add(value);
+      return value;
+    });
+  }
+  model.sketchIds = [...sketchIds];
+  model.sketchState = state(document, model.sketchIds, "sketches");
 }
 
 export function compileMcpModel(document, rawPlan, replaceBodyIds = [], options = {}) {
@@ -35,6 +44,9 @@ export function compileMcpModel(document, rawPlan, replaceBodyIds = [], options 
     input.sketches = input.sketches.filter((sketch) => !previous.sketchIds.includes(sketch.id));
   }
   const plan = normalizeModelPlan(resolved.plan, input.bodies.map((body) => body.id), input.mode);
+  if (template.parameters && plan.operations.some((operation) => operation.type === "mirror" && input.bodies.some((body) => body.id === operation.source))) {
+    throw new Error("Named parameter models must own the bodies they mirror; external body dependencies require a separate plan");
+  }
   const compiled = buildModelPlan(input, plan, undefined, replaceBodyIds, true);
   const changedExisting = input.bodies.filter((body) => !replaceBodyIds.includes(body.id) && state(input, [body.id], "bodies") !== state(compiled.document, [body.id], "bodies"));
   if (changedExisting.some((body) => body.locked)) throw new Error("Unlock every affected body before editing it");
@@ -47,6 +59,11 @@ export function compileMcpModel(document, rawPlan, replaceBodyIds = [], options 
       for (const [feature, ids] of Object.entries(compiled.featureBodyIds)) {
         const old = previous.featureBodyIds[feature];
         if (typeof ids === "string" && typeof old === "string" && previous.bodyIds.includes(old) && compiled.createdBodyIds.includes(ids)) remap.set(ids, old);
+        else if (Array.isArray(ids) && Array.isArray(old)) {
+          for (let i = 0; i < Math.min(ids.length, old.length); i++) {
+            if (previous.bodyIds.includes(old[i]) && compiled.createdBodyIds.includes(ids[i])) remap.set(ids[i], old[i]);
+          }
+        }
       }
       for (const body of compiled.document.bodies) if (remap.has(body.id)) body.id = remap.get(body.id);
       for (const pattern of compiled.pendingHolePatterns || []) pattern.bodyId = remap.get(pattern.bodyId) || pattern.bodyId;

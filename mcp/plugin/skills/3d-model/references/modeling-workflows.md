@@ -57,3 +57,65 @@ cut-only relative to the blank. Use the persisted body recipe for revision and
 reconcile native edits outside that recipe before regeneration. Inspect actual
 hollowing and `latheSampling.axialStepMm`; coarse samples can change the effective
 bottom thickness. Do not present a recipe mesh as a complete CAD feature tree.
+
+## Common household parts
+
+Treat these as dimensioned examples only. Replace dimensions with measurements
+from the user's part or requirements. Preview and inspect the result; a valid
+mesh does not establish installation fit or printability.
+
+### Divided tray
+
+This plan creates an 80 × 60 × 16 mm tray with 5 mm outer corner radii, a 2 mm
+floor, two compartments, and a 2 mm divider:
+
+```json
+{
+  "name": "80 by 60 divided organizer",
+  "sketches": [
+    { "id": "outer", "plane": "XY", "origin": [0, 0, 0], "profile": { "type": "roundedRect", "width": 80, "height": 60, "radius": 5 } },
+    { "id": "cavity", "plane": "XY", "origin": [0, 0, 2], "profile": { "type": "roundedRect", "width": 76, "height": 56, "radius": 3 } },
+    { "id": "divider", "plane": "XY", "origin": [0, 0, 2], "profile": { "type": "polygon", "points": [[-1, -28.1], [1, -28.1], [1, 28.1], [-1, 28.1]] } }
+  ],
+  "features": [
+    { "id": "tray", "type": "extrude", "sketch": "outer", "distance": 16 },
+    { "id": "cavity-cut", "type": "extrude", "sketch": "cavity", "distance": 14, "operation": "cut", "target": "tray" },
+    { "id": "divider-wall", "type": "extrude", "sketch": "divider", "distance": 14, "operation": "join", "target": "tray" }
+  ]
+}
+```
+
+Inspect the outer bounds, floor, compartment count and widths, divider, and mesh.
+State the test dimensions as assumptions unless the user supplied them.
+
+### Curved hook and cable guide
+
+Use a circle profile with a connected line/arc path for a swept hook. Use a
+separate pipe path with `hollow: true` and a wall value for a cable guide. The
+section size and path are explicit and remain editable. Check path bounds and
+measured volume; do not infer load capacity from the model.
+
+### Mirrored slotted bracket pair
+
+For two 40 × 24 × 6 mm plates, create one plate at `[22, 0, 0]`, cut two slots
+with `shape: "slot"`, `width: 4`, `length: 10`, and `pitch: [16, 12]`, then add a
+linked mirror across the plane at the origin with normal `[1, 0, 0]`. Preview
+and inspect both plates, slot symmetry, thickness, and mesh validity. Supply the
+actual wall and fastener measurements before treating this as a fit design.
+
+### Hollow cup or cover
+
+A 40 mm cylinder with a 38 mm circular cut that starts 2 mm above the base has
+a nominal 2 mm side wall and 2 mm bottom:
+
+```json
+{
+  "name": "Hollow 40 by 40 cup",
+  "primitives": [{ "id": "cup", "kind": "cylinder", "parameters": { "w": 40, "d": 40, "h": 40 } }],
+  "sketches": [{ "id": "inside", "plane": "XY", "origin": [0, 0, 2], "profile": { "type": "circle", "center": [0, 0], "radius": 18 } }],
+  "features": [{ "id": "cup-cavity", "type": "extrude", "sketch": "inside", "distance": 38, "operation": "cut", "target": "cup" }]
+}
+```
+
+Measure the outside bounds, volume, wall intervals, and mesh after preview. This
+example does not establish a lid fit, liquid seal, or material suitability.

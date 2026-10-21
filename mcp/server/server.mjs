@@ -10,10 +10,12 @@ import { validateToolInput } from "../shared/schema.js";
 import { extendMcpTools } from "./tool-contracts.mjs";
 import { inspectTriangleMesh } from "../shared/geometry.js";
 import { clientPresence } from "./presence.mjs";
+import { listManagedImports, resolveManagedImports, MAX_IMPORTS_PER_PLAN, MAX_IMPORT_CATALOG_FILES } from "./imports.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const DOCS = join(ROOT, "build", "site");
 const EXPORTS = join(ROOT, "exports");
+const IMPORTS = resolve(process.env.JUMPSTART_MCP_IMPORT_DIR || join(ROOT, "imports"));
 const HOST = process.env.JUMPSTART_MCP_HOST || "127.0.0.1";
 const BROWSER_HOST = "localhost";
 const PORT = Number(process.env.JUMPSTART_MCP_PORT || 3210);
@@ -41,6 +43,27 @@ const profileSchema = {
       type: "object", additionalProperties: false, required: ["type", "center", "radius"],
       properties: { type: { const: "circle" }, center: point2, radius: { type: "number", exclusiveMinimum: 0, maximum: 10000 } },
     },
+    {
+      type: "object", additionalProperties: false, required: ["type", "width", "height", "radius"],
+      properties: {
+        type: { const: "roundedRect" }, width: { type: "number", exclusiveMinimum: 0, maximum: 10000 },
+        height: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, radius: { type: "number", exclusiveMinimum: 0, maximum: 5000 }, center: point2,
+      },
+    },
+    {
+      type: "object", additionalProperties: false, required: ["type", "segments"],
+      properties: {
+        type: { const: "contour" },
+        segments: {
+          type: "array", minItems: 1, maxItems: 64,
+          items: { oneOf: [
+            { type: "object", additionalProperties: false, required: ["type", "start", "end"], properties: { type: { const: "line" }, start: point2, end: point2 } },
+            { type: "object", additionalProperties: false, required: ["type", "start", "through", "end"], properties: { type: { const: "arc" }, start: point2, through: point2, end: point2 } },
+            { type: "object", additionalProperties: false, required: ["type", "points"], properties: { type: { const: "spline" }, points: { type: "array", minItems: 3, maxItems: 128, items: point2 }, closed: { type: "boolean" } } },
+          ] },
+        },
+      },
+    },
   ],
 };
 const primitiveSchema = {
@@ -61,6 +84,8 @@ const primitiveSchema = {
 const edgeSignatureSchema = { type: "object", additionalProperties: false, required: ["m", "n", "t"], properties: { index: { type: "integer", minimum: 0 }, a: point3, b: point3, m: point3, n: point3, t: { type: "string", maxLength: 40 } } };
 const modifierSchema = { oneOf: [
   { type: "object", additionalProperties: false, required: ["type", "radius", "edges"], properties: { type: { const: "fillet" }, radius: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, edges: { type: "array", minItems: 1, maxItems: 512, items: edgeSignatureSchema }, chain: { type: "boolean" } } },
+  { type: "object", additionalProperties: false, required: ["type", "distance", "edges"], properties: { type: { const: "chamfer" }, distance: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, edges: { type: "array", minItems: 1, maxItems: 512, items: edgeSignatureSchema }, chain: { type: "boolean" } } },
+  { type: "object", additionalProperties: false, required: ["type", "distance", "faces"], properties: { type: { const: "offset" }, distance: { oneOf: [{ type: "number", exclusiveMinimum: 0, maximum: 10000 }, { type: "number", minimum: -10000, exclusiveMaximum: 0 }], description: "Signed face offset in mm. Positive adds material; negative removes material." }, faces: { type: "array", minItems: 1, maxItems: 256, items: { type: "object", additionalProperties: false, required: ["c", "t"], properties: { c: point3, t: { type: "string", enum: ["PLANE", "CYLINDRE", "SPHERE"] }, n: point3 } } } } },
   { type: "object", additionalProperties: false, required: ["type", "thickness", "faces"], properties: { type: { const: "shell" }, thickness: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, faces: { type: "array", maxItems: 256, items: { type: "object", additionalProperties: false, required: ["c"], properties: { index: { type: "integer", minimum: 0 }, c: point3, n: point3, t: { type: "string" }, r: { type: "number" }, ext: { type: "boolean" }, o: point3, d: point3, ax: point3 } } }, direction: { type: "string", enum: ["in", "out", "both"] } } },
   { type: "object", additionalProperties: false, required: ["type", "at", "diameter"], properties: { type: { const: "hole" }, at: { type: "array", minItems: 1, maxItems: 64, items: { type: "object", additionalProperties: false, required: ["p", "n"], properties: { p: point3, n: point3 } } }, diameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, kind: { type: "string", enum: ["simple", "cbore", "csink", "tapped"] }, through: { type: "boolean" }, depth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, counterboreDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, counterboreDepth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkAngle: { type: "number", minimum: 1, maximum: 179 }, tip: { type: "boolean" }, pitch: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, clearance: { type: "number", minimum: 0, maximum: 10000 } } },
   { type: "object", additionalProperties: false, required: ["type", "face", "pitch"], properties: { type: { const: "thread" }, face: { type: "object", additionalProperties: false, required: ["c", "t"], properties: { index: { type: "integer", minimum: 0 }, c: point3, t: { const: "CYLINDRE" }, n: point3, r: { type: "number" }, ext: { type: "boolean" }, o: point3, d: point3, ax: point3 } }, pitch: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, length: { type: "number", minimum: 0, maximum: 10000 }, flip: { type: "boolean" }, left: { type: "boolean" }, clearance: { type: "number", minimum: 0, maximum: 10000 } } },
@@ -69,20 +94,30 @@ const modifierSchema = { oneOf: [
 ] };
 const fastenerSize = { type: "string", enum: ["M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "#6-32", "#8-32", "#10-24", "#10-32", "1/4-20", "1/4-28", "5/16-18", "5/16-24", "3/8-16", "3/8-24", "1/2-13", "1/2-20"] };
 const planOperationSchema = { oneOf: [
+  { type: "object", additionalProperties: false, required: ["id", "type", "assetId"], properties: { id: { type: "string", minLength: 1, maxLength: 80 }, type: { const: "import" }, assetId: { type: "string", pattern: "^[a-f0-9]{64}$", description: "SHA-256 asset id returned by jumpstart_list_imports. It references a file in the operator-managed imports directory; no path or file bytes are accepted." }, units: { type: "string", enum: ["mm", "cm", "in"], description: "Required for STL files. 3MF and STEP retain units encoded in their files." }, position: point3, rotation: point3 } },
   { type: "object", additionalProperties: false, required: ["id", "type", "members"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "group" }, name: { type: "string", maxLength: 80 }, members: { type: "array", minItems: 1, maxItems: 64, items: { type: "string", maxLength: 80 }, description: "A pattern reference may expand to multiple body instances before grouping." }, operation: { type: "string", enum: ["union", "cut", "intersect"] } } },
+  { type: "object", additionalProperties: false, required: ["id", "type", "source", "plane"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "mirror" }, source: { type: "string", maxLength: 80 }, plane: { type: "object", additionalProperties: false, required: ["normal"], properties: { origin: point3, normal: point3 } }, behavior: { type: "string", enum: ["linked", "join"], description: "Defaults to linked, which creates a new body that follows its source. Join keeps one body and merges a snapshot of the reflected source into it." } } },
+  { type: "object", additionalProperties: false, required: ["id", "type", "target", "plane"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "splitBody" }, target: { type: "string", maxLength: 80 }, plane: { type: "object", additionalProperties: false, required: ["origin", "normal"], properties: { origin: point3, normal: point3 }, description: "World-space plane in mm. The normalized positive-normal side keeps the target body id; the opposite side receives a new id." } } },
   { type: "object", additionalProperties: false, required: ["id", "type", "source", "mode", "axis", "count"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "pattern" }, source: { type: "string", maxLength: 80 }, mode: { type: "string", enum: ["linear", "circular"] }, axis: { type: "string", enum: axes }, count: { type: "integer", minimum: 2, maximum: 12, description: "Instances per direction for a linear pattern (count 4 with symmetric true produces 7 total); total instance count for a circular pattern, including the original." }, spacing: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, symmetric: { type: "boolean" }, angle: { type: "number", minimum: 1, maximum: 360, description: "Circular total angle. A full 360-degree pattern spaces instances around the full circle; a partial angle includes both endpoints." }, origin: point3 } },
+  { type: "object", additionalProperties: false, required: ["id", "type", "source", "path", "count"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "pathPattern" }, source: { type: "string", maxLength: 80 }, path: { type: "string", maxLength: 80, description: "An earlier typed path sketch made from connected lines and three-point arcs." }, mode: { type: "string", enum: ["fit", "spacing"], description: "Fit spaces count instances to an open path endpoint or around a closed path; spacing places count instances at an explicit interval." }, count: { type: "integer", minimum: 2, maximum: 12, description: "Total body instances, including the unchanged source body." }, spacing: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Required when mode is spacing. Copies must fit between the anchor station and the selected endpoint, or within one closed loop." }, direction: { type: "string", enum: ["forward", "reverse"] }, orientation: { type: "string", enum: ["same", "follow-path"], description: "follow-path rotates each copy by the path tangent change from the source anchor station." }, anchor: { ...point3, description: "Optional world-space anchor projected to the nearest path point. Defaults to the source body's transformed local origin; the original body transform is preserved." } } },
+  { type: "object", additionalProperties: false, required: ["id", "type", "target", "features", "mode", "axis", "count"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "featurePattern" }, target: { type: "string", maxLength: 80 }, features: { type: "array", minItems: 1, maxItems: 24, items: { type: "string", maxLength: 80 }, description: "Stable feature references: earlier modifier or boolean-feature operation ids, or native modifier ids from geometry inspection. Supported: holes, embosses, and sketch-backed extrude/revolve/sweep booleans." }, mode: { type: "string", enum: ["linear", "circular"] }, axis: { type: "string", enum: axes, description: "World-space axis. Feature positions and directions are transformed into the target body's local coordinates." }, count: { type: "integer", minimum: 2, maximum: 12, description: "Linear count means copies per side when symmetric is true. Circular count includes the source." }, spacing: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, symmetric: { type: "boolean" }, angle: { type: "number", minimum: 1, maximum: 360 }, origin: point3 } },
   { type: "object", additionalProperties: false, required: ["id", "type", "target"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "transform" }, target: { type: "string", maxLength: 80 }, position: point3, rotation: point3, relative: { type: "boolean" } } },
   { type: "object", additionalProperties: false, required: ["id", "type", "target", "tool", "operation"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "combine" }, target: { type: "string", maxLength: 80 }, tool: { type: "string", maxLength: 80 }, operation: { type: "string", enum: ["join", "cut", "intersect"] }, keepTool: { type: "boolean" } } },
   { type: "object", additionalProperties: false, required: ["id", "type", "target", "modifier"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "modifier" }, target: { type: "string", maxLength: 80 }, modifier: modifierSchema } },
   { type: "object", additionalProperties: false, required: ["id", "type", "fastenerType", "size"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "fastener" }, fastenerType: { type: "string", enum: ["bolt", "nut", "rod", "cutter"] }, size: fastenerSize, length: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Length in mm. Required for bolt, rod, and cutter; ignored for nut." }, clearance: { type: "number", minimum: -1, maximum: 0, description: "Thread print offset in mm. Default 0; values down to -1 loosen mating printed threads." }, left: { type: "boolean" }, position: point3, rotation: point3, name: { type: "string", maxLength: 80 } } },
-  { type: "object", additionalProperties: false, required: ["id", "type", "target", "face", "layout", "hole"], properties: {
+  { type: "object", additionalProperties: false, required: ["id", "type", "gearType", "module", "teeth", "thickness"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "gear" }, gearType: { type: "string", enum: ["spur", "rack", "bevel"] }, module: { type: "number", minimum: 0.2, maximum: 50, description: "Metric gear module in mm." }, teeth: { type: "integer", minimum: 6, maximum: 120, description: "Integer tooth count. Rack length is module × tooth count × π." }, pressureAngle: { type: "number", minimum: 14, maximum: 30, description: "Pressure angle in degrees; defaults to 20." }, thickness: { type: "number", minimum: 0.1, maximum: 10000, description: "Face width in mm. For a bevel gear this is its axial width." }, coneAngle: { type: "number", minimum: 5, maximum: 80, description: "Pitch cone angle in degrees for a straight bevel gear; defaults to 45. Teeth are an approximation lofted between scaled sampled involute sections; mating accuracy is not certified, and spiral bevel teeth are not generated." }, bore: { type: "number", minimum: 0, maximum: 10000, description: "Optional spur or bevel gear center bore diameter in mm; it must fit inside the smallest root diameter and is not supported for racks." }, baseDepth: { type: "number", minimum: 0.1, maximum: 10000, description: "Rack backing depth below the standard tooth roots in mm; defaults to twice the module and is not supported for gears." }, position: point3, rotation: point3, name: { type: "string", maxLength: 80 } } },
+  { type: "object", additionalProperties: false, required: ["id", "type", "target", "face", "layout"], properties: {
     id: { type: "string", maxLength: 80 }, type: { const: "holePattern" }, target: { type: "string", maxLength: 80 },
     face: { type: "string", enum: ["+x", "-x", "+y", "-y", "+z", "-z"], description: "World direction of the flat face. The farthest matching planar face is selected." },
     layout: { oneOf: [
       { type: "object", additionalProperties: false, required: ["type", "cols", "rows"], properties: { type: { const: "grid" }, cols: { type: "integer", minimum: 1, maximum: 200 }, rows: { type: "integer", minimum: 1, maximum: 200 }, pitch: { oneOf: [{ type: "number", exclusiveMinimum: 0, maximum: 10000 }, { type: "array", minItems: 2, maxItems: 2, items: { type: "number", exclusiveMinimum: 0, maximum: 10000 } }] }, margin: { type: "number", minimum: 0, maximum: 10000 }, stagger: { type: "boolean" }, angle: { type: "number", minimum: -360, maximum: 360 } } },
       { type: "object", additionalProperties: false, required: ["type", "count", "radius"], properties: { type: { const: "circle" }, count: { type: "integer", minimum: 2, maximum: 200 }, radius: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, start: { type: "number", minimum: -360, maximum: 360 }, center: point3, margin: { type: "number", minimum: 0, maximum: 10000 } } },
     ] },
-    hole: { type: "object", additionalProperties: false, required: ["diameter"], properties: { kind: { type: "string", enum: ["simple", "cbore", "csink", "tapped"] }, diameter: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Hole or tap-drill diameter in mm." }, depth: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Omit for through holes." }, counterboreDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, counterboreDepth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkAngle: { type: "number", minimum: 1, maximum: 179 }, pitch: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Thread pitch in mm for tapped holes." }, clearance: { type: "number", minimum: -1, maximum: 0 }, tip: { type: "boolean" } } },
+    shape: { type: "string", enum: ["round", "square", "hex", "slot"], description: "Defaults to round. Square, hex, and slot cuts are editable sketch-and-extrude features." },
+    width: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Required for square, hex, or slot. For a hex, width is across flats." },
+    length: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Slot length, greater than width. Omit for square and hex." },
+    depth: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Blind depth for shaped cuts; omit for through cuts." },
+    hole: { type: "object", additionalProperties: false, required: ["diameter"], description: "Required for round patterns; omit for shaped cuts.", properties: { kind: { type: "string", enum: ["simple", "cbore", "csink", "tapped"] }, diameter: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Hole or tap-drill diameter in mm." }, depth: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Omit for through holes." }, counterboreDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, counterboreDepth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkAngle: { type: "number", minimum: 1, maximum: 179 }, pitch: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Thread pitch in mm for tapped holes." }, clearance: { type: "number", minimum: -1, maximum: 0 }, tip: { type: "boolean" } } },
   } },
 ] };
 const planSchema = {
@@ -95,13 +130,21 @@ const planSchema = {
     sketches: {
       type: "array", maxItems: 12,
       items: {
-        type: "object", additionalProperties: false, required: ["id", "plane", "origin", "profile"],
+        type: "object", additionalProperties: false, required: ["id", "plane", "origin"],
         properties: {
           id: { type: "string", minLength: 1, maxLength: 80 },
           name: { type: "string", maxLength: 80 },
           plane: { type: "string", enum: ["XY", "XZ", "YZ"] },
           origin: point3,
           profile: profileSchema,
+          segments: {
+            description: "Optional ordered path geometry instead of a closed profile. Supports connected line segments and three-point arcs in this sketch's plane.",
+            type: "array", minItems: 1, maxItems: 64,
+            items: { oneOf: [
+              { type: "object", additionalProperties: false, required: ["type", "start", "end"], properties: { type: { const: "line" }, start: point2, end: point2 } },
+              { type: "object", additionalProperties: false, required: ["type", "start", "through", "end"], properties: { type: { const: "arc" }, start: point2, through: point2, end: point2 } },
+            ] },
+          },
         },
       },
     },
@@ -112,17 +155,30 @@ const planSchema = {
         properties: {
           id: { type: "string", minLength: 1, maxLength: 80 },
           name: { type: "string", maxLength: 80 },
-          type: { type: "string", enum: ["revolve", "extrude", "loft"] },
+          type: { type: "string", enum: ["revolve", "extrude", "loft", "sweep", "pipe", "coil"], description: "Sweep carries a closed profile along a path sketch. Pipe creates a section along a path. Coil creates a native helical feature with a round, square, or triangular section." },
           sketch: { type: "string", minLength: 1, maxLength: 80 },
+          path: { type: "string", minLength: 1, maxLength: 80, description: "Id of a path sketch made from ordered connected line and three-point arc segments." },
           sections: { type: "array", minItems: 2, maxItems: 12, items: { type: "string", maxLength: 80 } },
           operation: { type: "string", enum: ["new", "join", "cut"] },
           target: { type: "string", maxLength: 80 },
           axis: { type: "string", enum: axes },
-          angle: { type: "number", minimum: 1, maximum: 360 },
+          angle: { type: "number", minimum: -60, maximum: 360, description: "Revolve angle is 1 to 360 degrees; coil taper angle is -60 to 60 degrees." },
           distance: { type: "number", exclusiveMinimum: -10000, exclusiveMaximum: 10000 },
-          mode: { type: "string", enum: ["one", "sym", "two"] },
+          mode: { type: "string", enum: ["one", "sym", "two", "height", "pitch"], description: "For coils, choose height or pitch mode; other features use one, sym, or two." },
           distance2: { type: "number", exclusiveMinimum: 0, maximum: 10000 },
           ruled: { type: "boolean" }, closed: { type: "boolean" },
+          section: { type: "string", enum: ["circle", "square", "triangle", "triangle-in"] },
+          size: { type: "number", exclusiveMinimum: 0, maximum: 10000 },
+          hollow: { type: "boolean" },
+          wall: { type: "number", exclusiveMinimum: 0, maximum: 10000 },
+          d: { type: "number", minimum: 0.1, maximum: 10000, description: "Coil centerline diameter in mm." },
+          turns: { type: "number", minimum: 0.25, maximum: 100, description: "Coil turns, including fractional turns." },
+          h: { type: "number", minimum: 0.1, maximum: 10000, description: "Overall coil height in mm when mode is height." },
+          pitch: { type: "number", minimum: 0.05, maximum: 10000, description: "Axial distance per turn in mm when mode is pitch." },
+          pos: { type: "string", enum: ["inside", "on", "outside"], description: "Where the section sits relative to the coil diameter." },
+          left: { type: "boolean", description: "Use a left-handed helix when true." },
+          position: point3,
+          rotation: { type: "array", minItems: 3, maxItems: 3, items: { type: "number", minimum: -360, maximum: 360 }, description: "Body placement rotation in degrees. The native coil axis starts along local +Z." },
           pattern: {
             type: "object", additionalProperties: false, required: ["axis", "count"],
             properties: {
@@ -141,6 +197,12 @@ const planSchema = {
 
 const tools = extendMcpTools([
   {
+    name: "jumpstart_list_imports",
+    title: "List managed CAD imports",
+    description: "List STL, 3MF, STEP, and STP files placed by the operator in the read-only managed imports directory. Returns metadata and SHA-256 asset ids only. Use an id in a typed import operation; requests never accept host paths or file bytes.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {} },
+  },
+  {
     name: "jumpstart_list_editors",
     title: "List open JumpStart editors",
     description: "List local JumpStart browser tabs connected to this MCP server. Call this first when more than one editor may be open.",
@@ -149,13 +211,13 @@ const tools = extendMcpTools([
   {
     name: "jumpstart_get_document",
     title: "Read the active CAD document",
-    description: "Read document identity, revision, units, sketches, body features, world bounds, local dimensions, volume, triangle counts, and geometry errors. With includeGeometry true, also return capped edge and face selectors in body-local millimeters for fillet, shell, hole, thread, and emboss edits. The returned units field is the UI display preference.",
+    description: "Read document identity, revision, units, sketches, body features, world bounds, local dimensions, volume, triangle counts, and geometry errors. With includeGeometry true, also return capped edge and face selectors in body-local millimeters for fillet, chamfer, shell, hole, thread, and emboss edits. The returned units field is the UI display preference.",
     inputSchema: { type: "object", additionalProperties: false, properties: { ...commonEditor, includeGeometry: { type: "boolean", description: "Include sketch coordinates and feature nodes so an agent can revise the editable CAD model. Large sketches are capped." } } },
   },
   {
     name: "jumpstart_preview_model",
     title: "Preview a parametric model plan",
-    description: "Preview a typed CAD plan using JumpStart primitives, sketches and features, plus native metric or inch bolts, nuts, threaded rods and tap cutters, and fitted grid, staggered or circular hole patterns on planar faces. Plans can modify existing bodies. Returns geometry errors, dimensions, volume, triangle counts, edge/face selectors, and viewport images. The preview does not modify the saved document. Coordinates and dimensions use millimeters.",
+    description: "Preview a typed CAD plan using JumpStart primitives, profiles, features, patterns, mirrors, splits, fasteners, gears, and modifiers. Import operator-managed STL, 3MF, STEP, or STP assets by the digest id from jumpstart_list_imports; STL requires explicit units, while 3MF and STEP retain file units. Imports are native editable document assets and remain subject to preview, inspection, and explicit apply. Returns geometry errors, dimensions, volume, triangle counts, edge/face selectors, and viewport images. The preview does not modify the saved document. Coordinates and dimensions use millimeters.",
     inputSchema: {
       type: "object", additionalProperties: false, required: ["plan"],
       properties: {
@@ -529,11 +591,11 @@ async function callTool(name, args) {
   switch (name) {
     case "jumpstart_get_capabilities": return {
       schemaVersion: 1, units: "mm", toolSchemas: tools,
-      limits: { toolInputBytes: 262144, trianglesInspected: 200000, estimatedTriangleVisits: 8000000, meshWeldToleranceMm: 0.0001, namedParameters: 64, parameterModels: 16, images: 4 },
-      operations: ["rectangular frame preset", "native bound rectangle/extrusion", "native parameters", "native Lathe profile/hollow/scale", "primitives", "circle/polygon sketches", "extrude", "revolve", "loft", "linear/circular patterns", "transforms", "booleans", "native ISO/UNC fasteners", "fitted planar grid/staggered/circular hole patterns", "fillet", "shell", "hole", "thread", "planar emboss", "scale"],
+      limits: { toolInputBytes: 262144, trianglesInspected: 200000, estimatedTriangleVisits: 8000000, meshWeldToleranceMm: 0.0001, namedParameters: 64, parameterModels: 16, images: 4, importFileBytes: 24 * 1024 * 1024, importPlanBytes: 24 * 1024 * 1024, importsPerPlan: MAX_IMPORTS_PER_PLAN, importCatalogFiles: MAX_IMPORT_CATALOG_FILES },
+      operations: ["operator-managed STL/3MF/STEP/STP imports by digest id", "rectangular frame preset", "native bound rectangle/extrusion", "native parameters", "native Lathe profile/hollow/scale", "primitives", "circle/polygon/rounded-rectangle/line-arc-spline contour profiles", "line/arc path sketches", "extrude", "revolve", "loft", "sweep", "pipe", "coil", "linear/circular/path body patterns", "linear/circular patterns of editable hole, emboss, and sketch-backed boolean features", "transforms", "linked or joined body mirrors", "plane-based splitBody operation (two editable outputs)", "booleans", "native ISO/UNC fasteners", "native parametric spur, straight bevel, and rack gears (module, tooth count, pressure angle, face width, bevel cone angle, optional bore, and rack baseDepth)", "fitted planar grid/staggered/circular round and shaped hole patterns", "fillet", "chamfer", "signed planar/cylindrical/spherical face offset", "shell", "hole", "thread", "planar emboss", "scale"],
       inspection: ["top/side/isometric/section images", "tessellated plane sections", "line/solid intervals", "dimensions", "axis-aligned parallel flat-bottom channels", "mesh edge incidence", "semantic native signature queries"],
       exports: ["stl", "step", "3mf"],
-      unsupported: ["interactive pedal/chisel session automation", "general sketch constraint solver", "arcs/splines through MCP", "dimensional algebra", "automatic stable topological naming", "mesh-to-parametric reconstruction", "arbitrary mirror planes", "self-intersection validation", "minimum wall thickness everywhere", "physical fit or printability certification"],
+      unsupported: ["interactive pedal/chisel session automation", "spiral bevel tooth geometry and automatic gear-pair placement or mating-accuracy certification", "patterning feature types other than holes, embosses, and sketch-backed extrude/revolve/sweep booleans", "Split Face (the editor cannot edit it and its kernel face selector has no distance/ambiguity guard)", "general sketch constraint solver", "independent analytic contour self-intersection checks (preview relies on CAD kernel face construction)", "sweep taper and twist", "pipe paths picked from existing body edges", "dimensional algebra", "automatic stable topological naming", "mesh-to-parametric reconstruction", "minimum wall thickness everywhere", "physical fit or printability certification"],
       parameterExample: { parameters: { diameter: { value: 100, unit: "mm", min: 10, max: 500 } }, numericReference: { $expr: "diameter / 2" }, operators: ["+", "-", "*", "/", "parentheses"], lifecycle: "preview_model -> inspect_geometry(previewId) -> apply_model -> save_document -> preview_parameters; templates survive native save/reopen" },
       validationLayers: ["schema", "CAD construction", "requested geometric measurements", "export mesh checks", "physical fit unverified"],
     };
@@ -543,10 +605,16 @@ async function callTool(name, args) {
     case "jumpstart_preview_native_parameters": return await run("preview_native_parameters", { ...args, editorId: host(args) });
     case "jumpstart_preview_frame": return await run("preview_frame", { ...args, editorId: host(args) });
     case "jumpstart_preview_lathe": return await run("preview_lathe", { ...args, editorId: host(args) });
+    case "jumpstart_list_imports": return await listManagedImports(IMPORTS);
     case "jumpstart_list_editors": return { editors: listEditors() };
     case "jumpstart_get_document": return await run("get_document", { editorId: host(args), includeGeometry: args.includeGeometry === true });
     case "jumpstart_preview_new_document": return await run("preview_new_document", { ...args, editorId: host(args) });
-    case "jumpstart_preview_model": return await run("preview_model", { editorId: host(args), plan: args.plan, replaceBodyIds: args.replaceBodyIds || [], includeImage: args.includeImage !== false, section: args.section, expectedRevision: args.expectedRevision });
+    case "jumpstart_preview_model": {
+      const imports = (args.plan.operations || []).filter((operation) => operation.type === "import").map((operation) => operation.assetId);
+      if (imports.length > MAX_IMPORTS_PER_PLAN) throw new Error(`A model plan can import at most ${MAX_IMPORTS_PER_PLAN} assets`);
+      const importAssets = await resolveManagedImports(IMPORTS, imports);
+      return await run("preview_model", { editorId: host(args), plan: args.plan, importAssets, replaceBodyIds: args.replaceBodyIds || [], includeImage: args.includeImage !== false, section: args.section, expectedRevision: args.expectedRevision });
+    }
     case "jumpstart_preview_resize_body": return await run("preview_resize_body", { editorId: host(args), bodyId: args.bodyId, size: args.size, anchor: args.anchor, includeImage: args.includeImage !== false, section: args.section, expectedRevision: args.expectedRevision });
     case "jumpstart_preview_parameters": return await run("preview_parameters", { ...args, editorId: host(args) });
     case "jumpstart_inspect_geometry": return await run("inspect_geometry", { ...args, editorId: host(args) });

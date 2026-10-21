@@ -1804,7 +1804,7 @@ export function initAdvanced(app) {
       okLabel: "OK",
       valid: () => !!st.ref,
       canOk: () => !!st.ref,
-      ok() { done = true; closeCmd(false); app.toast("Section on. Clear it with ✕ on the Section chip, or open Section analysis again to change it."); },
+      ok() { done = true; closeCmd(false); app.toast("Section on. Use the close button on the Section chip to clear it, or open Section analysis again to change it."); },
       onDelete: prev ? () => { done = true; section.clear(); closeCmd(false); } : null,
       hint: () => st.ref ? "Drag the arrow or type a distance to move the cut. Flip shows the other side." : "Click an origin plane, a construction plane or a flat face to cut along (or pick YZ / XZ / XY).",
       build(body) {
@@ -2099,7 +2099,7 @@ export function initAdvanced(app) {
         hint(`Size: ${s.map((v) => showLen(v, 1)).join(" × ")} ${getUnit()}`);
         if (fixes.length) hint("Repaired: " + fixes.join(", ") + ".");
         if (rep.open) hint(el("b", {}, "Not closed: "), `${rep.open.toLocaleString()} open edge${rep.open > 1 ? "s" : ""}. It will come in as a surface you can see and export, but not cut or fillet. Try fixing the file, or the Mesh to STEP Helper.`);
-        else hint(el("b", {}, "Closed solid ✓ "), "It comes in as a solid you can move, scale, group and cut holes in.");
+        else hint(el("b", {}, "Closed solid: "), "It comes in as a solid you can move, scale, group and cut holes in.");
         if (rep.nonManifold) hint(`${rep.nonManifold.toLocaleString()} edge${rep.nonManifold > 1 ? "s are" : " is"} shared by more than two triangles (touching parts). It may not build cleanly.`);
         if (info.bytes && app.meshstep) body.append(el("button", { class: "btn", id: "imp-tostep", style: { marginTop: "8px", width: "100%" }, title: "Turn the mesh into smooth, editable CAD faces (planes, cylinders, fillets) first", onclick: () => { closeCmd(false); app.meshstep.open({ bytes: info.bytes, name: fileName }); } }, "Convert to CAD faces in Mesh to STEP…"));
       },
@@ -4923,6 +4923,7 @@ export function initAdvanced(app) {
   function primCmd(kind, editingId = null) {
     const existing = editingId ? findBody(store.doc, editingId) : null;
     const st = { kind: existing ? existing.node.kind : kind, p: existing ? { ...existing.node.p } : { ...PRIM_DEFAULTS[kind] }, m: existing ? existing.m.slice() : null, id: existing ? existing.id : uid("b"), placed: !!existing };
+    st.rackBaseFollowsModule = st.kind === "rack" && Math.abs(st.p.baseDepth - 2 * st.p.module) < 1e-9;
     if (!st.m) { const t = vp.view.target; st.m = arr(new THREE.Matrix4().makeTranslation(round(t.x, 5), round(t.y, 5), 0)); }
     const def = {
       title: (existing ? "Edit " : "") + primName(st.kind),
@@ -4937,12 +4938,26 @@ export function initAdvanced(app) {
       onDelete: existing ? () => { closeCmd(false); deleteBodies([existing.id]); } : null,
       hint: () => existing ? "Edit the sizes." : "Click the ground or a flat face to place it, then set the sizes.",
       build(body) {
-        const dims = st.kind === "torus" ? [["Diameter", "w"], ["Tube", "tube"]] : st.kind === "sphere" ? [["X", "w"], ["Y", "d"], ["Z", "h"]] : [["Width", "w"], ["Depth", "d"], ["Height", "h"]];
-        const r3 = el("div", { class: "row3" });
-        for (const [l, k] of dims) r3.append(el("label", {}, l, app.numField({ value: st.p[k], id: "pr-" + k, min: 0.01, step: 1, live: true, onCommit: (v) => { st.p[k] = v; schedulePreview(def); } })));
-        body.append(el("div", { class: "subhead" }, "Size"), r3);
-        const extra = { cone: [["Top ratio", "top", 0, 1]], pyramid: [["Sides", "sides", 3, 12]], prism: [["Sides", "sides", 3, 24]], tube: [["Wall", "wall", 0.1, 1e9]], box: [["Fillet all", "r", 0, 1e9], ["Chamfer all", "c", 0, 1e9]], cylinder: [["Fillet ends", "r", 0, 1e9]] }[st.kind] || [];
-        for (const [l, k, mn, mx] of extra) body.append(row(l, app.numField({ value: st.p[k] ?? 0, id: "pr-x-" + k, min: mn, max: mx, step: k === "top" ? 0.1 : 1, live: true, onCommit: (v) => { st.p[k] = v; schedulePreview(def); } }), "pr-x-" + k));
+        if (st.kind === "gear" || st.kind === "bevelgear" || st.kind === "rack") {
+          body.append(el("div", { class: "subhead" }, st.kind === "gear" ? "Spur gear" : st.kind === "bevelgear" ? "Straight bevel gear" : "Rack"));
+          const fields = [["Module", "module", 0.2, 50, 0.25], ["Teeth", "teeth", 6, 120, 1], ["Pressure angle °", "pressureAngle", 14, 30, 1], ["Face width", "thickness", 0.1, 10000, 0.5]];
+          if (st.kind === "gear" || st.kind === "bevelgear") fields.push(["Bore", "bore", 0, 10000, 0.5]);
+          if (st.kind === "bevelgear") fields.push(["Pitch cone angle °", "coneAngle", 5, 80, 1]);
+          if (st.kind === "rack") fields.push(["Base depth", "baseDepth", 0.1, 10000, 0.5]);
+          for (const [label, key, min, max, step] of fields) body.append(row(label, app.numField({ value: st.p[key], id: "pr-gear-" + key, min, max, step, live: true, onCommit: (v) => {
+            st.p[key] = v;
+            if (key === "module" && st.rackBaseFollowsModule) { st.p.baseDepth = 2 * v; def.render(); }
+            if (key === "baseDepth") st.rackBaseFollowsModule = false;
+            schedulePreview(def);
+          } }), "pr-gear-" + key));
+        } else {
+          const dims = st.kind === "torus" ? [["Diameter", "w"], ["Tube", "tube"]] : st.kind === "sphere" ? [["X", "w"], ["Y", "d"], ["Z", "h"]] : [["Width", "w"], ["Depth", "d"], ["Height", "h"]];
+          const r3 = el("div", { class: "row3" });
+          for (const [l, k] of dims) r3.append(el("label", {}, l, app.numField({ value: st.p[k], id: "pr-" + k, min: 0.01, step: 1, live: true, onCommit: (v) => { st.p[k] = v; schedulePreview(def); } })));
+          body.append(el("div", { class: "subhead" }, "Size"), r3);
+          const extra = { cone: [["Top ratio", "top", 0, 1]], pyramid: [["Sides", "sides", 3, 12]], prism: [["Sides", "sides", 3, 24]], tube: [["Wall", "wall", 0.1, 1e9]], box: [["Fillet all", "r", 0, 1e9], ["Chamfer all", "c", 0, 1e9]], cylinder: [["Fillet ends", "r", 0, 1e9]] }[st.kind] || [];
+          for (const [l, k, mn, mx] of extra) body.append(row(l, app.numField({ value: st.p[k] ?? 0, id: "pr-x-" + k, min: mn, max: mx, step: k === "top" ? 0.1 : 1, live: true, onCommit: (v) => { st.p[k] = v; schedulePreview(def); } }), "pr-x-" + k));
+        }
         const pos = new THREE.Vector3().setFromMatrixPosition(M4(st.m));
         const p3 = el("div", { class: "row3" });
         ["X", "Y", "Z"].forEach((l, i) => p3.append(el("label", {}, l, app.numField({ value: pos.getComponent(i), id: "pr-pos" + i, step: 1, onCommit: (v) => {

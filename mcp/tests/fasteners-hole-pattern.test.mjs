@@ -83,6 +83,53 @@ test("grid, staggered and circular hole layouts fit the native flat-face boundar
   assert.equal(circle.mod.kind, "simple");
 });
 
+test("square, hex and slot patterns compile as editable sketch-and-extrude cuts", () => {
+  const body = { id: "plate", m: identity };
+  for (const shape of [
+    { type: "square", width: 6 },
+    { type: "hex", width: 6 },
+    { type: "slot", width: 4, length: 10 },
+  ]) {
+    const generated = buildHolePattern(body, rectangleData(), pattern({
+      sketchId: `sketch-${shape.type}`, shape,
+      layout: { type: "grid", cols: 2, rows: 2, pitch: 12, margin: 0, stagger: false, angle: 0 },
+    }));
+    assert.equal(generated.shape, shape.type);
+    assert.equal(generated.holes, 4);
+    assert.equal(generated.sketch.id, `sketch-${shape.type}`);
+    assert.equal(generated.sketch.plane.n.join(","), "0,0,1");
+    assert.equal(generated.tool.t, "extrude");
+    assert.equal(generated.tool.profiles.length, 4);
+    assert.ok(generated.sketch.ents.some((entity) => entity.t === "arc") === (shape.type === "slot"));
+    assert.equal(generated.mod, undefined);
+  }
+});
+
+test("circular slot patterns orient each slot along its radius", () => {
+  const generated = buildHolePattern({ id: "plate", m: identity }, rectangleData(), pattern({
+    sketchId: "circle-slots", shape: { type: "slot", width: 4, length: 10 },
+    layout: { type: "circle", count: 4, radius: 10, start: 0, margin: 0 },
+  }));
+  const points = new Map(generated.sketch.pts.map((entry) => [entry.id, entry]));
+  for (const [index, axis] of [[0, "x"], [6, "y"]]) {
+    const entity = generated.sketch.ents[index];
+    const delta = [points.get(entity.b).x - points.get(entity.a).x, points.get(entity.b).y - points.get(entity.a).y];
+    assert.ok(Math.abs(delta[axis === "x" ? 1 : 0]) < 1e-6);
+    assert.ok(Math.abs(delta[axis === "x" ? 0 : 1]) > 1);
+  }
+});
+
+test("shaped hole patterns normalize only valid dimensions and reject round-hole settings", () => {
+  const base = {
+    name: "Slot plate", primitives: [{ id: "plate", kind: "box" }],
+    operations: [{ id: "slots", type: "holePattern", target: "plate", face: "+z", layout: { type: "grid", cols: 2, rows: 2 }, shape: "slot", width: 4, length: 10 }],
+  };
+  assert.deepEqual(normalizeModelPlan(base).operations[0].shape, { type: "slot", width: 4, length: 10 });
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], shape: "slot", length: 4 }] }), /length must be greater than its width/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], shape: "hex", length: 10 }] }), /length is only supported for slot/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], shape: "slot", hole: { diameter: 4 } }] }), /hole settings are only supported for round patterns/);
+});
+
 test("hole patterns reject missing faces, overlapping holes and unsupported counts", () => {
   assert.throws(() => buildHolePattern({ id: "plate", m: identity }, { ...rectangleData(), faceInfo: [{ t: "CYLINDRE", n: [0, 0, 1], c: [0, 0, 6] }] }, pattern()), /no flat face/);
   assert.throws(() => buildHolePattern({ id: "plate", m: identity }, rectangleData(), pattern({ layout: { type: "grid", cols: 2, rows: 2, pitch: 2, margin: 0, stagger: false, angle: 0 } })), /pitch is smaller/);

@@ -392,7 +392,7 @@ export function bodyKey(resolved) {
 
 // ------------------------------------------------------------- timeline
 // Every creation step gets a sequence number; the timeline lists them in order.
-const PRIM_NAMES = { box: "Box", cylinder: "Cylinder", sphere: "Sphere", cone: "Cone", pyramid: "Pyramid", wedge: "Wedge", torus: "Torus", tube: "Tube", hemisphere: "Hemisphere", prism: "Prism", text: "Text", star: "Star", heart: "Heart", roof: "Roof", roundroof: "Round roof", paraboloid: "Paraboloid", gem: "Gem", spring: "Spring", capsule: "Capsule", arrow: "Arrow" };
+const PRIM_NAMES = { box: "Box", cylinder: "Cylinder", sphere: "Sphere", cone: "Cone", pyramid: "Pyramid", wedge: "Wedge", torus: "Torus", tube: "Tube", hemisphere: "Hemisphere", prism: "Prism", text: "Text", star: "Star", heart: "Heart", roof: "Roof", roundroof: "Round roof", paraboloid: "Paraboloid", gem: "Gem", spring: "Spring", gear: "Spur gear", bevelgear: "Straight bevel gear", rack: "Rack", capsule: "Capsule", arrow: "Arrow" };
 export function primName(kind) { return PRIM_NAMES[kind] || kind; }
 
 export function timeline(doc) {

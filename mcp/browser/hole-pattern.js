@@ -110,6 +110,12 @@ function outerRadius(hole) {
   return Math.max(hole.diameter, hole.kind === "cbore" ? hole.counterboreDiameter : 0, hole.kind === "csink" ? hole.countersinkDiameter : 0) / 2;
 }
 
+function shapeRadius(shape) {
+  if (shape.type === "square") return shape.width / Math.SQRT2;
+  if (shape.type === "hex") return shape.width / Math.sqrt(3);
+  return shape.length / 2;
+}
+
 function spotsOnFace(frame, layout, radius) {
   const candidates = [];
   let total, px, py;
@@ -147,8 +153,11 @@ function spotsOnFace(frame, layout, radius) {
 export function buildHolePattern(body, data, pattern) {
   const face = findFace(body, data, pattern.face);
   const frame = projectedFace(data, face, pattern.layout.type === "grid" ? pattern.layout.angle : 0);
+  const shape = pattern.shape || { type: "round" };
   const hole = pattern.hole;
-  const layout = spotsOnFace(frame, { ...pattern.layout, kind: hole.kind }, outerRadius(hole));
+  const radius = shape.type === "round" ? outerRadius(hole) : shapeRadius(shape);
+  const layout = spotsOnFace(frame, { ...pattern.layout, kind: hole?.kind || "simple" }, radius);
+  if (shape.type !== "round") return buildShapedPattern(data, pattern, frame, face, layout, shape);
   const tapped = hole.kind === "tapped";
   return {
     mod: {
@@ -161,6 +170,79 @@ export function buildHolePattern(body, data, pattern) {
       tip: hole.depth !== undefined && hole.tip,
       at: layout.positions,
     },
+    faceIndex: face, holes: layout.positions.length, dropped: layout.dropped, total: layout.total,
+    fittedPitch: layout.pitch,
+  };
+}
+
+function buildShapedPattern(data, pattern, frame, face, layout, shape) {
+  const sketchId = pattern.sketchId || `sketch-${pattern.featureId}`;
+  let pointIndex = 0, entityIndex = 0;
+  const pointId = () => `${sketchId}-p${pointIndex++}`;
+  const entityId = () => `${sketchId}-e${entityIndex++}`;
+  let sketch;
+  const point = (xy) => {
+    const id = pointId();
+    sketch.pts.push({ id, x: xy[0], y: xy[1] });
+    return id;
+  };
+  sketch = {
+    id: sketchId,
+    name: `${pattern.id} profiles`.slice(0, 80),
+    seq: pattern.seq,
+    plane: { o: frame.toPoint(0, 0).map((value, i) => value + frame.n[i] * 0.01), x: frame.U.slice(), n: frame.n.slice() },
+    pts: [], ents: [], hidden: true,
+  };
+  const profileRefs = [];
+  const at = (center, xy, angle = 0) => [
+    center[0] + xy[0] * Math.cos(angle) - xy[1] * Math.sin(angle),
+    center[1] + xy[0] * Math.sin(angle) + xy[1] * Math.cos(angle),
+  ];
+  const line = (a, b, center, angle = 0) => sketch.ents.push({ id: entityId(), t: "line", a: point(at(center, a, angle)), b: point(at(center, b, angle)) });
+  const arc = (arcCenter, a, b, center, angle = 0) => sketch.ents.push({ id: entityId(), t: "arc", c: point(at(center, arcCenter, angle)), a: point(at(center, a, angle)), b: point(at(center, b, angle)) });
+  const polygon = (center, vertices) => {
+    const ids = vertices.map((xy) => point([xy[0] + center[0], xy[1] + center[1]]));
+    const edges = [];
+    for (let i = 0; i < ids.length; i++) {
+      const id = entityId();
+      sketch.ents.push({ id, t: "line", a: ids[i], b: ids[(i + 1) % ids.length] });
+      edges.push(id);
+    }
+    profileRefs.push({ key: edges.sort().join(","), pt: center });
+  };
+  const half = shape.width / 2;
+  for (const position of layout.positions) {
+    const center = frame.toOffset(position.p);
+    const start = sketch.ents.length;
+    if (shape.type === "square") polygon(center, [[-half, -half], [half, -half], [half, half], [-half, half]]);
+    else if (shape.type === "hex") {
+      const radius = shape.width / Math.sqrt(3);
+      polygon(center, Array.from({ length: 6 }, (_, i) => {
+        const angle = i * Math.PI / 3;
+        return [radius * Math.cos(angle), radius * Math.sin(angle)];
+      }));
+    } else {
+      const radius = half, centerOffset = (shape.length - shape.width) / 2;
+      const circleCenter = pattern.layout.type === "circle" ? frame.toOffset(pattern.layout.center || frame.toPoint(0, 0)) : [0, 0];
+      const angle = pattern.layout.type === "circle" ? Math.atan2(center[1] - circleCenter[1], center[0] - circleCenter[0]) : 0;
+      line([centerOffset, radius], [-centerOffset, radius], center, angle);
+      arc([-centerOffset, 0], [-centerOffset, radius], [-centerOffset - radius, 0], center, angle);
+      arc([-centerOffset, 0], [-centerOffset - radius, 0], [-centerOffset, -radius], center, angle);
+      line([-centerOffset, -radius], [centerOffset, -radius], center, angle);
+      arc([centerOffset, 0], [centerOffset, -radius], [centerOffset + radius, 0], center, angle);
+      arc([centerOffset, 0], [centerOffset + radius, 0], [centerOffset, radius], center, angle);
+      const edges = sketch.ents.slice(start).map((entity) => entity.id).sort();
+      profileRefs.push({ key: edges.join(","), pt: center });
+    }
+  }
+  const projections = [];
+  for (let i = 0; i < data.vertices.length; i += 3) projections.push(dot(frame.n, [data.vertices[i], data.vertices[i + 1], data.vertices[i + 2]]));
+  const lo = Math.min(...projections), hi = Math.max(...projections), faceProjection = dot(frame.n, frame.c);
+  const inward = faceProjection - lo < hi - faceProjection ? 1 : -1;
+  const depth = shape.depth ?? (inward > 0 ? hi - faceProjection : faceProjection - lo) + 0.02;
+  return {
+    shape: shape.type, sketch,
+    tool: { t: "extrude", sketch: sketch.id, profiles: profileRefs, dist: inward * (depth + 0.02), mode: "one", dist2: 0, mods: [] },
     faceIndex: face, holes: layout.positions.length, dropped: layout.dropped, total: layout.total,
     fittedPitch: layout.pitch,
   };

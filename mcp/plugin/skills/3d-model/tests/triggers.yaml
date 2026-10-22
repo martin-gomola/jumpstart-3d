@@ -22,6 +22,12 @@ cases:
   - prompt: "Pattern the selected mounting slots across this plate."
     expected: invoke
     mode: implicit
+  - prompt: "Mount this imported mouse holder on an IKEA Skådis board using the separate hook and match this reference pose."
+    expected: invoke
+    mode: implicit
+  - prompt: "Do these two imported parts fit together as a wall mount?"
+    expected: invoke
+    mode: implicit
   - prompt: "Import reference.stl through an arbitrary local path."
     expected: invoke
     mode: implicit

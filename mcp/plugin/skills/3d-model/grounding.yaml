@@ -37,3 +37,12 @@ rules:
   - instruction: "Import only by asset id from jumpstart_list_imports; do not pass host paths or file contents through model plans."
     sources: [server, managed-imports, modeling-contract]
     locator: "Managed read-only imports directory and typed digest references"
+  - instruction: "For a mounted assembly, establish mating sides and hook direction before applying transforms; bounding-box overlap alone does not establish fit."
+    sources: [mount-assembly-incident, modeling-contract]
+    locator: "User's Skådis correction and MCP's physical-fit validation boundary"
+  - instruction: "Use an available localhost browser screenshot as visual context for the open editor, but use MCP geometry data for dimensions and fit checks."
+    sources: [local-browser-context, modeling-contract]
+    locator: "User's browser-access clarification and MCP measurement/fit boundaries"
+  - instruction: "When a document revision changes outside the agent's preview, reread it and confirm intent before undoing, replacing, or saving the changed geometry."
+    sources: [server, modeling-contract, user-workflow]
+    locator: "Preview/apply revision guards and save-only-after-agreement workflow"

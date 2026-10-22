@@ -1,6 +1,8 @@
 ---
 name: 3d-model
-description: Creates and revises dimensioned CAD models and 3D-printable parts in JumpStart through its local MCP tools. Use for spacers, brackets, enclosures, turned parts, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and product research.
+description: Creates and revises dimensioned CAD models, imported-part assemblies, and 3D-printable parts in JumpStart through its local MCP tools. Use for spacers, brackets, enclosures, turned parts, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and product research.
+metadata:
+  version: "1.0.0"
 ---
 
 # Model a part in JumpStart
@@ -60,6 +62,41 @@ no shell commands, external uploads, or additional network services.
   most four imports and 24 MiB total. STL and 3MF remain editable mesh bodies;
   STEP/STP become native STEP bodies. Use `jumpstart_preview_resize_body` for
   resizing an imported body, and do not claim parametric reconstruction.
+
+## Assemble and mount imported parts
+
+1. Describe each part's role and the intended relationship before transforming
+   anything: which face mates, which direction hooks or clips point, what sits
+   in front of or behind the board, and whether an existing mount stays or is
+   replaced. If the user's reference or wording does not settle a critical
+   orientation, ask before applying a transform.
+2. When the editor is open at localhost and a browser screenshot tool is
+   available, capture the full viewport if its current camera or visible part
+   arrangement will help resolve the assembly. Use the screenshot only as visual
+   context; use MCP document data for body identity and dimensions. Do not use
+   browser UI actions to edit the model or bypass preview/apply.
+3. Read each body's local dimensions, world bounds, and feature tree. Use
+   geometry selectors where available to ground local features. Imported meshes
+   are opaque geometry; do not assume a hook is a separate editable feature.
+   Do not choose placement from bounding-box overlap alone.
+4. Preview the assembly from the reference pose. Inspect a complete isometric
+   view and a view from the mating side. Check that the retaining features face
+   the board and the holder sits on the intended side. Use a board model and
+   measured thickness/pitch for clearance checks where the available geometry
+   tools support them. Without a board model or a supported clearance check,
+   report board engagement and physical fit as unverified.
+5. Distinguish a spatial assembly from a fused solid. A valid mesh check only
+   establishes the mesh properties reported by the inspector; it does not prove
+   contact, clearance, fit, or printability. If a boolean times out, do not
+   describe two overlapping bodies as a fused or print-ready part. Explain the
+   result and preview an alternative only when it still meets the user's stated
+   assembly intent.
+6. Before apply, confirm the document revision still matches the preview. If it
+   changed, reread and summarize the current document. Treat changes not
+   explained by your preview as user work: do not undo, replace, or save them
+   until their intent is clear.
+7. After apply, reread the document and inspect the final assembly. Save only
+   when requested or already part of the agreed task.
 
 ## Preview, inspect, then apply
 

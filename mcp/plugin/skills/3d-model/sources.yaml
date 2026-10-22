@@ -37,3 +37,11 @@ sources:
     locator: "User spacer and plugin-bundle requests in this development conversation."
     trust: "User's requested local modeling workflow and measured/assumed distinction."
     mutable: false
+  - id: mount-assembly-incident
+    locator: "User's Logitech MX3 holder and IKEA Skådis-hook request, correction, and target image in this conversation."
+    trust: "The user's intended mounting relationship and correction; the image does not establish board dimensions, clearances, or physical fit."
+    mutable: false
+  - id: local-browser-context
+    locator: "User clarification that the agent can capture the localhost editor browser for visual context."
+    trust: "User-provided capability and intended read-only use; screenshots are not dimensional evidence."
+    mutable: false

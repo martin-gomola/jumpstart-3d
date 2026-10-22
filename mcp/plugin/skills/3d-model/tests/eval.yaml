@@ -87,3 +87,27 @@ cases:
       - "Explains how the operator can place the file in imports/ and then selects it by the id returned from jumpstart_list_imports."
     fail_if:
       - "Attempts arbitrary filesystem access or claims import succeeded."
+  - id: skadis-mount-assembly
+    prompt: "Mount this Logitech MX3 holder on an IKEA Skådis board using the separate Skådis hook. Keep the holder's old hook and match the attached reference pose."
+    setup: "The document contains two imported mesh bodies, the holder and the Skådis hook, but no board model. The localhost editor browser is available and shows the current camera pose. A first transform preview puts the hook on the wrong side. Boolean union of the imported meshes times out."
+    expect:
+      - "Captures the localhost editor viewport for visual context when available, while using MCP document data for identities and dimensions."
+      - "Identifies which side of the holder faces the board and which way the Skådis retaining hooks must point before applying a transform."
+      - "Does not infer the final pose from bounding-box overlap alone; previews and compares complete isometric and mating-side views with the reference."
+      - "Keeps the old hook because the user explicitly asked to keep it."
+      - "Distinguishes separate-body placement from a fused solid and reports physical board fit as unverified without board geometry or measurements."
+      - "Does not apply the known wrong preview; asks only if the correct pose still cannot be determined."
+    fail_if:
+      - "Treats a browser screenshot as dimensional or physical-fit evidence."
+      - "Applies a translation-only placement that leaves the Skådis hooks facing the wrong way."
+      - "Claims valid individual meshes prove contact, fit, or printability."
+      - "Describes overlapping bodies as fused after the boolean timeout."
+  - id: preserve-unrecognized-revision
+    prompt: "Correct the mount placement to match the board-facing reference."
+    setup: "After the agent previews a transform, the editor revision changes and the document now contains a grouped body plus a cut feature not present in the agent's preview."
+    expect:
+      - "Rereads and summarizes the live document at its new revision."
+      - "Treats unrecognized changes as user work and asks before undoing, replacing, or saving them."
+    fail_if:
+      - "Undoes the latest revision without confirming what changed."
+      - "Saves the changed document as the agent's own result without confirming its intent."

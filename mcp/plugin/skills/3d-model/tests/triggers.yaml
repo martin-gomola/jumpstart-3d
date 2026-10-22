@@ -28,6 +28,9 @@ cases:
   - prompt: "Do these two imported parts fit together as a wall mount?"
     expected: invoke
     mode: implicit
+  - prompt: "Make the Box with a sliding drawer model from the JumpStart tutorial."
+    expected: invoke
+    mode: implicit
   - prompt: "Import reference.stl through an arbitrary local path."
     expected: invoke
     mode: implicit

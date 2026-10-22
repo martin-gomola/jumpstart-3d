@@ -5,8 +5,8 @@ services:
     ports:
       - "127.0.0.1:3210:3210"
     volumes:
-      - ./exports:/app/exports
-      - ./imports:/app/imports:ro
+      - "${JUMPSTART_DATA_DIR:?Set JUMPSTART_DATA_DIR in .env}/exports:/app/exports"
+      - "${JUMPSTART_DATA_DIR:?Set JUMPSTART_DATA_DIR in .env}/imports:/app/imports:ro"
     restart: unless-stopped
     healthcheck:
       test:

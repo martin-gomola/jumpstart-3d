@@ -111,3 +111,15 @@ cases:
     fail_if:
       - "Undoes the latest revision without confirming what changed."
       - "Saves the changed document as the agent's own result without confirming its intent."
+  - id: tutorial-recipe-to-native-model
+    prompt: "Make the Box with a sliding drawer from the JumpStart tutorial."
+    setup: "The tutorial source is available and specifies an 80 x 70 x 50 mm open-front case, 4 mm corner fillets, a 3 mm case shell, a separate 73 x 62 x 43 mm drawer, a 2 mm drawer shell, a joined handle, a fit test, and a final side-by-side print layout."
+    expect:
+      - "Uses the tutorial's ordered native feature recipe rather than copying UI clicks or substituting one primitive."
+      - "Keeps the case and drawer as separate editable bodies and verifies the feature previews and dimensions."
+      - "Previews the drawer's fit position, then leaves the applied design in the tutorial's separate print layout."
+      - "Labels tutorial clearance as an example and does not claim universal printer fit."
+    fail_if:
+      - "Applies the inserted fit-test position as the final print layout."
+      - "Claims physical fit from a valid mesh or nominal tutorial dimensions alone."
+      - "Runs arbitrary JavaScript or UI automation to imitate tutorial steps."

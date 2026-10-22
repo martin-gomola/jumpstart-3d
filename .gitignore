@@ -3,6 +3,7 @@
 /docs/
 node_modules/
 .DS_Store
+/.env
 /mesh-to-step-helper.html
 /exports/
 /imports/

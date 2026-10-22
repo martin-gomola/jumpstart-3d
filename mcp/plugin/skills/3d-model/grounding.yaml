@@ -43,6 +43,12 @@ rules:
   - instruction: "Use an available localhost browser screenshot as visual context for the open editor, but use MCP geometry data for dimensions and fit checks."
     sources: [local-browser-context, modeling-contract]
     locator: "User's browser-access clarification and MCP measurement/fit boundaries"
+  - instruction: "When a matching JumpStart tutorial is available, translate its ordered recipe into native typed features and verify its geometric milestones rather than reproducing UI clicks."
+    sources: [tutorial-recipes, tutorial-model-benchmark, model-plan]
+    locator: "The a-drawer tutorial steps and matching native-plan acceptance case"
+  - instruction: "Treat tutorial clearances as example values; preview fit and print positions separately and apply the requested final layout."
+    sources: [tutorial-recipes, tutorial-model-benchmark, modeling-contract]
+    locator: "The drawer tutorial fit-test and print-layout steps; physical-fit validation boundary"
   - instruction: "When a document revision changes outside the agent's preview, reread it and confirm intent before undoing, replacing, or saving the changed geometry."
     sources: [server, modeling-contract, user-workflow]
     locator: "Preview/apply revision guards and save-only-after-agreement workflow"

@@ -80,11 +80,17 @@ make up
 ```
 
 This builds and starts the container, then prints
-`http://localhost:3210/?mcp=1`. The port is published on loopback only. MCP
-exports are written to this checkout's `exports/` directory. Put STL, 3MF, STEP,
-or STP files you want the agent to import in this checkout's `imports/`
-directory. Compose mounts it read-only at `/app/imports`; MCP imports use digest
-ids from `jumpstart_list_imports`, never host paths or file bytes. Each file and
+`http://localhost:3210/?mcp=1`. The port is published on loopback only. Set
+`JUMPSTART_DATA_DIR` in the local, gitignored `.env` file (copy `.env.example`
+and replace its placeholder). Compose bind-mounts `exports/` and `imports/`
+under that host directory, outside the checkout, so those files survive
+container replacement and remain easy to open from the host file browser. MCP
+exports are written there. Put STL, 3MF, STEP, or STP files you want the agent to
+import in its `imports/` subdirectory. Compose mounts imports read-only at
+`/app/imports`; MCP imports use digest ids from `jumpstart_list_imports`, never
+host paths or file bytes. `jumpstart_save_document` still saves native projects
+to browser-local storage; this Docker data mount does not back up browser data.
+Each file and
 each plan's combined imports are limited to 24 MiB, with at most four files per
 plan. The catalog lists up to 128 files and reports when it is truncated. STL
 plans require explicit `mm`, `cm`, or `in` units. 3MF and STEP retain units

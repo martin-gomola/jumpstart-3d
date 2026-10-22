@@ -45,3 +45,11 @@ sources:
     locator: "User clarification that the agent can capture the localhost editor browser for visual context."
     trust: "User-provided capability and intended read-only use; screenshots are not dimensional evidence."
     mutable: false
+  - id: tutorial-recipes
+    path: src/tutorial_data.js
+    trust: "The editor's authored tutorial titles, design intent, dimensions, operation order, and user-facing fit/print guidance."
+    mutable: true
+  - id: tutorial-model-benchmark
+    path: mcp/benchmarks/tutorial-cases.mjs
+    trust: "Typed-plan acceptance cases for representative tutorial models; dimensions remain tutorial examples, not general fit specifications."
+    mutable: true

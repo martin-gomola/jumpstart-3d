@@ -61,3 +61,19 @@ test("drawer plans remain native, persist metadata, replace only owned parts and
   dependent.joints.push({ a: dependent.bodies[0].id });
   assert.throws(() => compileMcpModel(dependent, { name: "unsafe", operations: [edit] }), /depends/);
 });
+
+test("configurable bin limits support larger native bins without changing default limits or baseplate tiling", () => {
+  const large = layout({ width: 230, depth: 690, binLimits: { columns: 5, rows: 6 }, bins: [bin("wide", { columns: 5, rows: 4 })] });
+  const normalized = normalizeDrawerLayout(large);
+  assert.deepEqual(normalized.binLimits, { columns: 5, rows: 6 });
+  const parts = drawerParts(normalized);
+  assert.ok(parts.some(p => p.kind === "bin" && p.columns === 5 && p.rows === 4));
+  assert.ok(parts.filter(p => p.kind === "baseplate").every(p => p.columns <= 4 && p.rows <= 4));
+  assert.ok(compileMcpModel(doc(), { operations: [large] }).document.bodies.length > 1);
+  let id = 0;
+  const filled = fillDrawerGaps({ ...large, bins: [] }, rect => bin(`wide-${++id}`, rect));
+  assert.deepEqual(filled.bins.map(b => [b.columns, b.rows]), [[5, 6], [5, 6], [5, 4]]);
+  assert.equal(drawerMetrics(filled).fill, 100);
+  assert.throws(() => normalizeDrawerLayout({ ...large, binLimits: { columns: 4, rows: 4 } }), /configured/);
+  for (const binLimits of [{ columns: 7 }, { rows: 0 }, { columns: 2.5 }, { columns: Infinity }, { unexpected: 5 }, null]) assert.throws(() => normalizeDrawerLayout({ ...large, binLimits }));
+});

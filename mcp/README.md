@@ -104,6 +104,20 @@ the 3D preview before Add. Save the project after adding to persist the layout.
 Saved layouts can be loaded and regenerated; native edits, missing/locked parts
 and external dependencies block replacement rather than discarding those edits.
 
+### Gridfinity settings
+
+Open **Gridfinity → Settings** to set maximum drawer-bin width and depth in cells.
+Defaults are 4 × 4; each direction supports 1–6 cells (up to a 251.5 mm bin edge).
+The settings show the maximum footprint in mm for comparison with your printer.
+Drawing, resizing and Fill gaps use these limits. Reducing them below existing
+bin sizes is rejected; bins are never silently resized or deleted.
+
+The typed `drawerLayout.binLimits` object uses `columns` and `rows`. It is saved
+with the native layout and defaults to 4 × 4 when absent. UI settings are also
+remembered in this browser for new drawers. Standalone Gridfinity parts support
+up to 6 × 6 cells; drawer baseplates still tile at 4 × 4. The 16-bin, 144-cell,
+preview timeout and geometry inspection budgets remain enforced.
+
 ### Optional magnet pockets
 
 Single part provides a **Magnet pockets** checkbox for bins, insert blanks and

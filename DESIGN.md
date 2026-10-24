@@ -15,6 +15,12 @@ Connection and Generators share this desktop width. Keep the title, workspace
 tabs and Close action on one compact desktop header row; switching tabs must not
 resize or shift the panel. Stack header navigation only at narrower widths.
 
+Disclosure rows use full-row pointer targets, a trailing chevron, and distinct
+open/hover/focus states. Inputs use the stronger neutral boundary on a recessed
+surface. Hover feedback requires a hover-capable pointer and preserves selected
+states. Press feedback uses scale 0.96 over 150 ms ease-out only without reduced
+motion; grid dragging and rapid steppers stay static. Contain overlay scrolling.
+
 AI is the fourth entry beside Beginner, Advanced and Chisel in the shared mode
 control. Its label stays AI; connection/activity details remain in its accessible
 name, tooltip and Connection tab. Opening the workspace highlights AI without
@@ -27,6 +33,11 @@ choosing a CAD mode closes the AI workspace.
   with Drawer layout and Single part as its workflows. Future unrelated generators
   belong beside Gridfinity, not inside its drawer or part controls.
 - Default Gridfinity to Drawer layout; retain Single part for cutouts and detailed CAD parameters.
+- Gridfinity Settings exposes maximum drawer-bin width/depth in cells and shows
+  their millimetre footprint. Defaults remain 4 by 4; validated native generation
+  supports up to 6 by 6. Persist limits with the drawer, remember browser defaults
+  for new drafts, and reject reductions that exceed existing bins without resizing them.
+  Keep geometry/time/memory budgets separate from user preferences.
 - Keep New drawer beside the drawer heading, including for unsaved drafts. It clears
   draft bins, measurements and preview in one undoable action, focuses width, and
   leaves already applied CAD bodies unchanged.

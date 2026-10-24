@@ -16,8 +16,8 @@ test("Gridfinity normalizer has bounded explicit dimensions and rejects unused g
   const op=normalizeGridfinity(raw());
   assert.equal(op.kind,"insert");
   assert.deepEqual([op.columns,op.rows,op.heightUnits,op.floor,op.wall],[1,1,3,2,1.2]);
-  assert.equal(GRIDFINITY_LIMITS.cells,16);
-  for (const overrides of [{columns:0},{rows:5},{heightUnits:1},{columns:1.5},{floor:NaN},{wall:0.1},{lip:"yes"},{kind:"other"},{kind:"insert",lip:true},{kind:"insert",dividers:{x:1}},{kind:"bin",dividers:{y:7}},{kind:"bin",dividers:{z:1}},{kind:"baseplate",heightUnits:4},{kind:"baseplate",wall:2},{extra:1},{position:[0,0]},{rotation:[0,0,361]}]) {
+  assert.equal(GRIDFINITY_LIMITS.cells,36);
+  for (const overrides of [{columns:0},{rows:7},{heightUnits:1},{columns:1.5},{floor:NaN},{wall:0.1},{lip:"yes"},{kind:"other"},{kind:"insert",lip:true},{kind:"insert",dividers:{x:1}},{kind:"bin",dividers:{y:7}},{kind:"bin",dividers:{z:1}},{kind:"baseplate",heightUnits:4},{kind:"baseplate",wall:2},{extra:1},{position:[0,0]},{rotation:[0,0,361]}]) {
     assert.throws(()=>normalizeGridfinity(raw(overrides)),JSON.stringify(overrides));
   }
   assert.throws(()=>normalizeGridfinity({id:"grid"}),/type/);

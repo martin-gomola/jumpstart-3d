@@ -1,6 +1,7 @@
+import { GRIDFINITY_LIMITS, normalizeBinLimits } from "./gridfinity-limits.js";
 // Drawer planning uses grid cells; the native Gridfinity generator owns interface geometry.
 import { normalizeMagnetPockets, magnetCarrierHeight } from "./gridfinity-magnets.js";
-export const DRAWER_LIMITS = Object.freeze({ axisCells: 20, cells: 144, bins: 16, partCells: 4 });
+export const DRAWER_LIMITS = Object.freeze({ axisCells: 20, cells: 144, bins: 16, partCells: GRIDFINITY_LIMITS.columns, baseplateTileCells: 4 });
 export const GRID_PITCH = 42;
 export const drawerBinBaseZ = drawer => drawer.includeBaseplate === false ? 0 : magnetCarrierHeight(drawer.baseplateMagnets) + 0.25;
 const fail = message => { throw new Error(`Drawer layout: ${message}`); };
@@ -28,7 +29,8 @@ export function drawerMetrics(drawer) {
 export function placementError(drawer, candidate, ignoreId) {
   const { columns, rows } = drawerMetrics(drawer);
   if (![candidate.x, candidate.y, candidate.columns, candidate.rows].every(Number.isInteger)) return "Place bins on whole grid cells.";
-  if (candidate.columns < 1 || candidate.rows < 1 || candidate.columns > 4 || candidate.rows > 4) return "Each part can span 1 to 4 cells in either direction.";
+  const limits = normalizeBinLimits(drawer.binLimits);
+  if (candidate.columns < 1 || candidate.rows < 1 || candidate.columns > limits.columns || candidate.rows > limits.rows) return `Bin exceeds the configured ${limits.columns} × ${limits.rows} cell limit. Adjust Gridfinity Settings.`;
   if (candidate.x < 0 || candidate.y < 0 || candidate.x + candidate.columns > columns || candidate.y + candidate.rows > rows) return "Keep the bin inside the drawer grid.";
   const overlap = (drawer.bins || []).find(bin => bin.id !== ignoreId && bin.x < candidate.x + candidate.columns && bin.x + bin.columns > candidate.x && bin.y < candidate.y + candidate.rows && bin.y + bin.rows > candidate.y);
   return overlap ? `That space is occupied by ${overlap.label || "another bin"}.` : null;
@@ -41,7 +43,7 @@ export function firstDrawerSpace(drawer, columns = 1, rows = 1, ignoreId) {
   return null;
 }
 export function normalizeDrawerLayout(raw) {
-  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "baseplateMagnets", "floor", "wall", "bins", "replaceExisting"], "plan");
+  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "baseplateMagnets", "floor", "wall", "bins", "replaceExisting", "binLimits"], "plan");
   if (raw.type !== "drawerLayout") fail("type must be drawerLayout");
   const id = text(raw.id, "id"), layoutId = text(raw.layoutId, "layoutId", id);
   if (!/^[a-zA-Z0-9_-]+$/.test(layoutId)) fail("layoutId must use letters, numbers, underscores or hyphens");
@@ -50,7 +52,7 @@ export function normalizeDrawerLayout(raw) {
   for (const key of ["includeBaseplate", "replaceExisting"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") fail(`${key} must be a boolean`);
   const result = { type: "drawerLayout", id, layoutId, name: text(raw.name, "name", "Drawer layout"), width, depth, height,
     includeBaseplate: raw.includeBaseplate !== false, baseplateMagnets: normalizeMagnetPockets(raw.baseplateMagnets, "baseplateMagnets"), replaceExisting: raw.replaceExisting === true,
-    floor: number(raw.floor ?? 2, 0.8, 6, "floor"), wall: number(raw.wall ?? 1.2, 0.8, 4, "wall"), bins: [] };
+    binLimits: normalizeBinLimits(raw.binLimits), floor: number(raw.floor ?? 2, 0.8, 6, "floor"), wall: number(raw.wall ?? 1.2, 0.8, 4, "wall"), bins: [] };
   if (result.baseplateMagnets && !result.includeBaseplate) fail("baseplate magnet pockets require matching baseplates");
   if (!Array.isArray(raw.bins) || !raw.bins.length || raw.bins.length > DRAWER_LIMITS.bins) fail(`add between 1 and ${DRAWER_LIMITS.bins} bins`);
   const ids = new Set();
@@ -58,7 +60,7 @@ export function normalizeDrawerLayout(raw) {
     object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets"], `bin ${i + 1}`);
     const bin = { id: text(entry.id, `bin ${i + 1} id`), label: text(entry.label, `bin ${i + 1} label`, `Bin ${i + 1}`),
       x: number(entry.x, 0, 19, "column", true), y: number(entry.y, 0, 19, "row", true),
-      columns: number(entry.columns, 1, 4, "bin width", true), rows: number(entry.rows, 1, 4, "bin depth", true),
+      columns: number(entry.columns, 1, GRIDFINITY_LIMITS.columns, "bin width", true), rows: number(entry.rows, 1, GRIDFINITY_LIMITS.rows, "bin depth", true),
       heightUnits: number(entry.heightUnits ?? 3, 2, 12, "bin height", true), kind: entry.kind ?? "bin", lip: entry.lip === true, magnets: normalizeMagnetPockets(entry.magnets, `${entry.label || entry.id} magnets`) };
     if (ids.has(bin.id)) fail("bin ids must be unique"); ids.add(bin.id);
     if (!["bin", "insert"].includes(bin.kind)) fail("parts must be bins or insert blanks");
@@ -90,10 +92,11 @@ export function drawerParts(raw) {
 }
 export function fillDrawerGaps(drawer, makeBin) {
   const next = structuredClone(drawer), { columns, rows } = drawerMetrics(next);
+  const limits = normalizeBinLimits(drawer.binLimits);
   for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
     if (placementError(next, { x, y, columns: 1, rows: 1 })) continue;
     let best = { x, y, columns: 1, rows: 1 };
-    for (let w = 1; w <= 4; w++) for (let d = 1; d <= 4; d++) {
+    for (let w = 1; w <= limits.columns; w++) for (let d = 1; d <= limits.rows; d++) {
       const candidate = { x, y, columns: w, rows: d };
       if (w * d > best.columns * best.rows && !placementError(next, candidate)) best = candidate;
     }

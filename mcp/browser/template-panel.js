@@ -2,6 +2,7 @@ import { el } from "../../src/util.js";
 import { initDrawerPanel } from "./drawer-panel.js";
 import { magnetControls } from "./magnet-controls.js";
 import { magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
+import { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";
 
 const TEMPLATES = [
   ["insert", "Custom insert", "A solid blank with measured pockets"],
@@ -121,8 +122,8 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
     list.append(button); cards.set(key, button);
   }
   const basic = el("div", { class: "ai-template-fields" });
-  controls.columns = numberField(basic, "columns", "Width (cells)", 2, 1, 4, 1);
-  controls.rows = numberField(basic, "rows", "Depth (cells)", 3, 1, 4, 1);
+  controls.columns = numberField(basic, "columns", "Width (cells)", 2, 1, GRIDFINITY_LIMITS.columns, 1);
+  controls.rows = numberField(basic, "rows", "Depth (cells)", 3, 1, GRIDFINITY_LIMITS.rows, 1);
   const dimensions = el("p", { class: "ai-template-note", "aria-live": "polite" });
   const heightFields = el("div", { class: "ai-template-fields" });
   controls.heightUnits = numberField(heightFields, "heightUnits", "Height (7 mm units)", 3, 2, 12, 1);
@@ -227,21 +228,40 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const settings = el("div", { class: "ai-template-settings" }, el("h3", {}, "Part type"), list, form);
   const singlePart = el("div", { class: "ai-single-part", hidden: true }, settings, el("div", { class: "ai-template-review" }, emptyPreview, previewArea));
   const drawerRoot = el("div", { class: "ai-drawer-mode" });
+  const generatorSettings = el("form", { class: "ai-template-form ai-generator-settings", hidden: true, "aria-label": "Gridfinity settings" });
   const modeSwitch = el("div", { class: "ai-template-mode", role: "group", "aria-label": "Gridfinity workflow" });
-  for (const [mode, title] of [["drawer", "Drawer layout"], ["part", "Single part"]]) {
+  for (const [mode, title] of [["drawer", "Drawer layout"], ["part", "Single part"], ["settings", "Settings"]]) {
     const button = el("button", { type: "button", "aria-pressed": String(mode === "drawer"), "data-workspace-view": mode }, title);
     button.onclick = () => {
       modeButtons.forEach((entry, id) => entry.setAttribute("aria-pressed", String(id === mode)));
       singlePart.hidden = mode !== "part"; drawerRoot.hidden = mode !== "drawer";
+      generatorSettings.hidden = mode !== "settings";
+      if (mode === "settings") { const limits = drawerPanel.getBinLimits(); limitWidth.value = limits.columns; limitDepth.value = limits.rows; updateLimitFootprint(); }
       invalidate(undefined, { discard: true }); drawerPanel.deactivate();
     };
     modeButtons.set(mode, button); modeSwitch.append(button);
   }
   const gridfinity = el("section", { class: "ai-generator", "aria-labelledby": "ai-gridfinity-title" },
     el("div", { class: "ai-generator-header" }, el("h3", { id: "ai-gridfinity-title" }, "Gridfinity"), modeSwitch),
-    drawerRoot, singlePart);
+    drawerRoot, singlePart, generatorSettings);
   root.append(gridfinity);
   const drawerPanel = initDrawerPanel({ root: drawerRoot, request, subscribe, createPreviewView, onBusy: active => modeButtons.forEach(button => { button.disabled = active; }) });
+  const limitFields = el("div", { class: "ai-template-fields" });
+  const limitWidth = numberField(limitFields, "max-bin-width", "Maximum bin width (cells)", 4, 1, GRIDFINITY_LIMITS.columns, 1);
+  const limitDepth = numberField(limitFields, "max-bin-depth", "Maximum bin depth (cells)", 4, 1, GRIDFINITY_LIMITS.rows, 1);
+  const limitStatus = el("p", { class: "ai-template-message", role: "status" });
+  const limitFootprint = el("p", { class: "ai-template-note" });
+  function updateLimitFootprint() { limitFootprint.textContent = limitWidth.validity.valid && limitDepth.validity.valid ? `${(Number(limitWidth.value) * 42 - 0.5).toFixed(1)} × ${(Number(limitDepth.value) * 42 - 0.5).toFixed(1)} mm maximum bin footprint.` : ""; }
+  limitWidth.oninput = limitDepth.oninput = updateLimitFootprint;
+  limitWidth.setAttribute("aria-describedby", "ai-bin-limits-note"); limitDepth.setAttribute("aria-describedby", "ai-bin-limits-note");
+  generatorSettings.append(el("h3", {}, "Bin size limits"),
+    el("p", { id: "ai-bin-limits-note", class: "ai-template-note" }, "Used for drawer drawing, resizing and Fill gaps. Up to 6 cells per direction. Check part dimensions against your printer’s build area."),
+    limitFields, limitFootprint, limitStatus, el("div", { class: "ai-template-actions" }, el("button", { type: "submit", class: "ai-template-primary" }, "Save limits")));
+  generatorSettings.onsubmit = event => {
+    event.preventDefault(); if (!generatorSettings.reportValidity()) return;
+    try { limitStatus.textContent = drawerPanel.setBinLimits({ columns: Number(limitWidth.value), rows: Number(limitDepth.value) }); delete limitStatus.dataset.error; }
+    catch (error) { limitStatus.textContent = error.message; limitStatus.dataset.error = "true"; }
+  };
   const readState = () => ({ kind, magnets: magnets.get(), ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
   form.addEventListener("input", () => { invalidate(); updateDimensions(); });
   form.addEventListener("change", () => invalidate());

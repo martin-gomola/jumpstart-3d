@@ -28,7 +28,7 @@ test("Gridfinity and pocket plans compile immutable native feature definitions a
 
 test("Gridfinity rejects unsupported layouts, unsafe pockets and implicit pocket merges", () => {
   const build = operations => compileMcpModel(document(), { name: "Invalid fixture", operations });
-  for (const patch of [{ columns: 0 }, { columns: 1.5 }, { columns: 5 }, { rows: -1 }, { heightUnits: 1 }, { wall: 0 }, { floor: -1 }, { kind: "arbitrary" }, { arbitraryScript: "execute" }]) {
+  for (const patch of [{ columns: 0 }, { columns: 1.5 }, { columns: 7 }, { rows: -1 }, { heightUnits: 1 }, { wall: 0 }, { floor: -1 }, { kind: "arbitrary" }, { arbitraryScript: "execute" }]) {
     assert.throws(() => build([{ ...blank, ...patch }]));
   }
   for (const patch of [

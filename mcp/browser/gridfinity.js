@@ -53,7 +53,8 @@ SOFTWARE.
 import { findRegions, resolveSketch } from "../../src/regions.js";
 import { normalizeMagnetPockets, magnetCarrierHeight, magnetCenters, MAGNET_CARRIER_FLOOR } from "../shared/gridfinity-magnets.js";
 
-export const GRIDFINITY_LIMITS = Object.freeze({ columns: 4, rows: 4, cells: 16, heightUnits: 12, dividers: 6 });
+import { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";
+export { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";
 const IDENTITY = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 const sourceRevision = "910e22d8607fd7f5f51ad5e5cbc5287a76810bfd";
 const fail = message => { throw new Error(message); };

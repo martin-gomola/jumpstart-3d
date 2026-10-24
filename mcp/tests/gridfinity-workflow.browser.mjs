@@ -169,9 +169,10 @@ test("Gridfinity discovery and failed pockets report actionable errors without c
   const variants = discovery.toolSchemas.find(tool => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf;
   expect(variants.map(variant => variant.properties.type.const)).toEqual(expect.arrayContaining(["gridfinity", "pocket"]));
   expect(variants).toHaveLength(2);
+  expect(variants.find(variant => variant.properties.type.const === "gridfinity").properties.columns.oneOf.find(branch => branch.type === "integer").maximum).toBe(6);
   const invalidOperations = [
     { id: "insert", type: "gridfinity", kind: "insert", columns: 0, rows: 3 },
-    { id: "insert", type: "gridfinity", kind: "insert", columns: 5, rows: 3 },
+    { id: "insert", type: "gridfinity", kind: "insert", columns: 7, rows: 3 },
     pocket("too-deep", { type: "circle", radius: 8 }, [0, 0], { depth: 13, minimumFloor: 2 }),
     pocket("too-wide", { type: "circle", radius: 50 }, [0, 0]),
     pocket("unsupported", { type: "mesh", bodyId: "reference" }, [0, 0]),

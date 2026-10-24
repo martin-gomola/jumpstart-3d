@@ -5,14 +5,29 @@
 .ai-workspace-tabs button, .ai-templates button, .ai-templates input, .ai-templates summary { min-block-size: var(--ai-status-controlHeight); font: inherit; }
 .ai-workspace-tabs button, .ai-templates button { border: var(--ai-status-panelBorder) solid var(--line); border-radius: var(--r); background: var(--panel); color: var(--ink); padding: var(--ai-status-gap) var(--ai-status-panelGap); cursor: pointer; }
 .ai-workspace-tabs button[aria-selected="true"], .ai-template-choice[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
-.ai-workspace-tabs button:hover, .ai-templates button:hover { background: var(--panel-2); border-color: var(--ink-2); }
-.ai-workspace-tabs button:active, .ai-templates button:active { transform: translateY(var(--ai-status-pressOffset)); }
+.ai-workspace-tabs button:active, .ai-templates button:active, .ai-setup-close:active, .ai-setup-copy:active { transform: none; }
+@media (hover: hover) {
+  .ai-workspace-tabs button:not(:disabled):not([aria-selected="true"]):hover, .ai-templates button:not(:disabled):not(.drawer-bin):not([aria-pressed="true"]):hover, .ai-setup-close:not(:disabled):hover, .ai-setup-copy:not(:disabled):hover { background: var(--panel-2); border-color: var(--ink-2); }
+  .ai-templates summary:hover { background: var(--panel-2); border-color: var(--ink-3); color: var(--ink); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ai-workspace-tabs button, .ai-templates button, .ai-setup-close, .ai-setup-copy { transition: scale var(--ai-status-pressDuration) ease-out; }
+  .ai-workspace-tabs button:not(:disabled):active, .ai-templates button:not(:disabled):not(.drawer-bin):active, .ai-setup-close:not(:disabled):active, .ai-setup-copy:not(:disabled):active { scale: var(--ai-status-pressScale); }
+  .ai-templates .drawer-stepper button:not(:disabled):active { scale: 1; }
+}
 .ai-workspace-tabs button:focus-visible, .ai-templates :is(button,input,summary):focus-visible { outline: var(--ai-status-stroke) solid var(--focus); outline-offset: var(--ai-status-stroke); }
 .ai-templates button:disabled, .ai-templates input:disabled { opacity: var(--ai-status-disabledOpacity); cursor: default; transform: none; }
 .ai-templates { gap: var(--ai-status-sectionGap); font-size: var(--ai-status-bodyFont); }
+.ai-setup-panel, .ai-setup-body, .ai-template-settings, .ai-template-review { overscroll-behavior: contain; }
+.ai-templates summary { display: flex; align-items: center; justify-content: space-between; gap: var(--ai-status-panelGap); box-sizing: border-box; padding: var(--ai-status-gap) var(--ai-status-panelGap); border: var(--ai-status-panelBorder) solid var(--line); border-radius: var(--r); color: var(--ink-2); cursor: pointer; list-style: none; overflow-wrap: anywhere; }
+.ai-templates summary::-webkit-details-marker { display: none; }
+.ai-templates summary::after { content: ""; flex: none; inline-size: var(--ai-status-light); block-size: var(--ai-status-light); border-inline-end: var(--ai-status-stroke) solid currentColor; border-block-end: var(--ai-status-stroke) solid currentColor; transform: rotate(-45deg); }
+.ai-templates details[open] > summary { background: var(--panel-2); border-color: var(--ink-3); color: var(--ink); }
+.ai-templates details[open] > summary::after { transform: rotate(45deg); }
 .ai-generator { display: flex; flex-direction: column; flex: 1; gap: var(--ai-status-panelGap); min-block-size: 0; min-inline-size: 0; }
 .ai-generator-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ai-status-panelGap); flex: none; }
 .ai-generator-header h3 { margin-inline-end: auto; }
+.ai-generator-settings { inline-size: 100%; max-inline-size: var(--ai-status-templateSettingsWidth); }
 .ai-templates [hidden] { display: none; }
 .ai-templates fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .ai-templates h3, .ai-templates h4, .ai-templates p { margin: 0; }
@@ -32,7 +47,8 @@
 .ai-template-submit button { inline-size: 100%; }
 .ai-template-fields { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--ai-status-panelGap); }
 .ai-template-field { display: grid; gap: var(--ai-status-gap); min-inline-size: 0; }
-.ai-template-field input { box-sizing: border-box; inline-size: 100%; min-inline-size: 0; border: var(--ai-status-panelBorder) solid var(--line); border-radius: var(--r); padding: var(--ai-status-gap) var(--ai-status-panelGap); color: var(--ink); background: var(--panel); font-variant-numeric: tabular-nums; }
+.ai-template-field input { box-sizing: border-box; inline-size: 100%; min-inline-size: 0; border: var(--ai-status-panelBorder) solid var(--ink-3); border-radius: var(--r); padding: var(--ai-status-gap) var(--ai-status-panelGap); color: var(--ink); background: var(--panel-2); font-variant-numeric: tabular-nums; }
+.ai-template-field input:focus { border-color: var(--focus); }
 .ai-template-field input[aria-invalid="true"] { border-color: var(--danger); }
 .ai-template-field input[type="checkbox"] { inline-size: var(--ai-status-target); block-size: var(--ai-status-target); accent-color: var(--accent); }
 .ai-template-field:has(input[type="checkbox"]) { display: flex; align-items: center; }
@@ -57,7 +73,7 @@
 .ai-template-preview dd { margin: 0; text-align: end; font-variant-numeric: tabular-nums; }
 .ai-template-actions { display: flex; flex-wrap: wrap; gap: var(--ai-status-panelGap); }
 .ai-templates .ai-template-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.ai-templates .ai-template-primary:hover { background: var(--accent-2); }
+@media (hover: hover) { .ai-templates .ai-template-primary:not(:disabled):hover { background: var(--accent-2); } }
 .ai-template-message { line-height: var(--ai-status-panelBodyLine); overflow-wrap: anywhere; }
 .ai-template-message[data-error="true"] { color: var(--danger); }
 @media (min-width: 40rem) { .ai-template-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } }
@@ -73,6 +89,7 @@
 .drawer-settings, .drawer-review { align-content: start; }
 .drawer-settings { gap: var(--ai-status-panelGap); }
 .drawer-inspector-header { position: sticky; inset-block-start: 0; z-index: 1; display: grid; gap: var(--ai-status-gap); padding-block: var(--ai-status-gap); background: var(--panel); }
+.drawer-inspector-header .ai-template-actions button { background: var(--panel-2); }
 .drawer-saved, .drawer-inspector, .drawer-compartments, .drawer-advanced, .drawer-measure-fields { display: grid; gap: var(--ai-status-panelGap); }
 .drawer-measure-fields { padding-block-start: var(--ai-status-panelGap); }
 .drawer-measurements summary { color: var(--ink); }

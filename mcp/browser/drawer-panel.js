@@ -2,16 +2,19 @@ import { el } from "../../src/util.js";
 import { drawerMetrics, normalizeDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../shared/drawer-layout.js";
 import { normalizeMagnetPockets, magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
 import { magnetControls } from "./magnet-controls.js";
+import { normalizeBinLimits } from "../shared/gridfinity-limits.js";
 
 const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);
 
 export function initDrawerPanel({ root, request, subscribe, onBusy, createPreviewView }) {
+  let preferredBinLimits = normalizeBinLimits();
+  try { const saved = localStorage.getItem("jumpstart.gridfinity.binLimits"); if (saved) preferredBinLimits = normalizeBinLimits(JSON.parse(saved)); } catch { /* Browser preferences are optional. */ }
   let previewView = null;
   const disposePreviewView = () => { previewView?.dispose(); previewView = null; };
   let draft, selectedId = null, documentId = null, savedLayouts = [], counter = 0, cached = null, busy = false, gesture = null, view = "layout";
   let undo = [], redo = [], measurementsCollapsed = false;
-  const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, baseplateMagnets: false, floor: 2, wall: 1.2, bins: [] });
+  const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, baseplateMagnets: false, binLimits: copy(preferredBinLimits), floor: 2, wall: 1.2, bins: [] });
   draft = fresh();
   const field = (name, label, initial = "", step = "any") => {
     const id = `drawer-${name}`, input = el("input", { id, type: "number", min: name === "height" ? 14 : 42, max: name === "height" ? 10000 : 881.99, step, value: initial, required: true, "aria-describedby": "drawer-message" });
@@ -169,7 +172,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     inspector.append(inspectorHeader, el("label", { class: "ai-template-field", for: label.id }, el("span", {}, "Name"), label));
     const stepper = (key, title, mm) => {
       const minus = el("button", { type: "button", "aria-label": `Decrease ${title.toLowerCase()}`, disabled: busy || bin[key] <= 1 }, "−");
-      const plus = el("button", { type: "button", "aria-label": `Increase ${title.toLowerCase()}`, disabled: busy || bin[key] >= 4 }, "+");
+      const plus = el("button", { type: "button", "aria-label": `Increase ${title.toLowerCase()}`, disabled: busy || bin[key] >= normalizeBinLimits(draft.binLimits)[key] }, "+");
       minus.onclick = () => updateBin({ [key]: bin[key] - 1 }); plus.onclick = () => updateBin({ [key]: bin[key] + 1 });
       return el("div", { class: "drawer-stepper" }, el("span", {}, title), el("div", {}, minus, el("output", {}, `${bin[key]} cells`), plus), el("small", {}, `${mm.toFixed(1)} mm`));
     };
@@ -256,7 +259,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   }
   function render() {
     const validDimensions = ready(), m = drawerMetrics(draft);
-    measureSummary.textContent = validDimensions ? `${draft.name} · ${draft.width} × ${draft.depth} × ${draft.height} mm · Edit drawer` : "Drawer measurements";
+    measureSummary.textContent = validDimensions ? `${draft.name} · ${draft.width} × ${draft.depth} × ${draft.height} mm` : "Drawer measurements";
     example.hidden = validDimensions;
     fit.textContent = validDimensions ? `${m.columns} × ${m.rows} grid · ${m.gridWidth} × ${m.gridDepth} mm. Spare space: ${(m.spareWidth / 2).toFixed(1)} mm per side, ${(m.spareDepth / 2).toFixed(1)} mm front/back.` : "Enter the drawer’s inside measurements in millimetres.";
     const magnetCount = draft.bins.reduce((sum, bin) => sum + (bin.magnets ? bin.columns * bin.rows * 4 : 0), 0) + (draft.includeBaseplate && draft.baseplateMagnets ? m.total * 4 : 0);
@@ -363,5 +366,15 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   }
   subscribe(kind => { if (!["preview", "version"].includes(kind)) { invalidate(); } });
   render();
-  return { refreshDocument, deactivate: invalidate };
+  return { refreshDocument, deactivate: invalidate,
+    getBinLimits: () => normalizeBinLimits(draft.binLimits),
+    setBinLimits(value) {
+      if (busy) throw new Error("Wait for the current preview to finish.");
+      const limits = normalizeBinLimits(value);
+      if (draft.bins.some(bin => bin.columns > limits.columns || bin.rows > limits.rows)) throw new Error("Existing bins exceed these limits. Resize or remove them, or start a new drawer first.");
+      const next = copy(draft); next.binLimits = limits;
+      commit(next, "Bin limits updated. Preview again before applying."); preferredBinLimits = copy(limits);
+      try { localStorage.setItem("jumpstart.gridfinity.binLimits", JSON.stringify(limits)); return "Limits saved for this drawer and new drawers in this browser."; }
+      catch { return "Limits applied to this drawer. Browser preferences could not be saved."; }
+    } };
 }

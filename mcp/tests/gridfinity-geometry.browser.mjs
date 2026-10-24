@@ -77,3 +77,25 @@ test("supported maximum grids and the narrow minimum-height lip bin build within
   console.info(JSON.stringify({gridfinityNativeBudget:{elapsedMs,profiles:doc.sketches.length,bodies:measured.map(({volume,faces,triangles})=>({volume,faces,triangles}))}}));
   expect(errors).toEqual([]);
 });
+
+test("4x5 and 6x6 native bins and magnetic socket carriers have connected measured geometry", async ({ page }, info) => {
+  const errors = watchErrors(page);
+  const document = fixture([{ kind: "bin", columns: 4, rows: 5 }, { kind: "bin", columns: 6, rows: 6, magnets: true, lip: true, position: [400, 0, 0] }, { kind: "baseplate", columns: 6, rows: 6, magnets: true, position: [800, 0, 0] }]);
+  await boot(page, info); const started = Date.now(); await loadDoc(page, document);
+  const parts = await page.evaluate(() => window.__store.doc.bodies.map(body => {
+    const view = window.__app.scene.views.get(body.id);
+    return { error: window.__app.scene.errors.get(body.id), bounds: view.data?.bbox, volume: view.data?.volume, vertices: Array.from(view.data?.vertices || []), triangles: Array.from(view.data?.triangles || []) };
+  }));
+  const { inspectGeometry } = await import("../browser/inspection.js");
+  for (const part of parts) {
+    expect(part.error).toBeUndefined(); expect(part.volume).toBeGreaterThan(0);
+    const mesh = inspectGeometry(part, { mesh: true }).meshValidation;
+    expect(mesh.valid).toBe(true); expect(mesh.disconnectedComponents).toBe(1);
+  }
+  expect(parts[0].bounds.max[0] - parts[0].bounds.min[0]).toBeCloseTo(167.5, 3);
+  expect(parts[0].bounds.max[1] - parts[0].bounds.min[1]).toBeCloseTo(209.5, 3);
+  expect(parts[1].bounds.max[0] - parts[1].bounds.min[0]).toBeCloseTo(251.5, 3);
+  expect(parts[2].bounds.max[2]).toBeCloseTo(8.2, 3);
+  console.info(JSON.stringify({ largerGridfinityBuildMs: Date.now() - started, bodies: parts.length }));
+  expect(errors).toEqual([]);
+});

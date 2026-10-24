@@ -1,6 +1,42 @@
 version: 2
 scope: "Source paths resolve from repository root; skillFile paths resolve from the skill root. Core and direct references contain the instructions. Remote sources are not runtime dependencies."
 rules:
+  - instruction: "Physical printed fit remains unverified."
+    skillFile: references/drawer-layouts.md
+    sources: [drawer-layout, drawer-ownership]
+    locator: "Measured layout versus physical compatibility"
+  - instruction: "Preserve other document bodies."
+    skillFile: references/drawer-layouts.md
+    sources: [drawer-ownership]
+    locator: "Regeneration scope and native dependency guards"
+  - instruction: "Published overall dimensions support an envelope pocket, not an exact fitted outline."
+    skillFile: references/gridfinity.md
+    sources: [gridfinity-user-workflow, measured-pockets]
+    locator: "Evidence boundary for measured profiles and explicit envelopes"
+  - instruction: "Pockets use the insert's local XY coordinates and cut downward from its top."
+    skillFile: references/gridfinity.md
+    sources: [measured-pockets]
+    locator: "Pocket position, rotation and depth frame"
+  - instruction: "Depth must leave both the protected Gridfinity base and the requested floor material intact."
+    skillFile: references/gridfinity.md
+    sources: [gridfinity-generator, measured-pockets]
+    locator: "Protected base height and minimumFloor validation"
+  - instruction: "Never describe uniform scaling of an imported model as constant surface clearance."
+    skillFile: references/gridfinity.md
+    sources: [measured-pockets, gridfinity-user-workflow]
+    locator: "Profile-offset scope; arbitrary imported surface offsets unsupported"
+  - instruction: "Conservative envelope checks can reject a layout even when the shapes appear to fit."
+    skillFile: references/gridfinity.md
+    sources: [measured-pockets]
+    locator: "Conservative profile bounds for wall and neighboring-pocket checks"
+  - instruction: "Assign it `reference` through `setRole` and retain it for visual comparison; printable exports exclude it."
+    skillFile: references/gridfinity.md
+    sources: [body-roles, model-plan]
+    locator: "Non-printable reference-body context"
+  - instruction: "The pinned interface reference uses a 42 mm XY grid and 7 mm height units."
+    skillFile: references/gridfinity.md
+    sources: [gridfinity-interface, gridfinity-generator]
+    locator: "GRID_DIMENSIONS_MM and height-unit geometry"
   - instruction: "Printable scope excludes references and hardware; assembly scope includes hardware and still excludes references."
     skillFile: references/mounts-and-assemblies.md
     sources: [body-roles, server, model-plan]

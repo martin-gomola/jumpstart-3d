@@ -1,6 +1,14 @@
 version: 1
 owner: JumpStart 3D self-hosted maintainers
 sources:
+  - id: drawer-layout
+    path: mcp/shared/drawer-layout.js
+    trust: "Typed measured drawer coordinates, overlap/height limits, native part placements and tiled baseplates."
+    mutable: true
+  - id: drawer-ownership
+    path: mcp/browser/drawer-layout.js
+    trust: "Saved native layout ownership and replacement checks for edited, missing, locked or externally referenced parts."
+    mutable: true
   - id: portable-format
     url: https://agentskills.io/specification
     trust: "Official Agent Skills format authority; portable frontmatter only."
@@ -91,3 +99,21 @@ sources:
     path: src/bodyRoles.js
     trust: "Native role defaults, conservative combination and printable/assembly selection. Independently implemented from SOMA workflow ideas; no GPL code copied."
     mutable: true
+  - id: gridfinity-generator
+    path: mcp/browser/gridfinity.js
+    trust: "Current typed Gridfinity normalization and native geometry generation; read the returned dimensions and supported parameter ranges."
+    mutable: true
+  - id: measured-pockets
+    path: mcp/browser/pockets.js
+    trust: "Measured-profile pocket contracts, native cuts, source evidence and conservative material-margin checks; not arbitrary imported surface-clearance certification."
+    mutable: true
+  - id: gridfinity-interface
+    repository: https://github.com/kennetek/gridfinity-rebuilt-openscad
+    revision: 910e22d8607fd7f5f51ad5e5cbc5287a76810bfd
+    locator: "src/core/standard.scad; src/core/gridfinity-baseplate.scad; LICENSE"
+    trust: "Pinned MIT interface dimensions for native Gridfinity profiles. Attribution and source scope are retained under third_party/gridfinity-rebuilt-openscad; no external runtime is required."
+    mutable: false
+  - id: gridfinity-user-workflow
+    locator: "User's Gridfinity custom-cutout and two-tab AI-sidebar requests in this conversation."
+    trust: "Requested workflow: exact item research, explicit evidence, editable inserts and shared manual/agent generation. Product images do not establish object shape or fit."
+    mutable: false

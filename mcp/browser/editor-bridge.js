@@ -11,6 +11,8 @@ import { compileMcpModel, refreshMcpModelBodyState, reviseMcpParameters } from "
 import { inspectGeometry } from "./inspection.js";
 import { selectGeometry } from "../shared/geometry.js";
 import { initAgentStatus, initAiSetupPanel, STATUS_HOLD_MS } from "./ai-status.js";
+import { initTemplatePanel } from "./template-panel.js";
+import { summarizeDrawerLayouts } from "./drawer-layout.js";
 
 import { createNativeParametricModel, reviseNativeParameters } from "./native-parameters.js";
 import { compileLathePlan } from "./lathe-plan.js";
@@ -60,6 +62,9 @@ function bodyInfo(body, app, includeGeometry = false, options = {}) {
     id: body.id,
     name: body.name,
     role: bodyRole(body),
+    ...(body.mcpDrawerLayout ? { drawerLayout: { layoutId: body.mcpDrawerLayout.layoutId, partId: body.mcpDrawerLayout.partId } } : {}),
+    ...(body.mcpGridfinity ? { gridfinity: Object.fromEntries(Object.entries(clone(body.mcpGridfinity)).filter(([key]) => !["nodeSignature", "sketchSignatures"].includes(key))) } : {}),
+    ...(body.mcpPockets ? { pockets: clone(body.mcpPockets) } : {}),
     feature: body.node?.t ?? "unknown",
     ...(body.turned ? { turned: clone(body.turned) } : {}),
     ...(body.mcpLathe ? { latheRecipe: clone(body.mcpLathe.plan), latheSampling: clone(body.mcpLathe.sampling) } : {}),
@@ -145,6 +150,7 @@ function documentSummary(app, editorId, revision, includeGeometry = false, optio
     })),
     planes: (doc.planes || []).map((plane) => ({ id: plane.id, name: plane.name, kind: plane.kind, plane: clone(plane.plane), hidden: !!plane.hidden })),
     bodies: bodies.map((body) => bodyInfo(body, app, includeGeometry, options)),
+    drawerLayouts: summarizeDrawerLayouts(doc).filter(layout => !wanted || layout.bodyIds.some(id => wanted.has(id))),
     ...(wanted ? { selection: { bodyIds: [...wanted], totalBodies: doc.bodies.filter((body) => !body.cutPreview).length, returnedBodies: bodies.length } } : {}),
     parametricModels: (doc.mcpModels || []).filter((model) => !wanted || model.bodyIds.some((id) => wanted.has(id))).map(({ bodyState, sketchState, planeState, ...model }) => ({ ...clone(model), sourceState: "saved parameter template; native edits are checked before regeneration" })),
   };
@@ -758,6 +764,13 @@ export function initMcp(app) {
   }, AbortSignal.timeout(3000)).then((response) => showStatus({ checking: false, online: true, connected: response.agent?.clientConnected === true, recent: response.agent?.recentClientActivity === true })).catch(() => showStatus({ checking: false, online: false, connected: false, recent: false }));
 
   const submitResult = (commandId, ok, data, error) => post("/result", { editorId, commandId, ok, data, error }).catch(() => undefined);
+  let commandQueue = Promise.resolve();
+  const enqueue = command => {
+    const result = commandQueue.then(() => execute(command));
+    commandQueue = result.catch(() => {});
+    return result;
+  };
+  initTemplatePanel({ request: (action, params) => enqueue({ action, params }), subscribe: listener => store.on(listener) });
 
   const poll = async () => {
     if (polling || stopped) return;
@@ -772,7 +785,7 @@ export function initMcp(app) {
         showStatus({ action: command.action, checking: false, online: true, recent: true, ...(reading ? {} : { error: null, outcome: null }) });
         const before = currentRevision();
         try {
-          const result = await execute(command);
+          const result = await enqueue(command);
           const failed = result?.valid === false || ["failed", "unknown"].includes(result?.geometricRequirements);
           const changesDocument = ["apply_model", "undo", "reopen_document"].includes(command.action);
           const outcome = command.action.startsWith("preview_") || ["save_document", "export_model"].includes(command.action) ? command.action : changesDocument ? before !== currentRevision() ? command.action : "no_change" : null;

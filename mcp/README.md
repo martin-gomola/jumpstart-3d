@@ -63,6 +63,40 @@ product migration changes them.
 
 JumpStart exposes the running local editor through a stdio MCP server. The server binds its browser bridge to loopback and serves the built app at `http://localhost:3210/?mcp=1`.
 
+### AI workspace templates
+
+Open the AI status button and choose **Templates** to configure a Gridfinity
+drawer layout or choose **Single part** for an insert, bin, or baseplate. On desktop, the workspace expands to show scrollable
+settings beside the model preview, dimensions, and Add/Cancel actions. The
+Templates panel uses the same typed plans and preview/apply checks as the agent.
+
+Changing a value keeps the last preview visible with an **Out of date** label
+and disables **Add to document**. Select **Preview** to rebuild and inspect the
+new values before adding them. **Cancel preview** discards the proposal. The
+Connection tab contains client setup instructions.
+
+**Drawer layout** begins with inside width, depth, and usable height in mm.
+The planner calculates the cell grid and leftover space, lets you draw/move bins,
+and exposes settings for the selected bin. Add bin and Fill gaps provide pointer-free
+alternatives. Arrow keys move a focused bin; Shift + arrows resize it. Undo layout
+and Ctrl/Cmd+Z affect the layout draft while planner controls have focus.
+
+Preview layout creates a typed `drawerLayout` operation. It checks overlaps,
+bounds, height and resource limits, then generates editable native bins and matching
+baseplates. Baseplates are tiled into parts no larger than 4 by 4 cells. Inspect
+the 3D preview before Add. Save the project after adding to persist the layout.
+Saved layouts can be loaded and regenerated; native edits, missing/locked parts
+and external dependencies block replacement rather than discarding those edits.
+
+The operation accepts `width`, `depth`, `height`, `bins`, optional `layoutId`,
+`includeBaseplate`, `floor`, `wall`, and explicit `replaceExisting`. Bin positions
+`x`/`y` are whole cells from the front-left; +Y goes toward the back. Each bin has
+`id`, `label`, `columns`, `rows`, `heightUnits`, `kind` (bin/insert), optional
+`dividers` and `lip`. Limits: 20 cells per direction, 16 bins, and 144 generated
+grid cells. `get_document` returns saved `drawerLayouts` and whether they remain
+editable. Existing tool names, preview revision checks and apply idempotency remain
+in effect. Draft rearrangement itself does not mutate the native document.
+
 ## Start
 
 For development outside Docker, build the app and then add the MCP server to

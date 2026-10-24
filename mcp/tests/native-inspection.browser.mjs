@@ -109,7 +109,7 @@ test("MCP editor opens the subscription-client setup drawer without API-key fiel
   await expect(panel).toContainText("Claude Code");
   await expect(panel).toContainText("Antigravity CLI");
   await expect(panel).toContainText("No model API key is needed");
-  await expect(panel.locator("input")).toHaveCount(0);
+  await expect(panel.locator('input[type="password"], input[name*="key" i], input[autocomplete="current-password"]')).toHaveCount(0);
   const mobilePanel = await panel.boundingBox();
   expect(mobilePanel.x).toBeGreaterThanOrEqual(0);
   expect(mobilePanel.x + mobilePanel.width).toBeLessThanOrEqual(320);

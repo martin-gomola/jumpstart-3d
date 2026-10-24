@@ -2,6 +2,10 @@ import { clone } from "../../src/util.js";
 import { findRegions, resolveSketch } from "../../src/regions.js";
 import { createFastener } from "./fasteners.js";
 import { BODY_ROLES, bodyRole, combinedRole } from "../../src/bodyRoles.js";
+import { normalizeGridfinity, buildGridfinity } from "./gridfinity.js";
+import { normalizePocket, buildPocket } from "./pockets.js";
+import { normalizeDrawerLayout } from "../shared/drawer-layout.js";
+import { buildDrawerLayout } from "./drawer-layout.js";
 
 export const MCP_PLAN_LIMITS = {
   sketches: 12,
@@ -451,6 +455,9 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
     const type = text(operation.type, `operations[${i}].type`);
     const id = text(operation.id, `operations[${i}].id`);
     if (featureIds.has(id) || primitiveIds.has(id)) fail(`Duplicate model id: ${id}`);
+    if (type === "gridfinity") return normalizeGridfinity(operation, `operations[${i}]`);
+    if (type === "pocket") return normalizePocket(operation, `operations[${i}]`);
+    if (type === "drawerLayout") return normalizeDrawerLayout(operation);
     if (type === "phoneCradle") {
       strictObject(operation, `operations[${i}]`, ["id", "type", "name", "width", "phoneLength", "angle", "plateThickness", "ribThickness", "stopHeight", "stopDepth", "topEdgeToward", "position"]);
       const width = number(operation.width, `operations[${i}].width`, { min: 30, max: 500 });
@@ -685,7 +692,7 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
       strictObject(operation, `operations[${i}]`, ["id", "type", "target", "modifier"]);
       return { type, id, target: text(operation.target, `operations[${i}].target`), modifier: normalizeModifier(operation.modifier, `operations[${i}].modifier`) };
     }
-    fail(`operations[${i}].type must be import, group, mirror, pattern, pathPattern, featurePattern, transform, combine, modifier, fastener, gear, knurl, holePattern, phoneCradle, splitBody, or setRole`);
+    fail(`operations[${i}].type must be import, group, mirror, pattern, pathPattern, featurePattern, transform, combine, modifier, fastener, gear, knurl, holePattern, phoneCradle, splitBody, setRole, gridfinity, pocket, or drawerLayout`);
   });
   const allIds = new Set([...existingBodyIds, ...primitiveIds, ...featureIds]);
   for (const operation of operations) {
@@ -694,14 +701,14 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
       for (const member of operation.members) if (!allIds.has(member)) fail(`Group ${operation.id} references unknown or later body ${member}`);
     } else if (operation.type === "mirror" || operation.type === "pattern" || operation.type === "pathPattern") {
       if (!allIds.has(operation.source)) fail(`${operation.type === "mirror" ? "Mirror" : operation.type === "pathPattern" ? "Path pattern" : "Pattern"} ${operation.id} references unknown or later body ${operation.source}`);
-    } else if (operation.type === "setRole" || operation.type === "transform" || operation.type === "modifier" || operation.type === "holePattern" || operation.type === "featurePattern" || operation.type === "splitBody") {
+    } else if (operation.type === "pocket" || operation.type === "setRole" || operation.type === "transform" || operation.type === "modifier" || operation.type === "holePattern" || operation.type === "featurePattern" || operation.type === "splitBody") {
       if (!allIds.has(operation.target)) fail(`${operation.type} ${operation.id} references unknown or later body ${operation.target}`);
     } else if (operation.type === "combine") {
       if (!allIds.has(operation.target) || !allIds.has(operation.tool)) fail(`Combine ${operation.id} references an unknown or later body`);
     }
     allIds.add(operation.id);
   }
-  const inferredMode = features.length || sketches.length || operations.some((operation) => operation.type === "gear" || operation.type === "knurl" || operation.type === "phoneCradle") ? "advanced" : defaultMode || "beginner";
+  const inferredMode = features.length || sketches.length || operations.some((operation) => ["gear", "knurl", "phoneCradle", "gridfinity", "pocket", "drawerLayout"].includes(operation.type)) ? "advanced" : defaultMode || "beginner";
   const mode = text(input.mode, "plan.mode", inferredMode).toLowerCase();
   if (!["beginner", "advanced"].includes(mode)) fail("plan.mode must be beginner or advanced");
   return { name: text(input.name, "plan.name", "AI model"), mode, sketches, features, primitives, operations, planes };
@@ -1272,7 +1279,24 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
   }
 
   for (const operation of plan.operations) {
-    if (operation.type === "phoneCradle") {
+    if (operation.type === "drawerLayout") {
+      const result = buildDrawerLayout(operation, { document: doc, addBody, idFactory, nextSeq: () => ++doc.seq, matrixForTransform });
+      for (const id of result.removedBodyIds) affectedBodyIds.add(id);
+      remember(operation.id, result.bodies);
+    } else if (operation.type === "gridfinity") {
+      const built = buildGridfinity(operation, { document: doc, idFactory, nextSeq: () => ++doc.seq });
+      const body = addBody(operation.name, built.node, matrixForTransform(operation.position, operation.rotation));
+      body.mcpGridfinity = built.recipe;
+      remember(operation.id, [body]);
+    } else if (operation.type === "pocket") {
+      const targets = bodyList(operation.target);
+      if (targets.length !== 1) fail(`Pocket ${operation.id} requires one insert body`);
+      const body = targets[0];
+      if (body.locked) fail(`Unlock body ${body.id} before cutting a pocket`);
+      buildPocket(operation, { document: doc, target: body, idFactory, nextSeq: () => ++doc.seq });
+      affectedBodyIds.add(body.id);
+      remember(operation.id, targets);
+    } else if (operation.type === "phoneCradle") {
       if (doc.bodies.length >= MCP_PLAN_LIMITS.bodies) fail(`Phone cradle ${operation.id} would exceed ${MCP_PLAN_LIMITS.bodies} document bodies`);
       const [centerX, lowerEdgeY, baseZ] = operation.position;
       const direction = operation.topEdgeToward === "+Y" ? 1 : -1;

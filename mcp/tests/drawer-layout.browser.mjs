@@ -1,0 +1,182 @@
+import { test, expect } from "@playwright/test";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { watchErrors, waitIdle } from "../../test/helpers.mjs";
+
+let broker, baseURL, requestId = 0;
+
+test.beforeAll(async () => {
+  broker = spawn(process.execPath, ["mcp/server/server.mjs"], {
+    cwd: new URL("../..", import.meta.url),
+    env: { ...process.env, JUMPSTART_MCP_HOST: "127.0.0.1", JUMPSTART_MCP_PORT: "0", JUMPSTART_MCP_HTTP_ONLY: "1" },
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  await new Promise((resolve, reject) => {
+    let output = "";
+    const timer = setTimeout(() => reject(new Error(`MCP broker startup timed out: ${output}`)), 15_000);
+    const fail = (error) => { clearTimeout(timer); reject(error); };
+    broker.once("error", fail);
+    broker.once("exit", (code) => fail(new Error(`MCP broker exited during startup (${code}): ${output}`)));
+    broker.stderr.setEncoding("utf8");
+    broker.stderr.on("data", (chunk) => {
+      output += chunk;
+      const match = output.match(/JumpStart MCP app: http:\/\/localhost:(\d+)/);
+      if (match) { clearTimeout(timer); baseURL = `http://127.0.0.1:${match[1]}/`; resolve(); }
+    });
+  });
+});
+
+test.afterAll(async () => {
+  if (!broker || broker.exitCode !== null || broker.signalCode !== null) return;
+  const exited = once(broker, "exit");
+  broker.kill("SIGTERM");
+  const timer = setTimeout(() => broker.kill("SIGKILL"), 5_000);
+  try { await exited; } finally { clearTimeout(timer); }
+});
+
+async function tool(name, args = {}, expectError = false) {
+  const response = await fetch(`${baseURL}__mcp/rpc`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++requestId, method: "tools/call", params: { name, arguments: args } }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  expect(response.ok).toBe(true);
+  const payload = await response.json();
+  expect(payload.error).toBeUndefined();
+  if (expectError) expect(payload.result.isError).toBe(true);
+  else expect(payload.result.isError, payload.result.content?.find((item) => item.type === "text")?.text).not.toBe(true);
+  return JSON.parse(payload.result.content.find((item) => item.type === "text").text);
+}
+
+async function editor(page) {
+  await page.goto(baseURL);
+  await page.waitForFunction(() => window.__app?.kernel?.ready, null, { timeout: 90_000 });
+  await page.waitForSelector("#loading", { state: "hidden", timeout: 20_000 });
+  const documentId = await page.evaluate(() => window.__store.doc.id);
+  let editorId;
+  await expect.poll(async () => {
+    const listed = await tool("jumpstart_list_editors");
+    editorId = listed.editors.find((entry) => entry.documentId === documentId)?.editorId;
+    return !!editorId;
+  }).toBe(true);
+  return editorId;
+}
+
+async function openPlanner(page) {
+  const editorId = await editor(page);
+  await page.click("#ai-status"); await page.click("#ai-templates-tab");
+  return editorId;
+}
+async function dimensions(page, width = 260, depth = 180, height = 50) {
+  for (const [id, value] of [["width", width], ["depth", depth], ["height", height]]) {
+    await page.fill(`#drawer-${id}`, String(value)); await page.locator(`#drawer-${id}`).press("Tab");
+  }
+}
+async function draw(page, start, end, columns = 6, rows = 4) {
+  const board = page.locator("#drawer-board"); await board.scrollIntoViewIfNeeded();
+  const box = await board.boundingBox();
+  const point = ([x, y]) => ({ x: box.x + (x + 0.5) / columns * box.width, y: box.y + (rows - y - 0.5) / rows * box.height });
+  const a = point(start), b = point(end);
+  await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 8 }); await page.mouse.up();
+}
+
+test("drawer-first planning calculates fit, draws and moves bins, rejects overlap and supports undo", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  const reference = await tool("jumpstart_preview_model", { editorId, includeImage: false, plan: { name: "Preserved item", primitives: [{ id: "reference", kind: "box", position: [300, 0, 0] }] } });
+  await tool("jumpstart_apply_model", { editorId, previewId: reference.previewId });
+  const original = await tool("jumpstart_get_document", { editorId });
+  await expect(page.locator(".drawer-empty")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
+  await dimensions(page);
+  await expect(page.locator("#drawer-fit")).toContainText("6 × 4 grid");
+  await expect(page.locator("#drawer-fit")).toContainText("4.0 mm per side");
+  await draw(page, [0, 0], [1, 1]);
+  await expect(page.locator(".drawer-bin")).toHaveCount(1);
+  await page.getByRole("button", { name: "Increase width", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Increase width", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Decrease width", exact: true }).click();
+  await page.fill("#drawer-bin-label", "Screwdrivers"); await page.locator("#drawer-bin-label").press("Tab");
+  await draw(page, [3, 0], [3, 2]);
+  await expect(page.locator(".drawer-bin")).toHaveCount(2);
+  const second = page.locator('[data-bin-id="bin-2"]');
+  await second.focus(); await page.keyboard.press("ArrowRight");
+  expect(await second.evaluate(el => parseFloat(el.style.left))).toBeCloseTo(4 / 6 * 100, 3);
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(second).toContainText("2 × 3");
+  await page.keyboard.press("ArrowLeft"); await page.keyboard.press("ArrowLeft"); await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#drawer-message")).toContainText("occupied");
+  expect(await second.evaluate(el => parseFloat(el.style.left))).toBeCloseTo(2 / 6 * 100, 3);
+  await page.getByRole("button", { name: "Remove bin", exact: true }).click();
+  await expect(page.locator(".drawer-bin")).toHaveCount(1);
+  await page.getByRole("button", { name: "Undo layout", exact: true }).focus();
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".drawer-bin")).toHaveCount(2);
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(original.revision);
+  await page.locator(".drawer-measurements summary").click();
+  await page.fill("#drawer-height", "10"); await page.locator("#drawer-height").press("Tab");
+  await expect(page.locator("#drawer-message")).toContainText("usable height");
+  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
+  await page.fill("#drawer-height", "50"); await page.locator("#drawer-height").press("Tab");
+  await expect(page.locator(".drawer-bin")).toHaveCount(2);
+  await page.screenshot({ path: info.outputPath("drawer-layout.png") });
+  expect(errors).toEqual([]);
+});
+
+test("drawer layout previews without mutation, saves and reloads its native plan, then updates without duplicating parts", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  await dimensions(page, 140, 100, 50);
+  await page.fill("#drawer-name", "Kitchen drawer"); await page.locator("#drawer-name").press("Tab");
+  await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  await page.getByRole("button", { name: "Fill gaps", exact: true }).click();
+  await expect(page.locator("#drawer-summary")).toContainText("6 of 6 cells used");
+  const before = await get();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  expect((await get()).revision).toBe(before.revision);
+  await page.locator(".drawer-measurements summary").click();
+  await page.fill("#drawer-height", "55"); await page.locator("#drawer-height").press("Tab");
+  await expect(page.locator(".drawer-3d .ai-template-stale")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add layout to document", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.screenshot({ path: info.outputPath("drawer-3d.png") });
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added", { timeout: 90_000 });
+  const applied = await get();
+  expect(applied.bodies).toHaveLength(3);
+  expect(applied.drawerLayouts).toHaveLength(1);
+  expect(applied.drawerLayouts[0]).toMatchObject({ editable: true, definition: { width: 140, depth: 100, height: 55 } });
+  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
+  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
+  await page.reload(); await page.waitForFunction(() => window.__app?.kernel?.ready); await page.waitForSelector("#loading", { state: "hidden" });
+  await page.click("#ai-status"); await page.click("#ai-templates-tab");
+  await expect(page.locator("#drawer-name")).toHaveValue("Kitchen drawer");
+  await expect(page.locator(".drawer-bin")).toHaveCount(2);
+  await page.locator('[data-bin-id="bin-1"]').click();
+  await page.getByRole("button", { name: "35 mm", exact: true }).click();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Update layout in document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added", { timeout: 90_000 });
+  const updated = await get();
+  expect(updated.bodies).toHaveLength(3);
+  expect(updated.drawerLayouts[0].definition.bins[0].heightUnits).toBe(5);
+  await tool("jumpstart_undo", { editorId, expectedRevision: updated.revision });
+  expect((await get()).drawerLayouts[0].definition.bins[0].heightUnits).toBe(3);
+  expect(errors).toEqual([]);
+});
+
+test("maximum drawer cell budget builds native connected parts within the preview budget", async ({ page }) => {
+  const editorId = await editor(page), before = await tool("jumpstart_get_document", { editorId });
+  const bins = [];
+  for (let y = 0; y < 12; y += 4) for (let x = 0; x < 12; x += 4) bins.push({ id: `bin-${x}-${y}`, x, y, columns: 4, rows: 4, heightUnits: 3 });
+  const start = Date.now();
+  const preview = await tool("jumpstart_preview_model", { editorId, expectedRevision: before.revision, includeImage: false, plan: { name: "Large drawer", operations: [{ type: "drawerLayout", id: "drawer", layoutId: "large-drawer", width: 504, depth: 504, height: 50, bins }] } });
+  expect(preview.valid, JSON.stringify(preview.errors)).toBe(true);
+  expect(preview.bodies).toHaveLength(18);
+  expect(preview.bodies.every(body => body.volume > 0 && !body.error)).toBe(true);
+  console.info(JSON.stringify({ maximumDrawerPreviewMs: Date.now() - start, parts: preview.bodies.length }));
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
+});

@@ -1,6 +1,27 @@
-version: 3
+version: 4
 status: not-run
 cases:
+  - prompt: "Plan native Gridfinity bins for my 500 by 380 by 65 mm drawer in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Update the saved drawer layout without replacing the bin I modified manually."
+    expected: invoke
+    mode: implicit
+  - prompt: "Use $3d-model to create a Gridfinity insert with measured pockets for my tools."
+    expected: invoke
+    mode: explicit
+  - prompt: "Make a 2 by 3 Gridfinity baseplate and a matching divided bin in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Find the manufacturer's dimensions for this exact screwdriver so we can model its Gridfinity pocket in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Compare prices for Gridfinity storage boxes without modeling anything."
+    expected: do-not-invoke
+    neighbor: research
+  - prompt: "Make this product photo fit my insert."
+    expected: clarify-target
+    mode: ambiguous
   - prompt: "Use $3d-model to make an 86 mm square spacer, 10 mm high."
     expected: invoke
     mode: explicit

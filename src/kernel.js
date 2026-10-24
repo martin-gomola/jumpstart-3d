@@ -437,6 +437,24 @@ function buildExtrude(node) {
   const d1 = node.dist || 0;
   const mode = node.mode || "one";
   const mk = (start, len) => {
+    if (node.profileOffset !== undefined) {
+      if (!Number.isFinite(node.profileOffset) || node.profileOffset <= 0 || node.profileOffset > 10 || node.regions.length !== 1 || node.regions[0].holes?.length || node.regions[0].text) throw new Error("Pocket profile offset requires one closed region and a clearance above zero and at most 10 mm");
+      const pl = planeOf(node.plane, start);
+      const sk = loopDrawing(node.regions[0].outer).sketchOnPlane(pl);
+      let grown;
+      try {
+        const before = swDiag(sk.wire);
+        grown = sk.wire.clone().offset2D(node.profileOffset, "arc");
+        if (swDiag(grown) <= before + 1e-7) { grown.delete(); grown = sk.wire.clone().offset2D(-node.profileOffset, "arc"); }
+        if (swDiag(grown) <= before + 1e-7) throw new Error("Pocket profile offset did not expand the outline");
+        const result = new R.Sketch(grown, { defaultOrigin: pl.origin, defaultDirection: node.plane.n }).extrude(len);
+        grown = null;
+        return result;
+      } catch (error) {
+        grown?.delete();
+        throw new Error(`Pocket profile offset failed; simplify or measure another profile: ${error.message || "invalid offset"}`);
+      } finally { sk.delete(); }
+    }
     const dr = regionsDrawing(node.regions, node.stretch);
     return dr.sketchOnPlane(planeOf(node.plane, start)).extrude(len);
   };

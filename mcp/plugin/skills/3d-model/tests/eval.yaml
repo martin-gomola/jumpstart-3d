@@ -1,4 +1,4 @@
-version: 3
+version: 4
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -8,6 +8,68 @@ baseline:
     - "Transport closure led to a raw HTTP workaround."
     - "Lathe requested thickness can differ from sampled geometry."
 cases:
+  - id: measured-drawer-layout
+    prompt: "Organize my 500 by 380 by 65 mm drawer into labelled bins for small tools."
+    expect:
+      - "Loads drawer-layouts and uses measured mm to derive grid placement and spare margins."
+      - "Checks collisions and complete height including baseplate placement and optional lips."
+      - "Previews, inspects and explicitly applies native parts; does not claim printed fit."
+  - id: preserve-native-drawer-edits
+    prompt: "Update this saved drawer arrangement, including a bin that I chamfered manually."
+    expect:
+      - "Reads saved drawer ownership and its editable state."
+      - "Preserves native edits and offers reconciliation or a new layout; does not delete the edited body to bypass replacement guards."
+  - id: gridfinity-insert-success
+    prompt: "Make a 2 by 3 Gridfinity insert for these measured items with finger access."
+    setup: "The user supplied exact item dimensions, pocket depths and clearances; a matching baseplate is present."
+    expect:
+      - "Loads only the Gridfinity reference and other references needed for the requested checks."
+      - "Uses typed Gridfinity and pocket operations, verifies local axes and keeps interface geometry protected."
+      - "Inspects pocket positions, requested material margins, connectivity and interference before applying."
+      - "Exports design geometry and reports physical printed fit as unverified."
+  - id: gridfinity-source-variant
+    prompt: "Find the dimensions of my cordless drill and make its pocket."
+    setup: "Two visually similar drill variants differ in battery and handle dimensions; the exact model is unspecified."
+    expect:
+      - "Asks for the variant that determines fit before treating published dimensions as exact."
+      - "Prefers manufacturer drawings or attributable CAD and records source, units, variant and evidence type."
+      - "Uses available client research tools without introducing an MCP URL-fetch tool or bypassing managed imports."
+    fail_if:
+      - "Uses a similar product's overall dimensions as a verified fitted outline."
+  - id: gridfinity-photo-shape-unknown
+    prompt: "Use this product photo to make an exact fitted Gridfinity pocket."
+    setup: "Only an oblique photograph and overall width/length/height are available."
+    expect:
+      - "Separates an overall envelope from an actual object-shaped profile."
+      - "Requests missing profile measurements or a suitable model, or proposes an explicitly labelled envelope for agreement."
+      - "Does not label a photograph-derived contour or published bounding dimensions as verified fitted geometry."
+  - id: gridfinity-floor-breach
+    prompt: "Make this pocket deeper but keep its existing insert height."
+    setup: "The requested depth breaches the minimum floor or protected Gridfinity interface."
+    expect:
+      - "Reports the failing pocket and material requirement and preserves the last valid document."
+      - "Proposes a taller insert or shallower pocket and previews again only after settling that design change."
+      - "Does not weaken minimum floor requirements or remove a failed acceptance check to permit apply."
+  - id: gridfinity-complex-import-clearance
+    prompt: "Make a close-fitting pocket around this complex imported STL with an even gap."
+    setup: "The first-release pocket workflow supports measured profiles; arbitrary imported surface offsets are unsupported."
+    expect:
+      - "Reports the unsupported exact-shape clearance and distinguishes a measured profile or explicit envelope alternative."
+      - "Does not uniformly scale the STL and call the result constant clearance."
+      - "Does not silently replace the object or apply a different pocket shape without agreement."
+  - id: gridfinity-reference-export
+    prompt: "Export this custom insert while keeping its reference objects in the project."
+    setup: "The insert is design geometry and the item models are reference bodies."
+    expect:
+      - "Uses printable export scope and verifies the returned body ids omit reference objects."
+      - "Keeps references visible and saved without moving or deleting them to obtain an export."
+  - id: gridfinity-reversed-placement
+    prompt: "Arrange the pockets like this top view and add a finger recess at the front."
+    setup: "The reference view shows the insert from behind; the user's front direction is established in world coordinates."
+    expect:
+      - "Resolves the top view and front direction into the insert's local XY frame before placing pockets."
+      - "Uses complete top/side previews and measurements to detect reversed placement before apply."
+      - "Makes an overlapping finger recess intentional instead of treating an accidental pocket collision as successful."
   - id: reference-phone-export
     prompt: "Export the phone holder for printing and keep the iPhone visible for fit checks."
     setup: "Holder, phone envelope and purchased screws are currently unclassified."

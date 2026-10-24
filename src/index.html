@@ -463,7 +463,7 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .snapctl button svg { width: 14px; height: 14px; }
 .snapctl button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--hover-line); color: var(--accent); }
 .snapctl select:disabled { opacity: .45; }
-.menu button[aria-checked="true"]::after { content: "✓"; margin-left: auto; color: var(--accent); }
+.menu button[aria-checked="true"]::after { content: ""; inline-size: .4em; block-size: .7em; margin-inline-start: auto; margin-inline-end: .3em; border: solid var(--accent); border-width: 0 .14em .14em 0; transform: rotate(45deg); }
 .keys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 22px; }
 .keys-sec h3 { margin: 0 0 8px; font: 600 12.5px/1 var(--f-label); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 .keys-sec dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 0; font-size: 12.5px; align-items: center; }
@@ -1041,10 +1041,14 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
   </header>
   <aside id="ai-setup-panel" class="ai-setup-panel" hidden role="dialog" aria-modal="false" aria-labelledby="ai-setup-title">
     <header class="ai-setup-header">
-      <h2 id="ai-setup-title">Connect an AI client</h2>
+      <h2 id="ai-setup-title">AI workspace</h2>
       <button id="ai-setup-close" class="ai-setup-close" type="button">Close</button>
     </header>
-    <div class="ai-setup-body">
+    <div class="ai-workspace-tabs" role="tablist" aria-label="AI workspace">
+      <button id="ai-connection-tab" type="button" role="tab" aria-selected="true" aria-controls="ai-connection-panel">Connection</button>
+      <button id="ai-templates-tab" type="button" role="tab" aria-selected="false" aria-controls="ai-templates-panel" tabindex="-1">Templates</button>
+    </div>
+    <div id="ai-connection-panel" class="ai-setup-body" role="tabpanel" aria-labelledby="ai-connection-tab">
       <section class="ai-setup-current" aria-live="polite">
         <span class="ai-setup-kicker">JumpStart MCP</span>
         <strong id="ai-setup-state">Checking AI bridge</strong>
@@ -1081,6 +1085,7 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
       </section>
       <p id="ai-setup-copy-status" class="ai-setup-copy-status" role="status" aria-live="polite"></p>
     </div>
+    <div id="ai-templates-panel" class="ai-setup-body ai-templates" role="tabpanel" aria-labelledby="ai-templates-tab" hidden></div>
   </aside>
   <nav class="ribbon" id="ribbon" aria-label="Tools"></nav>
   <main class="work">

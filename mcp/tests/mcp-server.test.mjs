@@ -66,7 +66,7 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     const contour = profileVariants.find((profile) => profile.properties.type.const === "contour");
     assert.ok(contour);
     assert.deepEqual(contour.properties.segments.items.oneOf.map((segment) => segment.properties.type.const), ["line", "arc", "spline"]);
-    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.length, 16);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.length, 19);
     const roleSchema = listing.result.tools.find(tool => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find(operation => operation.properties.type.const === "setRole");
     assert.deepEqual(roleSchema.properties.role.enum, ["design", "reference", "hardware"]);
     const exportSchema = listing.result.tools.find(tool => tool.name === "jumpstart_export_model").inputSchema;

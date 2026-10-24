@@ -126,5 +126,45 @@
   "focus": {
     "$type": "color",
     "$value": "#a4d3ff"
+  },
+  "controlHeight": {
+    "$type": "dimension",
+    "$value": "2.5rem"
+  },
+  "disabledOpacity": {
+    "$type": "number",
+    "$value": 0.6
+  },
+  "sectionGap": {
+    "$type": "dimension",
+    "$value": "1.5rem"
+  },
+  "bodyFont": {
+    "$type": "dimension",
+    "$value": "0.875rem"
+  },
+  "templateTitle": {
+    "$type": "dimension",
+    "$value": "1.5rem"
+  },
+  "templateIcon": {
+    "$type": "dimension",
+    "$value": "2.5rem"
+  },
+  "templatePanelWidth": {
+    "$type": "dimension",
+    "$value": "64rem"
+  },
+  "templateSettingsWidth": {
+    "$type": "dimension",
+    "$value": "24rem"
+  },
+  "templatePreviewHeight": {
+    "$type": "dimension",
+    "$value": "30rem"
+  },
+  "drawerBoardHeight": {
+    "$type": "dimension",
+    "$value": "32rem"
   }
 }

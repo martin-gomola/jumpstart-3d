@@ -52,3 +52,32 @@ checks before accepting the change.
   the design/reference/hardware workflow. Native role metadata, typed `setRole`
   plans and printable/assembly filtering in `src/bodyRoles.js` were implemented
   independently. No SOMA code or runtime dependency is included.
+
+## Gridfinity interface profiles
+
+- Repository: <https://github.com/kennetek/gridfinity-rebuilt-openscad>
+- Reviewed snapshot: `910e22d8607fd7f5f51ad5e5cbc5287a76810bfd`.
+- Source: `src/core/standard.scad` and `src/core/gridfinity-baseplate.scad`.
+- License: MIT. Source and attribution details are retained in
+  `third_party/gridfinity-rebuilt-openscad/SOURCE.md`; complete license notices
+  are retained in `third_party/gridfinity-rebuilt-openscad/LICENSE`.
+- Adaptation: interface dimensions for editable native feet, sockets and
+  stacking lips. The local generator uses JumpStart native geometry; it does not
+  require an OpenSCAD process, external API or the source generator's UI.
+- Custom pocket guidance is authored for our typed measured-profile workflow.
+  Imported models and manufacturer drawings remain evidence for the specific
+  item and variant, not a source of universal printer clearances or guaranteed fit.
+
+## Drawer planning interaction reference
+
+- Repository: <https://github.com/andymai/gridfinity-layout-tool>
+- Reviewed snapshot: `6753e8b28706d008c86755dacb3fe8643b2ac358`.
+- Read implementation: `src/features/grid-editor/hooks/useInteraction.ts` and its
+  draw tests; `src/features/bin-inspector/hooks/useBinInspector.ts`;
+  `src/core/store/layout/drawerActions.ts`;
+  `src/features/grid-editor/components/Grid/DrawerMargin/useDrawerMarginInsets.ts`.
+- Observed the live planner at `gridfinitylayouttool.com`: a spatial grid,
+  draw-to-create bin footprints, selected-bin settings, and measured drawer margins.
+- License: AGPL-3.0. This is interaction inspiration only. Our drawer state,
+  validation, rendering, keyboard controls and native-plan compilation were authored
+  independently. No reference code, assets or runtime dependencies are included.

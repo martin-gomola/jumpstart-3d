@@ -29,7 +29,7 @@ await build({ ...common, entryPoints: [join(src, "app.js")], format: "esm", outf
   loader: { ".html": "text" }, define: { __WASM_PARTS__: JSON.stringify([{ url: "occt-gz.wasm", gz: true, size: wasmSize }]) } });
 await build({ ...common, entryPoints: [join(src, "worker.js")], format: "esm", outfile: join(site, "worker.js"), external: ["node:*"] });
 
-const shell = readFileSync(join(src, "index.html"), "utf8").replace("<style>", () => `<style>\n${AI_STATUS_CSS}`);
+const shell = `<html lang="en">\n${readFileSync(join(src, "index.html"), "utf8").replace("<style>", () => `<style>\n${AI_STATUS_CSS}\n${readFileSync(join(root, "mcp/browser/templates.css"), "utf8")}`)}\n</html>`;
 if (!shell.includes('<script type="module" src="app.js"></script>\n')) throw new Error("src/index.html is missing the app.js script tag");
 writeFileSync(join(site, "index.html"), shell);
 cpSync(wasm, join(site, "occt-gz.wasm"));

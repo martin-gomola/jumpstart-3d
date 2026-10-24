@@ -26,6 +26,7 @@ export const AI_STATUS_CSS = `
 .ai-setup-close, .ai-setup-copy { border: var(--ai-status-panelBorder) solid var(--line); border-radius: var(--r); padding: var(--ai-status-gap); background: var(--panel-2); color: var(--ink); cursor: pointer; }
 .ai-setup-close:active, .ai-setup-copy:active { transform: translateY(var(--ai-status-pressOffset)); }
 .ai-setup-body { display: flex; flex-direction: column; gap: var(--ai-status-panelGap); padding: var(--ai-status-panelPadding); overflow-y: auto; }
+.ai-setup-body[hidden] { display: none; }
 .ai-setup-current { display: grid; gap: var(--ai-status-gap); padding-block-end: var(--ai-status-panelGap); border-block-end: var(--ai-status-panelBorder) solid var(--line-2); }
 .ai-setup-current strong { font-weight: 600; }
 .ai-setup-current p, .ai-setup-client p, .ai-setup-note { margin: 0; color: var(--ink-2); line-height: var(--ai-status-panelBodyLine); }
@@ -99,7 +100,7 @@ export function initAgentStatus() {
     element.dataset.state = status.state; element.dataset.detail = status.detail;
     element.removeAttribute("title");
     element.querySelector(".ai-status-tooltip").textContent = status.detail;
-    element.setAttribute("aria-label", `${status.label}. ${element.getAttribute("aria-expanded") === "true" ? "Close" : "Open"} AI client setup.`);
+    element.setAttribute("aria-label", `${status.label}. ${element.getAttribute("aria-expanded") === "true" ? "Close" : "Open"} AI workspace.`);
     element.querySelector(".ai-status-full").textContent = status.label;
     element.querySelector(".ai-status-short").textContent = status.compact;
     const setupState = document.getElementById("ai-setup-state");
@@ -119,7 +120,7 @@ export function initAiSetupPanel() {
     panel.hidden = !open;
     trigger.dataset.setupOpen = String(open);
     trigger.setAttribute("aria-expanded", String(open));
-    trigger.setAttribute("aria-label", `${document.getElementById("ai-setup-state")?.textContent || "AI client"}. ${open ? "Close" : "Open"} AI client setup.`);
+    trigger.setAttribute("aria-label", `${document.getElementById("ai-setup-state")?.textContent || "AI client"}. ${open ? "Close" : "Open"} AI workspace.`);
     if (open) closeButton?.focus();
     else {
       if (dismissTooltip) trigger.dataset.tooltipDismissed = "true";

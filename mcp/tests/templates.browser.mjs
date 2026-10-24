@@ -62,22 +62,36 @@ async function editor(page) {
   return editorId;
 }
 
-test("AI workspace tabs keep connection setup and expose an accessible manual Templates view", async ({ page }) => {
+test("Generators groups drawer and part workflows under the Gridfinity feature", async ({ page }) => {
   const errors = watchErrors(page);
   await editor(page);
   await page.click("#ai-status");
   const panel = page.locator("#ai-setup-panel");
   await expect(panel).toBeVisible();
   const connection = page.getByRole("tab", { name: "Connection" });
-  const templates = page.getByRole("tab", { name: "Templates" });
+  const templates = page.getByRole("tab", { name: "Generators" });
+  const connectionBounds = await panel.boundingBox();
   await expect(connection).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#ai-setup-codex")).toBeVisible();
   await templates.focus();
   await page.keyboard.press("Enter");
   await expect(templates).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#ai-templates-panel")).toBeVisible();
+  expect(await panel.boundingBox()).toEqual(connectionBounds);
+  const headerLayout = await page.locator(".ai-setup-header").evaluate(header => {
+    const bounds = header.getBoundingClientRect(), tabs = header.querySelector('[role="tablist"]').getBoundingClientRect();
+    return { height: bounds.height, tabsInside: tabs.top >= bounds.top && tabs.bottom <= bounds.bottom };
+  });
+  expect(headerLayout.height).toBeLessThanOrEqual(64);
+  expect(headerLayout.tabsInside).toBe(true);
+  const gridfinity = page.getByRole("region", { name: "Gridfinity", exact: true });
+  await expect(gridfinity).toBeVisible();
+  await expect(gridfinity.getByRole("group", { name: "Gridfinity workflow" })).toBeVisible();
+  await expect(gridfinity.getByRole("button", { name: "Drawer layout", exact: true })).toBeVisible();
+  await expect(gridfinity.getByRole("button", { name: "Single part", exact: true })).toBeVisible();
   await expect(page.locator("#drawer-width")).toBeVisible();
   await page.getByRole("button", { name: "Single part", exact: true }).click();
+  await expect(gridfinity.getByRole("heading", { name: "Part type", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Custom insert/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Bin/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Baseplate/ })).toBeVisible();
@@ -87,6 +101,7 @@ test("AI workspace tabs keep connection setup and expose an accessible manual Te
   await expect(connection).toBeFocused();
   await expect(connection).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#ai-connection-panel")).toBeVisible();
+  expect(await panel.boundingBox()).toEqual(connectionBounds);
   await page.setViewportSize({ width: 320, height: 640 });
   await templates.click();
   const mobileBounds = await page.locator("#ai-setup-panel").evaluate(panel => {

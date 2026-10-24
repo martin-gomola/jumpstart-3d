@@ -6,7 +6,9 @@ import { magnetControls } from "./magnet-controls.js";
 const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);
 
-export function initDrawerPanel({ root, request, subscribe, onBusy }) {
+export function initDrawerPanel({ root, request, subscribe, onBusy, createPreviewView }) {
+  let previewView = null;
+  const disposePreviewView = () => { previewView?.dispose(); previewView = null; };
   let draft, selectedId = null, documentId = null, savedLayouts = [], counter = 0, cached = null, busy = false, gesture = null, view = "layout";
   let undo = [], redo = [], measurementsCollapsed = false;
   const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, baseplateMagnets: false, floor: 2, wall: 1.2, bins: [] });
@@ -45,8 +47,9 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
   const carrierNote = el("p", { class: "ai-template-note", hidden: true });
   construction.append(baseMagnets.element, carrierNote);
   const measureSummary = el("summary", {}, "Drawer measurements");
+  const newDrawer = el("button", { type: "button", class: "ai-template-remove", title: "Clear the draft and enter new drawer measurements. Undo layout restores the previous draft." }, "New drawer");
   const measureDetails = el("details", { class: "drawer-measurements", open: true }, measureSummary, el("div", { class: "drawer-measure-fields" }, nameLabel, measurements, example));
-  const settings = el("div", { class: "ai-template-settings drawer-settings" }, el("h3", {}, "Your drawer"), saved, measureDetails, fit,
+  const settings = el("div", { class: "ai-template-settings drawer-settings" }, el("div", { class: "drawer-view-toolbar" }, el("h3", {}, "Your drawer"), newDrawer), saved, measureDetails, fit,
     el("div", { class: "ai-template-actions" }, addBin, fill), inspector, construction, message,
     el("div", { class: "ai-template-submit" }, previewButton));
   const board = el("div", { id: "drawer-board", class: "drawer-board", role: "group", "aria-label": "Drawer layout. Drag empty cells to draw a bin; drag a bin to move it." });
@@ -71,6 +74,13 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
   }
   layoutTab.onclick = () => setView("layout"); imageTab.onclick = () => setView("preview");
   const invalidate = () => { cached = null; add.disabled = true; if (imageArea.childElementCount) stale.hidden = false; };
+  newDrawer.onclick = () => {
+    if (busy) return;
+    selectedId = null; gesture = null; ghost.hidden = true;
+    disposePreviewView(); imageArea.replaceChildren(); imageTab.disabled = true;
+    commit(fresh(), "New drawer started. Undo layout restores the previous draft.");
+    syncFields(); setView("layout"); width.input.focus();
+  };
   function remember() { undo.push(copy(draft)); if (undo.length > 50) undo.shift(); redo = []; }
   function ready() { const m = drawerMetrics(draft); return m.columns > 0 && m.rows > 0 && m.columns <= 20 && m.rows <= 20 && Number.isFinite(draft.height) && draft.height >= 14; }
   function commit(next, text = "") {
@@ -97,14 +107,14 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
   function addPart(rect) {
     if (draft.bins.length >= DRAWER_LIMITS.bins) throw new Error("This layout supports up to 16 bins.");
     const error = placementError(draft, rect); if (error) throw new Error(error);
-    const next = copy(draft), bin = nextBin(rect); next.bins.push(bin); normalizeDrawerLayout(next); selectedId = bin.id; commit(next);
+    const next = copy(draft), bin = nextBin(rect); next.bins.push(bin); normalizeDrawerLayout(next); selectedId = bin.id; commit(next); revealInspector();
   }
   addBin.onclick = () => perform(() => {
     const size = firstDrawerSpace(draft, 2, 2) ? 2 : 1, space = firstDrawerSpace(draft, size, size);
     if (!space) throw new Error("No empty space remains. Resize or remove a bin first.");
     addPart({ ...space, columns: size, rows: size });
   });
-  fill.onclick = () => perform(() => { const next = fillDrawerGaps(draft, nextBin); if (next.bins.length === draft.bins.length) return announce("The drawer grid is full."); selectedId = next.bins.at(-1).id; commit(next); });
+  fill.onclick = () => perform(() => { const next = fillDrawerGaps(draft, nextBin); if (next.bins.length === draft.bins.length) return announce("The drawer grid is full."); selectedId = next.bins.at(-1).id; commit(next); revealInspector(); });
   undoButton.onclick = () => { if (!undo.length || busy) return; redo.push(copy(draft)); draft = undo.pop(); selectedId = null; invalidate(); syncFields(); render(); announce("Layout change undone."); };
   redoButton.onclick = () => { if (!redo.length || busy) return; undo.push(copy(draft)); draft = redo.pop(); selectedId = null; invalidate(); syncFields(); render(); announce("Layout change restored."); };
   root.addEventListener("keydown", event => {
@@ -118,6 +128,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     event.stopPropagation();
   });
   function syncFields() {
+    counter = draft.bins.reduce((max, bin) => Math.max(max, Number(bin.id.match(/\d+$/)?.[0]) || 0), 0);
     title.value = draft.name; width.input.value = draft.width || ""; depth.input.value = draft.depth || ""; height.input.value = draft.height || "";
     baseplate.checked = draft.includeBaseplate; advancedFloor.input.value = draft.floor; advancedWall.input.value = draft.wall;
     baseMagnets.set(draft.baseplateMagnets || false);
@@ -147,10 +158,15 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     inspector.replaceChildren();
     inspector.dataset.selectedBinId = selectedId || "";
     const bin = picked();
+    const nextInspector = bin ? saved : construction;
+    if (inspector.nextElementSibling !== nextInspector) settings.insertBefore(inspector, nextInspector);
+    const nextMeasurements = bin ? inspector : fit;
+    if (measureDetails.nextElementSibling !== nextMeasurements) settings.insertBefore(measureDetails, nextMeasurements);
     if (!bin) { inspector.append(el("h3", {}, "Bin settings"), el("p", { class: "ai-template-note" }, draft.bins.length ? "Select a bin on the drawer to adjust it." : "Draw a rectangle on the grid or choose Add bin.")); return; }
     const label = el("input", { id: "drawer-bin-label", type: "text", maxlength: 80, value: bin.label, disabled: busy });
     label.onchange = () => updateBin({ label: label.value });
-    inspector.append(el("h3", {}, "Selected bin"), el("label", { class: "ai-template-field", for: label.id }, el("span", {}, "Name"), label));
+    const inspectorHeader = el("div", { class: "drawer-inspector-header" }, el("h3", {}, bin.label));
+    inspector.append(inspectorHeader, el("label", { class: "ai-template-field", for: label.id }, el("span", {}, "Name"), label));
     const stepper = (key, title, mm) => {
       const minus = el("button", { type: "button", "aria-label": `Decrease ${title.toLowerCase()}`, disabled: busy || bin[key] <= 1 }, "−");
       const plus = el("button", { type: "button", "aria-label": `Increase ${title.toLowerCase()}`, disabled: busy || bin[key] >= 4 }, "+");
@@ -188,10 +204,10 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     duplicate.onclick = () => perform(() => {
       const space = firstDrawerSpace(draft, bin.columns, bin.rows); if (!space) throw new Error("No space for another bin of that size.");
       if (draft.bins.length >= 16) throw new Error("This layout supports up to 16 bins.");
-      const next = copy(draft), other = { ...copy(bin), id: `bin-${++counter}`, label: `${bin.label} copy`.slice(0, 80), ...space }; next.bins.push(other); normalizeDrawerLayout(next); selectedId = other.id; commit(next);
+      const next = copy(draft), other = { ...copy(bin), id: `bin-${++counter}`, label: `${bin.label} copy`.slice(0, 80), ...space }; next.bins.push(other); normalizeDrawerLayout(next); selectedId = other.id; commit(next); revealInspector();
     });
     remove.onclick = () => { const next = copy(draft); next.bins = next.bins.filter(entry => entry.id !== bin.id); selectedId = null; commit(next, "Bin removed. Undo layout restores it."); addBin.focus(); };
-    inspector.append(el("div", { class: "ai-template-actions" }, rotate, duplicate, remove));
+    inspectorHeader.append(el("div", { class: "ai-template-actions" }, rotate, duplicate, remove));
     const binMagnets = magnetControls({ id: "drawer-bin-magnets", label: "Magnet pockets under this part",
       onInput: () => { invalidate(); previewButton.disabled = true; },
       onChange: value => { invalidate(); if (!updateBin({ magnets: value })) previewButton.disabled = true; } });
@@ -226,13 +242,18 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
           event.preventDefault(); selectedId = bin.id;
           const change = event.shiftKey ? { columns: bin.columns + direction[0], rows: bin.rows + direction[1] } : { x: bin.x + direction[0], y: bin.y + direction[1] };
           updateBin(change); focusBin(bin.id);
-        } else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectedId = bin.id; renderInspector(); renderSelection(); }
+        } else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectedId = bin.id; renderInspector(); renderSelection(); revealInspector(); }
       };
       board.append(button);
     }
     board.append(ghost);
   }
   function renderSelection() { board.querySelectorAll("[data-bin-id]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.binId === selectedId))); }
+  function revealInspector() {
+    if (!picked()) return;
+    measureDetails.open = false; measurementsCollapsed = true;
+    settings.scrollTop = 0;
+  }
   function render() {
     const validDimensions = ready(), m = drawerMetrics(draft);
     measureSummary.textContent = validDimensions ? `${draft.name} · ${draft.width} × ${draft.depth} × ${draft.height} mm · Edit drawer` : "Drawer measurements";
@@ -277,9 +298,9 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     const active = gesture, next = candidate(cell(event)); gesture = null; ghost.hidden = true;
     if (board.hasPointerCapture(event.pointerId)) board.releasePointerCapture(event.pointerId);
-    if (active.type === "move" && next.x === active.bin.x && next.y === active.bin.y) { render(); focusBin(selectedId); return; }
+    if (active.type === "move" && next.x === active.bin.x && next.y === active.bin.y) { render(); revealInspector(); focusBin(selectedId); return; }
     perform(() => { if (active.type === "draw") addPart(next); else updateBin(next); });
-    focusBin(selectedId);
+    revealInspector(); focusBin(selectedId);
   };
   board.onpointercancel = () => { gesture = null; ghost.hidden = true; };
 
@@ -302,9 +323,11 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
         if (!inspection.meshValidation?.valid || inspection.meshValidation.disconnectedComponents !== 1) throw new Error(`${body.name} did not form one valid connected part.`);
       }
       cached = preview; imageTab.disabled = false; stale.hidden = true;
+      disposePreviewView();
       imageArea.replaceChildren(el("h3", {}, "Review drawer layout"), stale);
       const image = preview.images?.find(image => image.view === "isometric");
-      if (image) imageArea.append(el("img", { src: image.dataUrl, alt: "3D preview of the proposed drawer bins and baseplates" }));
+      try { previewView = createPreviewView(preview.previewId); imageArea.append(previewView.element); }
+      catch { if (image) imageArea.append(el("img", { src: image.dataUrl, alt: "3D preview of the proposed drawer bins and baseplates" }), el("p", { class: "ai-template-note" }, "Interactive view unavailable. Showing the preview image.")); }
       imageArea.append(el("p", { class: "ai-template-note" }, `${preview.bodies.length} editable parts. Printed fit remains unverified.`), el("div", { class: "ai-template-actions" }, add, cancel));
       add.textContent = definition.replaceExisting ? "Update layout in document" : "Add layout to document";
       setView("preview"); announce("Preview ready. The document is unchanged.");
@@ -318,7 +341,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     catch (error) { invalidate(); announce(error.message, true); }
     finally { setBusy(false); }
   };
-  cancel.onclick = () => { cached = null; add.disabled = true; imageArea.replaceChildren(); imageTab.disabled = true; setView("layout"); announce("Preview cancelled. The document is unchanged."); };
+  cancel.onclick = () => { cached = null; add.disabled = true; disposePreviewView(); imageArea.replaceChildren(); imageTab.disabled = true; setView("layout"); announce("Preview cancelled. The document is unchanged."); };
   async function refreshDocument(current, autoLoad = true) {
     const changedDocument = documentId !== current.document.id;
     documentId = current.document.id; savedLayouts = current.drawerLayouts || [];
@@ -331,8 +354,8 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
       invalidate(); syncFields(); setView("layout"); render(); announce("Layout loaded. Changes need a new preview before updating the document.");
     };
     for (const entry of savedLayouts) { const button = el("button", { type: "button" }, entry.definition.name); button.onclick = () => load(entry); saved.append(button); }
-    if (savedLayouts.length) { const button = el("button", { type: "button" }, "New drawer"); button.onclick = () => { selectedId = null; commit(fresh()); syncFields(); setView("layout"); }; saved.append(button); }
     if (changedDocument) {
+      disposePreviewView();
       cached = null; imageArea.replaceChildren(); imageTab.disabled = true;
       if (autoLoad && savedLayouts.length === 1 && savedLayouts[0].editable) load(savedLayouts[0]);
       else { draft = fresh(); selectedId = null; undo = []; redo = []; measureDetails.open = true; measurementsCollapsed = false; syncFields(); setView("layout"); render(); }

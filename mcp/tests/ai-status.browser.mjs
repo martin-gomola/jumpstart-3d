@@ -127,3 +127,41 @@ test("editor retains compact status markup in both builds", async ({ page }, inf
   expect(await page.locator("#ai-status .ai-status-light").count()).toBe(1);
   expect(await page.locator("#ai-status-tooltip").count()).toBe(1);
 });
+
+test("AI shares the mode switch and restores the CAD selection when closed", async ({ page }, info) => {
+  await page.goto(`${info.project.use.baseURL}?mcp=1`);
+  await page.waitForFunction(() => window.__app?.kernel?.ready);
+  await page.waitForSelector("#loading", { state: "hidden" });
+  const group = page.locator(".modeswitch"), ai = group.locator("#ai-status");
+  await expect(group.locator("button")).toHaveCount(4);
+  await expect(group.locator("button")).toHaveText(["Beginner", "Advanced", "Chisel", /AI/]);
+  await expect(ai.locator(".ai-status-short")).toHaveText("AI");
+  const originalMode = await page.evaluate(() => window.__app.mode);
+  const mode = page.locator(`#mode-${originalMode}`);
+  for (const theme of ["light", "dark", "contrast"]) {
+    await page.evaluate(theme => document.documentElement.dataset.ui = theme, theme);
+    await ai.focus();
+    await page.keyboard.press("Enter");
+    await expect(ai).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#ai-setup-panel")).toBeVisible();
+    expect(await page.evaluate(() => window.__app.mode)).toBe(originalMode);
+    const styles = await group.evaluate(element => {
+      const ai = getComputedStyle(element.querySelector("#ai-status"));
+      const mode = getComputedStyle(element.querySelector('[aria-pressed="true"]'));
+      return { font: ai.fontFamily, modeFont: mode.fontFamily, weight: ai.fontWeight, modeWeight: mode.fontWeight, background: ai.backgroundColor, modeBackground: mode.backgroundColor };
+    });
+    expect(styles.font).toBe(styles.modeFont);
+    expect(styles.weight).toBe(styles.modeWeight);
+    expect(styles.background).not.toBe(styles.modeBackground);
+    await page.screenshot({ path: info.outputPath(`ai-mode-${theme}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(ai).toBeFocused();
+    await expect(ai).toHaveAttribute("aria-expanded", "false");
+    await expect(mode).toHaveAttribute("aria-pressed", "true");
+  }
+  await ai.click();
+  await page.locator("#mode-advanced").click();
+  await expect(page.locator("#ai-setup-panel")).toBeHidden();
+  await expect(page.locator("#mode-advanced")).toHaveAttribute("aria-pressed", "true");
+  await expect(ai).toHaveAttribute("aria-expanded", "false");
+});

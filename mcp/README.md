@@ -65,10 +65,11 @@ JumpStart exposes the running local editor through a stdio MCP server. The serve
 
 ### AI workspace templates
 
-Open the AI status button and choose **Templates** to configure a Gridfinity
-drawer layout or choose **Single part** for an insert, bin, or baseplate. On desktop, the workspace expands to show scrollable
+Open **AI → Generators → Gridfinity**, then choose **Drawer layout** or
+**Single part** for an insert, bin, or baseplate. These workflows belong to the
+Gridfinity generator; other generators can have their own controls. On desktop, the workspace expands to show scrollable
 settings beside the model preview, dimensions, and Add/Cancel actions. The
-Templates panel uses the same typed plans and preview/apply checks as the agent.
+Generators panel uses the same typed plans and preview/apply checks as the agent.
 
 Changing a value keeps the last preview visible with an **Out of date** label
 and disables **Add to document**. Select **Preview** to rebuild and inspect the
@@ -79,7 +80,18 @@ Preview images show only the proposed or changed bodies. Existing document parts
 remain in the editor but are excluded from the image, even when they overlap the
 proposal's position.
 
+The drawer's **3D preview** is interactive: drag to rotate, scroll to zoom, or
+choose **Top view** and **Reset view**. With the viewer focused, arrow keys rotate,
+plus/minus zoom, and zero resets. This local viewer uses cached preview meshes;
+camera changes do not edit the document or apply the layout. If interactive
+rendering is unavailable, the static preview image remains available.
+
 **Drawer layout** begins with inside width, depth, and usable height in mm.
+Choose **New drawer** beside the drawer heading to clear the draft and enter new
+measurements in one click. **Undo layout** restores the previous draft; already
+applied document parts are unchanged.
+Selecting a bin brings its inspector into view in the left column. Its name and
+Rotate/Duplicate/Remove actions remain pinned while scrolling the bin options.
 The planner calculates the cell grid and leftover space, lets you draw/move bins,
 and exposes settings for the selected bin. Add bin and Fill gaps provide pointer-free
 alternatives. Arrow keys move a focused bin; Shift + arrows resize it. Undo layout

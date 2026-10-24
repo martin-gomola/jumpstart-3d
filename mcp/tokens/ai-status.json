@@ -153,11 +153,11 @@
   },
   "templatePanelWidth": {
     "$type": "dimension",
-    "$value": "64rem"
+    "$value": "72rem"
   },
   "templateSettingsWidth": {
     "$type": "dimension",
-    "$value": "24rem"
+    "$value": "28rem"
   },
   "templatePreviewHeight": {
     "$type": "dimension",

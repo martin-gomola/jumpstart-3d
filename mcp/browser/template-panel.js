@@ -65,7 +65,7 @@ function illustration(kind) {
   svg.append(path); return svg;
 }
 
-export function initTemplatePanel({ request, subscribe }) {
+export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const root = document.getElementById("ai-templates-panel");
   const tabs = [...document.querySelectorAll('.ai-workspace-tabs [role="tab"]')];
   if (!root || !tabs.length) return;
@@ -224,10 +224,10 @@ export function initTemplatePanel({ request, subscribe }) {
   addPocket.onclick = addPocketForm;
   fieldset.append(basic, dimensions, heightFields, binFields, magnets.element, pocketSection);
   form.append(fieldset, message, el("div", { class: "ai-template-submit" }, previewButton));
-  const settings = el("div", { class: "ai-template-settings" }, el("h3", {}, "Gridfinity"), list, form);
+  const settings = el("div", { class: "ai-template-settings" }, el("h3", {}, "Part type"), list, form);
   const singlePart = el("div", { class: "ai-single-part", hidden: true }, settings, el("div", { class: "ai-template-review" }, emptyPreview, previewArea));
   const drawerRoot = el("div", { class: "ai-drawer-mode" });
-  const modeSwitch = el("div", { class: "ai-template-mode", role: "group", "aria-label": "Design workflow" });
+  const modeSwitch = el("div", { class: "ai-template-mode", role: "group", "aria-label": "Gridfinity workflow" });
   for (const [mode, title] of [["drawer", "Drawer layout"], ["part", "Single part"]]) {
     const button = el("button", { type: "button", "aria-pressed": String(mode === "drawer"), "data-workspace-view": mode }, title);
     button.onclick = () => {
@@ -237,8 +237,11 @@ export function initTemplatePanel({ request, subscribe }) {
     };
     modeButtons.set(mode, button); modeSwitch.append(button);
   }
-  root.append(modeSwitch, drawerRoot, singlePart);
-  const drawerPanel = initDrawerPanel({ root: drawerRoot, request, subscribe, onBusy: active => modeButtons.forEach(button => { button.disabled = active; }) });
+  const gridfinity = el("section", { class: "ai-generator", "aria-labelledby": "ai-gridfinity-title" },
+    el("div", { class: "ai-generator-header" }, el("h3", { id: "ai-gridfinity-title" }, "Gridfinity"), modeSwitch),
+    drawerRoot, singlePart);
+  root.append(gridfinity);
+  const drawerPanel = initDrawerPanel({ root: drawerRoot, request, subscribe, createPreviewView, onBusy: active => modeButtons.forEach(button => { button.disabled = active; }) });
   const readState = () => ({ kind, magnets: magnets.get(), ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
   form.addEventListener("input", () => { invalidate(); updateDimensions(); });
   form.addEventListener("change", () => invalidate());

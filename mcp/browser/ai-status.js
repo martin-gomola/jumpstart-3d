@@ -15,6 +15,11 @@ export const AI_STATUS_CSS = `
 .ai-status[data-state="error"] .ai-status-light { background: var(--ai-status-error); }
 .ai-status-full { position: absolute; width: var(--ai-status-hiddenSize); height: var(--ai-status-hiddenSize); padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .ai-status-short { white-space: nowrap; }
+.modeswitch .ai-status::before { display: none; }
+.modeswitch .ai-status-light { border-radius: var(--ai-status-radius); flex: none; }
+.modeswitch .ai-status[aria-expanded="true"] { background: var(--block-ink); color: var(--block); }
+:root .modeswitch:has(.ai-status[aria-expanded="true"]) button[aria-pressed="true"] { background: transparent; color: var(--ai-status-muted); }
+:root[data-ui="contrast"] .modeswitch .ai-status[aria-expanded="true"] { background: var(--accent); color: var(--block); }
 .ai-status-tooltip { display: none; box-sizing: border-box; position: fixed; inset-block-start: calc(var(--ai-status-anchor-bottom, 0rem) + var(--ai-status-tooltipOffset)); inset-inline-start: max(var(--ai-status-tooltipOffset), calc(min(var(--ai-status-anchor-right, 100vw), 100vw) - min(var(--ai-status-tooltipWidth), calc(100vw - var(--ai-status-target))))); width: var(--ai-status-tooltipWidth); max-width: min(var(--ai-status-tooltipWidth), calc(100vw - var(--ai-status-target))); padding: var(--ai-status-tooltipPadding); border-radius: var(--ai-status-radius); background: var(--ai-status-surface); color: var(--ai-status-ink); white-space: normal; z-index: 100; pointer-events: auto; }
 .ai-status:not([data-tooltip-dismissed]):hover .ai-status-tooltip, .ai-status:not([data-tooltip-dismissed]):focus .ai-status-tooltip { display: block; }
 .ai-status[data-setup-open="true"]:not([data-tooltip-dismissed]):hover .ai-status-tooltip, .ai-status[data-setup-open="true"]:not([data-tooltip-dismissed]):focus .ai-status-tooltip { display: none; }
@@ -102,7 +107,7 @@ export function initAgentStatus() {
     element.querySelector(".ai-status-tooltip").textContent = status.detail;
     element.setAttribute("aria-label", `${status.label}. ${element.getAttribute("aria-expanded") === "true" ? "Close" : "Open"} AI workspace.`);
     element.querySelector(".ai-status-full").textContent = status.label;
-    element.querySelector(".ai-status-short").textContent = status.compact;
+    element.querySelector(".ai-status-short").textContent = element.closest(".modeswitch") ? "AI" : status.compact;
     const setupState = document.getElementById("ai-setup-state");
     const setupDetail = document.getElementById("ai-setup-detail");
     if (setupState) setupState.textContent = status.label;
@@ -116,7 +121,7 @@ export function initAiSetupPanel() {
   if (!trigger || !panel) return () => {};
   const closeButton = document.getElementById("ai-setup-close");
   const copyStatus = document.getElementById("ai-setup-copy-status");
-  const setOpen = (open, { dismissTooltip = false } = {}) => {
+  const setOpen = (open, { dismissTooltip = false, restoreFocus = true } = {}) => {
     panel.hidden = !open;
     trigger.dataset.setupOpen = String(open);
     trigger.setAttribute("aria-expanded", String(open));
@@ -124,11 +129,13 @@ export function initAiSetupPanel() {
     if (open) closeButton?.focus();
     else {
       if (dismissTooltip) trigger.dataset.tooltipDismissed = "true";
-      trigger.focus();
+      if (restoreFocus) trigger.focus();
     }
   };
   const toggle = () => setOpen(panel.hidden);
   const close = () => { if (!panel.hidden) setOpen(false); };
+  const modeButtons = [...document.querySelectorAll('.modeswitch button[aria-pressed]')];
+  const leaveWorkspace = () => { if (!panel.hidden) setOpen(false, { restoreFocus: false }); };
   const onKeyDown = (event) => {
     if (event.key !== "Escape" || panel.hidden) return;
     event.preventDefault();
@@ -148,11 +155,13 @@ export function initAiSetupPanel() {
     }
   };
   trigger.addEventListener("click", toggle);
+  modeButtons.forEach(button => button.addEventListener("click", leaveWorkspace));
   closeButton?.addEventListener("click", close);
   panel.addEventListener("click", copy);
   window.addEventListener("keydown", onKeyDown, true);
   return () => {
     trigger.removeEventListener("click", toggle);
+    modeButtons.forEach(button => button.removeEventListener("click", leaveWorkspace));
     closeButton?.removeEventListener("click", close);
     panel.removeEventListener("click", copy);
     window.removeEventListener("keydown", onKeyDown, true);

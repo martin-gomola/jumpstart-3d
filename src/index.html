@@ -990,17 +990,17 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
     <span id="docver" class="docver" hidden>v1</span>
     <button class="tb-btn save-btn" id="btn-save" title="Save (Ctrl+S): each save is a new version, v1, v2, v3…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><rect x="8" y="13" width="8" height="6" rx="1"/></svg><span class="lbl">Save</span></button>
     <span id="savestate" class="savestate"></span>
-    <button id="ai-status" class="ai-status" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="ai-setup-panel" aria-live="polite" aria-atomic="true" aria-describedby="ai-status-tooltip" aria-label="Checking AI bridge. Open AI client setup.">
-      <span class="ai-status-light" aria-hidden="true"></span>
-      <span class="ai-status-full">Checking AI bridge</span><span class="ai-status-short" aria-hidden="true">AI linking</span>
-      <span id="ai-status-tooltip" class="ai-status-tooltip" role="tooltip" aria-live="off"></span>
-    </button>
     <button id="btn-autosave" class="autosave-btn" aria-pressed="false" title="Autosave backups: copies of your work every few moments, offered back if the app crashes or closes before saving">Autosave: Off</button>
     <div class="spacer"></div>
     <div class="modeswitch" role="group" aria-label="Mode">
       <button id="mode-beginner" aria-pressed="true" title="Drag shapes and combine them">Beginner</button>
       <button id="mode-advanced" aria-pressed="false" title="Sketches, features and a timeline">Advanced</button>
       <button id="mode-chisel" aria-pressed="false" title="Sculpt with brushes, like clay">Chisel</button>
+      <button id="ai-status" class="ai-status" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="ai-setup-panel" aria-live="polite" aria-atomic="true" aria-describedby="ai-status-tooltip" aria-label="Checking AI bridge. Open AI client setup.">
+        <span class="ai-status-light" aria-hidden="true"></span>
+        <span class="ai-status-full">Checking AI bridge</span><span class="ai-status-short" aria-hidden="true">AI</span>
+        <span id="ai-status-tooltip" class="ai-status-tooltip" role="tooltip" aria-live="off"></span>
+      </button>
     </div>
     <div class="spacer"></div>
     <button class="tb-btn" id="btn-undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
@@ -1042,12 +1042,12 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
   <aside id="ai-setup-panel" class="ai-setup-panel" hidden role="dialog" aria-modal="false" aria-labelledby="ai-setup-title">
     <header class="ai-setup-header">
       <h2 id="ai-setup-title">AI workspace</h2>
+      <div class="ai-workspace-tabs" role="tablist" aria-label="AI workspace">
+        <button id="ai-connection-tab" type="button" role="tab" aria-selected="true" aria-controls="ai-connection-panel">Connection</button>
+        <button id="ai-templates-tab" type="button" role="tab" aria-selected="false" aria-controls="ai-templates-panel" tabindex="-1">Generators</button>
+      </div>
       <button id="ai-setup-close" class="ai-setup-close" type="button">Close</button>
     </header>
-    <div class="ai-workspace-tabs" role="tablist" aria-label="AI workspace">
-      <button id="ai-connection-tab" type="button" role="tab" aria-selected="true" aria-controls="ai-connection-panel">Connection</button>
-      <button id="ai-templates-tab" type="button" role="tab" aria-selected="false" aria-controls="ai-templates-panel" tabindex="-1">Templates</button>
-    </div>
     <div id="ai-connection-panel" class="ai-setup-body" role="tabpanel" aria-labelledby="ai-connection-tab">
       <section class="ai-setup-current" aria-live="polite">
         <span class="ai-setup-kicker">JumpStart MCP</span>

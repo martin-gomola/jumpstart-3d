@@ -12,6 +12,7 @@ import { inspectGeometry } from "./inspection.js";
 import { selectGeometry } from "../shared/geometry.js";
 import { initAgentStatus, initAiSetupPanel, STATUS_HOLD_MS } from "./ai-status.js";
 import { initTemplatePanel } from "./template-panel.js";
+import { previewViewer } from "./preview-viewer.js";
 import { summarizeDrawerLayouts } from "./drawer-layout.js";
 
 import { createNativeParametricModel, reviseNativeParameters } from "./native-parameters.js";
@@ -775,7 +776,12 @@ export function initMcp(app) {
     commandQueue = result.catch(() => {});
     return result;
   };
-  initTemplatePanel({ request: (action, params) => enqueue({ action, params }), subscribe: listener => store.on(listener) });
+  initTemplatePanel({ request: (action, params) => enqueue({ action, params }), subscribe: listener => store.on(listener),
+    createPreviewView: previewId => {
+      const preview = previews.get(previewId);
+      if (!preview) throw new Error("Preview expired. Generate it again.");
+      return previewViewer(preview.compiled.affectedBodyIds.map(id => preview.geometries.get(id).mesh));
+    } });
 
   const poll = async () => {
     if (polling || stopped) return;

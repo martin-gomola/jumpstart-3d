@@ -1,3 +1,7 @@
+import { inspectNativePairs } from "./pair-inspection.js";
+import { bodyRole, selectExportBodies } from "../../src/bodyRoles.js";
+import { evaluatePairChecks, validatePairThresholds } from "../shared/pairs.js";
+import { validateRequirements, evaluateRequirements, comparePreviewBodies } from "./preview-requirements.js";
 import { compileFramePlan } from "./frame-plan.js";
 import { store, resolveNode, newDoc } from "../../src/store.js";
 import { applyFeaturePatterns, resizeBodyDocument } from "./model-plan.js";
@@ -46,7 +50,7 @@ function base64(bytes) {
   return btoa(binary);
 }
 
-function bodyInfo(body, app, includeGeometry = false) {
+function bodyInfo(body, app, includeGeometry = false, options = {}) {
   const view = app.scene.views.get(body.id);
   const box = app.scene.bodyWorldBox(body.id);
   const localBox = view?.data?.kbbox || view?.data?.bbox;
@@ -55,9 +59,11 @@ function bodyInfo(body, app, includeGeometry = false) {
   const result = {
     id: body.id,
     name: body.name,
+    role: bodyRole(body),
     feature: body.node?.t ?? "unknown",
     ...(body.turned ? { turned: clone(body.turned) } : {}),
     ...(body.mcpLathe ? { latheRecipe: clone(body.mcpLathe.plan), latheSampling: clone(body.mcpLathe.sampling) } : {}),
+    ...(body.mcpPhoneCradle ? { phoneCradle: clone(body.mcpPhoneCradle) } : {}),
     hidden: !!body.hidden,
     locked: !!body.locked,
     error: app.scene.errors.get(body.id) ?? null,
@@ -71,9 +77,9 @@ function bodyInfo(body, app, includeGeometry = false) {
     volume: view?.data?.volume ?? null,
     triangleCount: view?.data?.triangles?.length ? view.data.triangles.length / 3 : null,
   };
-  if (includeGeometry) result.featureTree = featureTree(body.node);
+  if (includeGeometry && options.includeFeatureTree !== false) result.featureTree = featureTree(body.node);
   else result.modifierCount = body.node?.mods?.length ?? 0;
-  if (includeGeometry) {
+  if (includeGeometry && options.includeSelectors !== false) {
     const edges = view?.data?.edgeInfo || [];
     const faces = view?.data?.faceInfo || [];
     result.geometrySelectors = {
@@ -98,8 +104,24 @@ function featureTree(value, depth = 0) {
   return out;
 }
 
-function documentSummary(app, editorId, revision, includeGeometry = false) {
+function referencedSketchIds(body, document, visited = new Set(), ids = new Set()) {
+  if (!body || visited.has(body.id)) return ids;
+  visited.add(body.id);
+  JSON.stringify(body.node, (key, value) => {
+    if (key === "sketch" && typeof value === "string") ids.add(value);
+    if (key === "srcBody" && typeof value === "string") referencedSketchIds(document.bodies.find((entry) => entry.id === value), document, visited, ids);
+    return value;
+  });
+  return ids;
+}
+
+function documentSummary(app, editorId, revision, includeGeometry = false, options = {}) {
   const doc = store.doc;
+  const wanted = options.bodyIds ? new Set(options.bodyIds) : null;
+  if (wanted && (wanted.size !== options.bodyIds.length || [...wanted].some((id) => !doc.bodies.some((body) => body.id === id)))) throw new Error("bodyIds must contain unique existing body ids");
+  const bodies = doc.bodies.filter((body) => !body.cutPreview && (!wanted || wanted.has(body.id)));
+  const sketchIds = new Set();
+  if (wanted) for (const body of bodies) for (const id of referencedSketchIds(body, doc)) sketchIds.add(id);
   return {
     editorId,
     revision,
@@ -112,7 +134,7 @@ function documentSummary(app, editorId, revision, includeGeometry = false) {
     })),
     nativeParametersTruncated: (doc.params?.length || 0) > 256,
     viewport: { target: app.vp.view.target.toArray(), azimuth: app.vp.view.az, elevation: app.vp.view.el, distance: app.vp.view.dist, roll: app.vp.view.roll || 0, orthographic: app.vp.useOrtho, section: clone(app.section?.info || null) },
-    sketches: (doc.sketches || []).map((sketch) => ({
+    sketches: (options.includeSketches === false ? [] : (doc.sketches || []).filter((sketch) => !wanted || sketchIds.has(sketch.id))).map((sketch) => ({
       id: sketch.id,
       name: sketch.name,
       plane: clone(sketch.plane),
@@ -122,14 +144,14 @@ function documentSummary(app, editorId, revision, includeGeometry = false) {
       ...(includeGeometry ? { points: sketch.pts?.slice(0, 512) ?? [], entities: sketch.ents?.slice(0, 512) ?? [], constraints: featureTree(sketch.cons?.slice(0, 512) || []), truncated: (sketch.pts?.length ?? 0) > 512 || (sketch.ents?.length ?? 0) > 512 || (sketch.cons?.length ?? 0) > 512 } : {}),
     })),
     planes: (doc.planes || []).map((plane) => ({ id: plane.id, name: plane.name, kind: plane.kind, plane: clone(plane.plane), hidden: !!plane.hidden })),
-    bodies: doc.bodies.filter((body) => !body.cutPreview).map((body) => bodyInfo(body, app, includeGeometry)),
-    parametricModels: (doc.mcpModels || []).map(({ bodyState, sketchState, planeState, ...model }) => ({ ...clone(model), sourceState: "saved parameter template; native edits are checked before regeneration" })),
+    bodies: bodies.map((body) => bodyInfo(body, app, includeGeometry, options)),
+    ...(wanted ? { selection: { bodyIds: [...wanted], totalBodies: doc.bodies.filter((body) => !body.cutPreview).length, returnedBodies: bodies.length } } : {}),
+    parametricModels: (doc.mcpModels || []).filter((model) => !wanted || model.bodyIds.some((id) => wanted.has(id))).map(({ bodyState, sketchState, planeState, ...model }) => ({ ...clone(model), sourceState: "saved parameter template; native edits are checked before regeneration" })),
   };
 }
 
-function buildStl(app) {
-  const items = store.doc.bodies
-    .filter((body) => !body.hidden && !body.hole && !body.cutPreview)
+function buildStl(app, bodies) {
+  const items = bodies
     .map((body) => ({ body, view: app.scene.views.get(body.id) }))
     .filter(({ view }) => view?.data?.triangles?.length);
   const triangleCount = items.reduce((total, { view }) => total + view.data.triangles.length / 3, 0);
@@ -188,7 +210,7 @@ function readyBodies(app, bodyIds) {
   return results;
 }
 
-function imageDataUrl(app, box) {
+function imageDataUrl(app, box, coordinateFrame = {}) {
   app.vp.render();
   const source = app.vp.renderer.domElement;
   if (!source.width || !source.height || app.vp.renderer.getContext().isContextLost()) throw new Error("Viewport is unavailable or its WebGL context is lost");
@@ -206,13 +228,52 @@ function imageDataUrl(app, box) {
   }
   const scale = Math.min(1, 1024 / sw, 1024 / sh);
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sw * scale));
-  canvas.height = Math.max(1, Math.round(sh * scale));
-  canvas.getContext("2d").drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  const imageWidth = Math.max(1, Math.round(sw * scale));
+  const imageHeight = Math.max(1, Math.round(sh * scale));
+  const footerHeight = Math.max(48, Math.round(imageWidth * 0.08));
+  canvas.width = imageWidth;
+  canvas.height = imageHeight + footerHeight;
+  const context = canvas.getContext("2d");
+  context.drawImage(source, sx, sy, sw, sh, 0, 0, imageWidth, imageHeight);
+  const center = box.getCenter(box.min.clone());
+  const axisLength = Math.max(...box.getSize(box.min.clone()).toArray()) * 0.18;
+  const ratioX = source.width / app.vp.w, ratioY = source.height / app.vp.h;
+  const project = (point) => {
+    const value = app.vp.project(point);
+    return [(value[0] * ratioX - sx) * scale, (value[1] * ratioY - sy) * scale];
+  };
+  const unit = Math.max(canvas.width / 34, 14), fontSize = Math.max(canvas.width / 80, 10);
+  const theme = getComputedStyle(document.documentElement);
+  const accent = theme.getPropertyValue("--accent").trim() || "CanvasText";
+  const panel = theme.getPropertyValue("--glass").trim() || "Canvas";
+  const ink = theme.getPropertyValue("--ink").trim() || "CanvasText";
+  const footerY = imageHeight;
+  const origin = project(center), anchor = [unit * 1.2, footerY + footerHeight / 2];
+  context.fillStyle = panel;
+  context.fillRect(0, footerY, canvas.width, footerHeight);
+  const axes = [
+    { label: "X", point: center.clone().set(center.x + axisLength, center.y, center.z) },
+    { label: "Y", point: center.clone().set(center.x, center.y + axisLength, center.z) },
+    { label: "Z", point: center.clone().set(center.x, center.y, center.z + axisLength) },
+  ];
+  for (const axis of axes) {
+    const end = project(axis.point), dx = end[0] - origin[0], dy = end[1] - origin[1], length = Math.hypot(dx, dy);
+    const ux = length > 0.001 ? dx / length : 0, uy = length > 0.001 ? dy / length : -1;
+    const x1 = anchor[0] + ux * unit, y1 = anchor[1] + uy * unit;
+    context.strokeStyle = accent; context.fillStyle = accent; context.lineWidth = unit * 0.1;
+    context.beginPath(); context.moveTo(anchor[0], anchor[1]); context.lineTo(x1, y1); context.stroke();
+    context.beginPath(); context.arc(length > 0.001 ? x1 : anchor[0], length > 0.001 ? y1 : anchor[1], unit * 0.12, 0, Math.PI * 2); context.fill();
+    context.font = `600 ${fontSize}px sans-serif`; context.fillText(axis.label, x1 + unit * 0.16, y1 - unit * 0.1);
+  }
+  context.fillStyle = ink; context.font = `${fontSize}px sans-serif`;
+  const textX = unit * 3.4, firstLine = footerY + fontSize * 1.25;
+  context.fillText(coordinateFrame.description || "World axes", textX, firstLine);
+  context.fillText(coordinateFrame.orientation || "+X / +Y / +Z", textX, firstLine + fontSize * 1.35);
+  if (coordinateFrame.screen) context.fillText(coordinateFrame.screen, textX, firstLine + fontSize * 2.7);
   return canvas.toDataURL("image/jpeg", 0.78);
 }
 
-function previewImages(app, box, section) {
+function previewImages(app, box, section, coordinateFrame = { description: "World axes", orientation: "+X / +Y / +Z" }) {
   const vp = app.vp;
   const saved = { view: { ...vp.view, target: vp.view.target.clone() }, ortho: vp.useOrtho, anim: vp.anim, grid: vp.grid.visible, overlay: vp.overlay.visible, section: clone(app.section?.info || null), time: performance.now() };
   const images = [], imageErrors = [];
@@ -238,7 +299,8 @@ function previewImages(app, box, section) {
           const o = [0, 0, 0]; o[["X", "Y", "Z"].indexOf(section.axis)] = section.offset;
           app.section.set({ ref: { n, o }, d: 0, flip: section.flip === true, hatch: true });
         }
-        images.push({ view: name, framing, projection: "orthographic", ...(name === "section" ? { section } : {}), dataUrl: imageDataUrl(app, box) });
+        const viewDirection = name === "top" ? "Camera from +Z toward -Z" : name === "side" ? "Camera from -Y toward +Y" : name === "isometric" ? "Home isometric view" : `Section from ${section.axis}`;
+        images.push({ view: name, viewDirection, framing, projection: "orthographic", coordinateFrame, ...(name === "section" ? { section } : {}), dataUrl: imageDataUrl(app, box, coordinateFrame) });
       } catch (error) { imageErrors.push({ view: name, error: error.message }); }
     }
   } finally {
@@ -316,6 +378,19 @@ export function initMcp(app) {
 
   async function previewCompiled(compiled, plan, includeImage, section, extra = {}) {
     const baseSnapshot = currentRevision();
+    const { requirements, ...metadata } = extra;
+    validateRequirements(requirements);
+    const signatures = (document) => {
+      const assets = new Map(Object.entries(document.assets || {}).map(([id, asset]) => [id, fingerprint(asset)]));
+      return new Map(document.bodies.map((body) => {
+        const resolved = resolveNode(body.node, document), references = {};
+        JSON.stringify(resolved, (key, value) => { if (key === "asset" && typeof value === "string") references[value] = assets.get(value); return value; });
+        const sketches = [...referencedSketchIds(body, document)].map((id) => document.sketches.find((sketch) => sketch.id === id));
+        return [body.id, fingerprint({ body, resolved, sketches, assets: references })];
+      }));
+    };
+    const beforeSignatures = signatures(store.doc);
+    const beforeBodies = new Map(store.doc.bodies.map((body) => [body.id, bodyInfo(body, app)]));
     let ownedPreview;
     const setCompiledPreview = () => {
       const previewDocument = clone(compiled.document);
@@ -332,16 +407,22 @@ export function initMcp(app) {
       if (store.preview !== ownedPreview || app.command || app.sketcher.active) throw new Error("Another editor command replaced the MCP preview; finish it and retry");
     };
     try {
+      const requirementTargets = [...(requirements?.bodies || []).map(({ target }) => target), ...(requirements?.pairs || []).flatMap(({ a, b }) => [a, b])];
+      const requirementBodyIds = requirementTargets.flatMap((target) => {
+        const bodyId = compiled.featureBodyIds?.[target] ?? target;
+        return typeof bodyId === "string" && compiled.document.bodies.some((body) => body.id === bodyId) ? [bodyId] : [];
+      });
+      const previewBodyIds = [...new Set([...compiled.affectedBodyIds, ...requirementBodyIds])];
       const waitForBuild = async () => {
         const deadline = Date.now() + BUILD_TIMEOUT_MS;
         let current;
         while (Date.now() < deadline) {
           assertOwned();
-          current = readyBodies(app, compiled.affectedBodyIds);
+          current = readyBodies(app, previewBodyIds);
           if (current.every((result) => !result.pending)) return current;
           await sleep(50);
         }
-        return readyBodies(app, compiled.affectedBodyIds);
+        return readyBodies(app, previewBodyIds);
       };
       let results = await waitForBuild();
       const holePatterns = [];
@@ -365,7 +446,7 @@ export function initMcp(app) {
         setCompiledPreview();
         results = await waitForBuild();
       }
-      const errors = results.filter((entry) => entry.error || entry.pending).map((entry) => ({ id: entry.id, error: entry.error || "Geometry build timed out" }));
+      const errors = results.filter((entry) => entry.error || entry.pending).map((entry) => ({ id: entry.id, error: entry.error || "Geometry build timed out", category: entry.pending ? "timeout" : "cad_construction", cause: "unverified", nextChecks: [entry.pending ? "Read current build state before retrying with a smaller feature stage." : "Inspect the reported source feature and intermediate geometry before changing it."] }));
       const result = {
         previewId: id(), valid: !errors.length, errors, revision: currentRevision(),
         validation: { schema: "passed", cadConstruction: errors.length ? "failed" : "passed", geometricRequirements: "not_requested", physicalFit: "unverified", manufacturingPerformance: "unverified" },
@@ -374,14 +455,22 @@ export function initMcp(app) {
         ...(holePatterns.length ? { holePatterns } : {}),
         ...(featurePatterns.length ? { featurePatterns } : {}),
         bodies: results.filter((entry) => entry.view).map(({ body, view }) => ({ ...bodyInfo(body, app, true), volume: view.data.volume, triangleCount: view.data.triangles.length / 3 })),
-        ...extra,
+        ...metadata,
       };
+      const afterSignatures = signatures(compiled.document);
+      const afterBodies = new Map(compiled.document.bodies.map((body) => [body.id, bodyInfo(body, app)]));
+      result.changes = comparePreviewBodies(beforeBodies, afterBodies, beforeSignatures, afterSignatures);
       if (result.valid) {
         const box = app.scene.allBox((body) => compiled.affectedBodyIds.includes(body.id));
-        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, section));
+        const phoneCradle = compiled.document.bodies.find((body) => body.mcpPhoneCradle)?.mcpPhoneCradle;
+        const coordinateFrame = phoneCradle?.coordinateFrame || { description: "X across · Y depth · Z up", orientation: "+X / +Y / +Z" };
+        if (phoneCradle) result.phoneCradle = clone(phoneCradle);
+        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, section, coordinateFrame));
         const geometries = new Map(results.map(({ body, view }) => [body.id, {
+          nativeBody: { node: resolveNode(body.node, compiled.document), m: body.m.slice() },
           mesh: { vertices: view.data.vertices, triangles: view.data.triangles, matrix: Array.from(view.group.matrix.elements) },
           selectors: bodyInfo(body, app, true).geometrySelectors,
+          ...(body.mcpPhoneCradle ? { phoneCradle: clone(body.mcpPhoneCradle) } : {}),
         }]));
         if (compiled.designContext?.preset === "rectangular_frame") {
           const expected = Object.fromEntries(["outerWidth", "outerDepth", "height", "wall"].map(name => [name, compiled.parameters[name].value]));
@@ -394,7 +483,18 @@ export function initMcp(app) {
         }
         const bytes = [...geometries.values()].reduce((sum, { mesh }) => sum + (mesh.vertices.byteLength || mesh.vertices.length * 8) + (mesh.triangles.byteLength || mesh.triangles.length * 8), 0);
         if (bytes > 32 * 1024 * 1024) throw new Error("Preview geometry exceeds the 32 MiB inspection cache budget");
-        if (result.valid) previews.set(result.previewId, { plan, compiled, baseSnapshot, baseDocumentId: store.doc.id, revision: currentRevision(), geometries, bytes });
+        if (result.valid) {
+          const pairResults = requirements?.pairs ? await inspectNativePairs(requirements.pairs, geometries, compiled.featureBodyIds, app.kernel) : [];
+          assertOwned();
+          const acceptance = evaluateRequirements(requirements, { document: compiled.document, featureBodyIds: compiled.featureBodyIds, geometries, beforeSignatures, afterSignatures, pairResults });
+          if (acceptance) {
+            result.acceptance = acceptance;
+            result.validation.geometricRequirements = acceptance.status;
+            result.valid = acceptance.passed;
+            if (!acceptance.passed) result.errors.push({ error: "Preview requirements did not pass", category: "acceptance", nextChecks: ["Inspect the acceptance checks and correct the plan before applying."] });
+          }
+          previews.set(result.previewId, { plan, compiled, baseSnapshot, baseDocumentId: store.doc.id, revision: currentRevision(), geometries, bytes, acceptance });
+        }
         const cacheBytes = () => [...previews.values()].reduce((sum, entry) => sum + entry.bytes, 0);
         while (previews.size > 20 || cacheBytes() > 64 * 1024 * 1024) previews.delete(previews.keys().next().value);
       }
@@ -447,20 +547,20 @@ export function initMcp(app) {
     return document;
   }
 
-  async function previewModel(rawPlan, includeImage = true, replaceBodyIds = [], section, expectedRevision, importAssets = []) {
+  async function previewModel(rawPlan, includeImage = true, replaceBodyIds = [], section, expectedRevision, importAssets = [], requirements) {
     assertIdle(); checkRevision(expectedRevision);
     const sourceDocument = await prepareImportDocument(rawPlan, importAssets);
     const compiled = compileMcpModel(sourceDocument, rawPlan, replaceBodyIds);
-    return previewCompiled(compiled, compiled.plan, includeImage, section);
+    return previewCompiled(compiled, compiled.plan, includeImage, section, { requirements });
   }
 
   async function previewParameters(p) {
     assertIdle(); checkRevision(p.expectedRevision);
     const compiled = reviseMcpParameters(store.doc, p.modelId, p.values);
-    return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section);
+    return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
   }
 
-  async function previewResizeBody(bodyId, size, anchor = "base", includeImage = true, section, expectedRevision) {
+  async function previewResizeBody(bodyId, size, anchor = "base", includeImage = true, section, expectedRevision, requirements) {
     assertIdle(); checkRevision(expectedRevision);
     const body = store.doc.bodies.find((entry) => entry.id === bodyId);
     if (!body) throw new Error("Body does not exist in the current document");
@@ -469,7 +569,7 @@ export function initMcp(app) {
     // Resizing a generated model directly invalidates its saved template ownership.
     edit.document.mcpModels = (edit.document.mcpModels || []).filter((model) => !model.bodyIds.includes(bodyId));
     const compiled = { document: edit.document, createdBodyIds: [bodyId], featureBodyIds: { [bodyId]: bodyId }, affectedBodyIds: [bodyId] };
-    return previewCompiled(compiled, { name: `Resize ${body.name}`.slice(0, 80), mode: store.doc.mode }, includeImage, section, { bodyId, anchor, requestedLocalDimensionsMm: { ...size }, factors: edit.factors });
+    return previewCompiled(compiled, { name: `Resize ${body.name}`.slice(0, 80), mode: store.doc.mode }, includeImage, section, { bodyId, anchor, requestedLocalDimensionsMm: { ...size }, factors: edit.factors, requirements });
   }
 
   function inspectionSource(p) {
@@ -483,7 +583,7 @@ export function initMcp(app) {
     }
     const [status] = readyBodies(app, [p.bodyId]);
     if (status.error || status.pending) throw new Error(status.error || "Geometry is still building; retry read-only inspection");
-    return { mesh: { vertices: status.view.data.vertices, triangles: status.view.data.triangles, matrix: Array.from(status.view.group.matrix.elements) }, selectors: bodyInfo(status.body, app, true).geometrySelectors };
+    return { nativeBody: { node: resolveNode(status.body.node, store.doc), m: status.body.m.slice() }, mesh: { vertices: status.view.data.vertices, triangles: status.view.data.triangles, matrix: Array.from(status.view.group.matrix.elements) }, selectors: bodyInfo(status.body, app, true).geometrySelectors, ...(status.body.mcpPhoneCradle ? { phoneCradle: clone(status.body.mcpPhoneCradle) } : {}) };
   }
 
   function applyModel(previewId) {
@@ -495,6 +595,10 @@ export function initMcp(app) {
       previews.delete(previewId);
       throw new Error("The document changed after preview; preview the plan again before applying it");
     }
+    if (preview.acceptance && !preview.acceptance.passed) throw new Error("Preview requirements did not pass; correct the model and preview again before applying");
+    const checkedCandidates = new Set([...(preview.compiled.createdBodyIds || []), ...(preview.compiled.affectedBodyIds || [])]);
+    const cradleBodyIds = preview.compiled.document.bodies.filter((body) => checkedCandidates.has(body.id) && body.mcpPhoneCradle).map((body) => body.id);
+    if (cradleBodyIds.some((bodyId) => !preview.meshChecks?.has(bodyId))) throw new Error("Inspect every phone-cradle preview with mesh validation before applying it");
     if (preview.failedMesh || [...(preview.checks?.values() || [])].some((pass) => !pass)) throw new Error("Preview has failed requested geometry checks; correct the model or resolve the reported measurement before applying");
     const next = clone(preview.compiled.document);
     store.update((doc) => {
@@ -510,26 +614,31 @@ export function initMcp(app) {
     return result;
   }
 
-  async function exportModel(format, name) {
+  async function exportModel(format, name, options = {}) {
     assertIdle();
-    const bodies = store.doc.bodies.filter((body) => !body.hidden && !body.hole && !body.cutPreview);
+    const revision = currentRevision();
+    const bodies = selectExportBodies(store.doc.bodies, options);
+    if (!bodies.length) throw new Error(`No eligible bodies for ${options.scope || "printable"} export`);
+    const selection = { scope: options.scope || "printable", bodyIds: bodies.map(body => body.id), roles: bodies.map(body => ({ id: body.id, role: bodyRole(body) })) };
     const statuses = readyBodies(app, bodies.map((body) => body.id));
     const errors = statuses.filter((entry) => entry.error || entry.pending).map((entry) => ({ id: entry.id, error: entry.error || "Geometry is still building" }));
     if (errors.length) throw new Error(`Cannot export while geometry errors remain: ${JSON.stringify(errors)}`);
     if (format === "3mf") {
       const bytes = await app.projects.threeMFBytes(bodies);
+      checkRevision(revision);
       if (bytes.byteLength > MAX_EXPORT_BYTES) throw new Error("3MF export exceeds the local export budget");
-      return { format, name, revision: currentRevision(), byteLength: bytes.byteLength, base64: base64(bytes) };
+      return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes) };
     }
     if (format === "stl") {
-      const bytes = buildStl(app);
-      return { format, name, revision: currentRevision(), byteLength: bytes.byteLength, base64: base64(bytes) };
+      const bytes = buildStl(app, bodies);
+      return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes) };
     }
     if (format === "step") {
       const resolved = bodies.map((body) => ({ node: resolveNode(body.node, store.doc), m: body.m }));
       const buffer = await app.kernel.step(resolved);
+      checkRevision(revision);
       if (buffer.byteLength > MAX_EXPORT_BYTES) throw new Error(`STEP export exceeds the ${MAX_EXPORT_BYTES} byte local export limit`);
-      return { format, name, revision: currentRevision(), byteLength: buffer.byteLength, base64: base64(new Uint8Array(buffer)) };
+      return { format, name, ...selection, revision, byteLength: buffer.byteLength, base64: base64(new Uint8Array(buffer)) };
     }
     throw new Error("Export format must be stl, step or 3mf");
   }
@@ -543,38 +652,59 @@ export function initMcp(app) {
       case "preview_native_model": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = createNativeParametricModel(store.doc, p.plan);
-        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section);
+        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
       }
       case "preview_native_parameters": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = reviseNativeParameters(store.doc, { values: p.values });
-        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section);
+        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
       }
       case "preview_frame": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = compileFramePlan(store.doc, p.plan);
-        return previewCompiled(compiled, compiled.plan, p.includeImage !== false);
+        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
       }
       case "preview_lathe": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = compileLathePlan({ document: store.doc, plan: p.plan, bodyId: p.bodyId });
-        return previewCompiled(compiled, { ...compiled.plan, mode: store.doc.mode }, p.includeImage !== false, p.section, { warnings: compiled.warnings });
+        return previewCompiled(compiled, { ...compiled.plan, mode: store.doc.mode }, p.includeImage !== false, p.section, { warnings: compiled.warnings, requirements: p.requirements });
       }
       case "list_editors": return { editors: [{ editorId, documentId: store.doc.id, documentName: store.doc.name, mode: app.mode, bodyCount: store.doc.bodies.length, focused: document.visibilityState === "visible" && document.hasFocus() }] };
-      case "get_document": return documentSummary(app, editorId, currentRevision(), p.includeGeometry === true);
+      case "get_document": return documentSummary(app, editorId, currentRevision(), p.includeGeometry === true, p);
       case "preview_new_document": {
         assertIdle(); checkRevision(p.expectedRevision);
         const document = newDoc(p.name || "Untitled", p.mode || "beginner");
-        return previewCompiled({ document, createdBodyIds: [], affectedBodyIds: [], featureBodyIds: {} }, { name: document.name, mode: document.mode }, false, undefined, { newDocument: { id: document.id, name: document.name, mode: document.mode }, replacesDocument: store.doc.id });
+        return previewCompiled({ document, createdBodyIds: [], affectedBodyIds: [], featureBodyIds: {} }, { name: document.name, mode: document.mode }, false, undefined, { newDocument: { id: document.id, name: document.name, mode: document.mode }, replacesDocument: store.doc.id, requirements: p.requirements });
       }
-      case "preview_model": return previewModel(p.plan, p.includeImage !== false, p.replaceBodyIds || [], p.section, p.expectedRevision, p.importAssets || []);
-      case "preview_resize_body": return previewResizeBody(p.bodyId, p.size, p.anchor || "base", p.includeImage !== false, p.section, p.expectedRevision);
+      case "preview_model": return previewModel(p.plan, p.includeImage !== false, p.replaceBodyIds || [], p.section, p.expectedRevision, p.importAssets || [], p.requirements);
+      case "preview_resize_body": return previewResizeBody(p.bodyId, p.size, p.anchor || "base", p.includeImage !== false, p.section, p.expectedRevision, p.requirements);
       case "preview_parameters": return previewParameters(p);
       case "inspect_geometry": {
-        const result = { ...inspectGeometry(inspectionSource(p).mesh, p), bodyId: p.bodyId, revision: currentRevision() };
+        if (p.againstBodyId && !p.expectedRevision) throw new Error("expectedRevision is required for pair inspection");
+        if (p.pairChecks && !p.againstBodyId) throw new Error("pairChecks require againstBodyId");
+        if (p.pairChecks) validatePairThresholds(p.pairChecks);
+        const source = inspectionSource(p);
+        const result = { ...inspectGeometry(source.mesh, p), bodyId: p.bodyId, revision: currentRevision() };
+        if (p.againstBodyId) {
+          const other = inspectionSource({ ...p, bodyId: p.againstBodyId });
+          const geometries = new Map([[p.bodyId, source], [p.againstBodyId, other]]);
+          const [pair] = await inspectNativePairs([{ id: "inspection", a: p.bodyId, b: p.againstBodyId }], geometries, {}, app.kernel);
+          inspectionSource(p); // Recheck the pinned revision/preview after native work completes.
+          result.pair = pair;
+          if (p.pairChecks) {
+            result.pair.acceptance = evaluatePairChecks(pair, p.pairChecks);
+            const statuses = [result.geometricRequirements, result.pair.acceptance.status];
+            result.geometricRequirements = statuses.includes("failed") ? "failed" : statuses.includes("unknown") ? "unknown" : "passed";
+          }
+        }
+        if (source.phoneCradle) {
+          const connectedComponents = result.meshValidation?.disconnectedComponents ?? null;
+          result.phoneCradle = { ...clone(source.phoneCradle), supportConnectivity: { connectedComponents, expectedComponents: 1, passed: connectedComponents === 1 && result.meshValidation?.valid === true, source: "independent tessellated mesh component check" } };
+        }
         if (p.previewId) {
           const preview = previews.get(p.previewId);
           preview.checks ||= new Map();
+          if (result.pair?.acceptance) preview.checks.set(`pair:${p.bodyId}:${p.againstBodyId}`, result.pair.acceptance.passed);
           for (const check of result.checks) preview.checks.set(`${p.bodyId}:${check.id}`, check.pass);
           if (result.frame) preview.checks.set(`${p.bodyId}:rectangularFrame`, result.frame.passed);
           if (result.meshValidation) { preview.meshChecks ||= new Map(); preview.meshChecks.set(p.bodyId, result.meshValidation.valid); preview.failedMesh = [...preview.meshChecks.values()].some((pass) => !pass); }
@@ -612,7 +742,7 @@ export function initMcp(app) {
         checkRevision(p.expectedRevision);
         if (!["stl", "step", "3mf"].includes(p.format)) throw new Error("Unknown export completion format");
         app.onExport && app.onExport(p.format); return { notified: true };
-      case "export_model": return exportModel(p.format, p.name || store.doc.name || "design");
+      case "export_model": return exportModel(p.format, p.name || store.doc.name || "design", { scope: p.scope, bodyIds: p.bodyIds });
       default: throw new Error(`Unknown JumpStart MCP action: ${command.action}`);
     }
   }
@@ -643,7 +773,7 @@ export function initMcp(app) {
         const before = currentRevision();
         try {
           const result = await execute(command);
-          const failed = result?.valid === false || result?.geometricRequirements === "failed";
+          const failed = result?.valid === false || ["failed", "unknown"].includes(result?.geometricRequirements);
           const changesDocument = ["apply_model", "undo", "reopen_document"].includes(command.action);
           const outcome = command.action.startsWith("preview_") || ["save_document", "export_model"].includes(command.action) ? command.action : changesDocument ? before !== currentRevision() ? command.action : "no_change" : null;
           if (reading && !failed) showStatus({ action: null });

@@ -1,3 +1,4 @@
+import { measureSolidPair, validatePairPlacement } from "./pairGeometry.js";
 // Geometry kernel: turns the document's node trees into OpenCascade solids
 // and meshes. Runs inside a Web Worker in the app, and directly in Node for tests.
 import * as R from "replicad";
@@ -1392,7 +1393,7 @@ function thickSolid(shape, d, openHashes, vIn, grows) {
           const v = safeVolume(sh);
           // inside walls: less than the body; outside walls: more than... the walls alone are
           // smaller than the grown body, so only check they're a sensible solid
-          if (v > 1e-6 && (grows ? validSolid(sh) : v < vIn * 0.995)) res = sh; else sh.delete();
+          if (v > 1e-6 && (grows ? validSolid(sh) : v < vIn * 0.995)) res = inFixedOrder(sh, v); else sh.delete();
         }
       } catch (e) { res = null; }
       b.delete(); list.delete();
@@ -1406,7 +1407,8 @@ function validSolid(sh) {
 }
 // The whole body grown (d > 0) or shrunk (d < 0) by |d|, as a solid.
 function offsetSolid(shape, d, vIn, grows) {
-  const good = (sh) => { const v = safeVolume(sh); return v > 1e-6 && (grows ? v > vIn * 1.0005 : v < vIn * 0.9995); };
+  let vol;
+  const good = (sh) => { vol = safeVolume(sh); return vol > 1e-6 && (grows ? vol > vIn * 1.0005 : vol < vIn * 0.9995); };
   const attempts = [
     (b) => b.PerformByJoin(shape.wrapped, d, 1e-3, OC.BRepOffset_Mode.BRepOffset_Skin, false, false, OC.GeomAbs_JoinType.GeomAbs_Arc, false),
     (b) => b.PerformByJoin(shape.wrapped, d, 1e-3, OC.BRepOffset_Mode.BRepOffset_Skin, true, false, OC.GeomAbs_JoinType.GeomAbs_Arc, false),
@@ -1421,7 +1423,7 @@ function offsetSolid(shape, d, vIn, grows) {
       if (b.IsDone()) {
         let sh = R.cast(b.Shape());
         sh = asSolid(sh);
-        if (sh && good(sh)) res = sh; else if (sh) sh.delete();
+        if (sh && good(sh)) res = inFixedOrder(sh, vol); else if (sh) sh.delete();
       }
     } catch (e) { res = null; }
     b.delete();
@@ -1434,12 +1436,64 @@ function offsetSolid(shape, d, vIn, grows) {
     let res = null;
     try {
       b.PerformByJoin(u.wrapped, d, 1e-2, OC.BRepOffset_Mode.BRepOffset_Skin, true, false, OC.GeomAbs_JoinType.GeomAbs_Arc, false);
-      if (b.IsDone()) { const sh = asSolid(R.cast(b.Shape())); if (sh && good(sh)) res = sh; else if (sh) sh.delete(); }
+      if (b.IsDone()) { const sh = asSolid(R.cast(b.Shape())); if (sh && good(sh)) res = inFixedOrder(sh, vol); else if (sh) sh.delete(); }
     } catch (e) {}
     b.delete(); u.delete();
     if (res) return res;
   }
   return null;
+}
+// OCCT offset builders can return the same shell with faces in allocation-dependent order. Rebuild plain solids
+// in a geometric order so equivalent shell/offset features export consistently regardless of what was built first.
+function inFixedOrder(sh, v0) {
+  if (!(sh instanceof R.Solid)) return sh;
+  const O = OC.TopAbs_Orientation, orientation = sh.wrapped.Orientation();
+  if (orientation !== O.TopAbs_FORWARD && orientation !== O.TopAbs_REVERSED) return sh;
+  const owned = [];
+  const grab = (parent, kind, wrap) => {
+    const out = [], ex = new OC.TopExp_Explorer(parent, OC.TopAbs_ShapeEnum[kind], OC.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    try { for (; ex.More(); ex.Next()) out.push(wrap(ex.Current())); } finally { ex.delete(); }
+    owned.push(...out);
+    return out;
+  };
+  const byKey = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+  const area = (face) => { try { return Math.round(R.measureArea(face) * 1e3); } catch (e) { return 0; } };
+  const parts = [];
+  let out = null;
+  try {
+    for (const shell of grab(sh.wrapped, "TopAbs_SHELL", (x) => OC.TopoDS.Shell(x))) {
+      const faces = grab(shell, "TopAbs_FACE", (x) => R.cast(OC.TopoDS.Face(x)));
+      const keyed = faces.map((face) => {
+        const box = face.boundingBox, [lo, hi] = box.bounds; box.delete();
+        return { face, key: [...lo, ...hi].map((value) => Math.round(value * 1e3)), type: face.geomType, area: null };
+      });
+      keyed.sort((a, b) => byKey(a.key, b.key) || (a.type < b.type ? -1 : a.type > b.type ? 1 : 0) || (a.area ??= area(a.face)) - (b.area ??= area(b.face)));
+      parts.push({ keyed, closed: shell.Closed() });
+    }
+    parts.sort((a, b) => {
+      for (let i = 0; i < Math.min(a.keyed.length, b.keyed.length); i++) { const delta = byKey(a.keyed[i].key, b.keyed[i].key); if (delta) return delta; }
+      return a.keyed.length - b.keyed.length;
+    });
+    const builder = new OC.TopoDS_Builder(), solid = new OC.TopoDS_Solid();
+    owned.push(builder, solid);
+    builder.MakeSolid(solid);
+    for (const { keyed, closed } of parts) {
+      const shell = new OC.TopoDS_Shell(); owned.push(shell); builder.MakeShell(shell);
+      for (const { face } of keyed) {
+        let wrapped = face.wrapped;
+        if (orientation === O.TopAbs_REVERSED) { wrapped = wrapped.Reversed(); owned.push(wrapped); }
+        builder.Add(shell, wrapped);
+      }
+      shell.Closed(closed);
+      builder.Add(solid, shell);
+    }
+    if (orientation === O.TopAbs_REVERSED) solid.Orientation(O.TopAbs_REVERSED);
+    out = R.cast(solid);
+    const actualVolume = safeVolume(out), expectedVolume = v0 ?? safeVolume(sh);
+    if (!(Math.abs(actualVolume - expectedVolume) <= 1e-6 * Math.abs(expectedVolume))) { out.delete(); return sh; }
+    sh.delete();
+    return out;
+  } catch (e) { if (out) out.delete(); return sh; } finally { owned.forEach((entry) => entry.delete()); }
 }
 // offset results can come back as a shell or compound: make a solid of them
 function asSolid(sh) {
@@ -2731,4 +2785,27 @@ export function exportStep(bodies) {
   if (!shapes.length) throw new Error("Nothing to export");
   const comp = shapes.length === 1 ? shapes[0] : R.makeCompound(shapes);
   return comp.blobSTEP();
+}
+
+
+// Isolated read-only queries use cloned evaluation results, never the editor worker's cache.
+export function inspectSolidPairs(pairs) {
+  if (!Array.isArray(pairs) || pairs.length < 1 || pairs.length > 8) throw new Error("Pair inspection requires 1 to 8 pairs");
+  return pairs.map(({ id, a, b }) => {
+    let left, right;
+    try {
+      for (const body of [a, b]) {
+        if (!body?.node) throw new Error("Pair inspection requires a native node");
+        validatePairPlacement(body.m);
+        let mesh = false;
+        JSON.stringify(body.node, (key, value) => { if (key === "t" && value === "mesh") mesh = true; return value; });
+        if (mesh) throw new Error("Mesh and recipe-mesh pair inspection is unsupported; native CAD or STEP solids are required");
+      }
+      left = transformShape(evalNode(a.node), a.m);
+      right = transformShape(evalNode(b.node), b.m);
+      return { id, ...measureSolidPair(left, right, OC, R) };
+    } catch (error) {
+      return { id, status: "unknown", error: error?.message || "Native pair query failed", distanceMm: null, overlapVolumeMm3: null, physicalFit: "unverified" };
+    } finally { left?.delete(); right?.delete(); }
+  });
 }

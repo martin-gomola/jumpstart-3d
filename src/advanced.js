@@ -1,6 +1,6 @@
 // Advanced mode: Fusion-style ribbon, browser, timeline and feature commands.
 import * as THREE from "three";
-import { store, findBody, findSketch, nextSeq, IDENTITY, timeline, regionsFor, regionOwners, shapeGroup, userLoops, resolveNode, bodyKey, primName, pathChain, orderPath } from "./store.js";
+import { store, findBody, findSketch, nextSeq, IDENTITY, timeline, regionsFor, regionOwners, shapeGroup, userLoops, resolveNode, bodyKey, primName, bodyTypeName, pathChain, orderPath } from "./store.js";
 import { el, fmt, uid, round, clone, nextColor, fileAccept } from "./util.js";
 import { getUnit, withUnit, showLen } from "./units.js";
 import { ICON } from "./icons.js";
@@ -3179,7 +3179,7 @@ export function initAdvanced(app) {
             b.node.mods.push({ id: uid("f"), seq: nextSeq(doc), t: "bool", op: "join", tool: { t: "mirror", src: clone(b.node), srcM: b.m.slice(), plane: P, mods: [] }, m: arr(M4(b.m).invert()) });
           } else {
             // a new body that follows the original when it changes
-            doc.bodies.push({ id: (st.ids || (st.ids = {}))[id] || (st.ids[id] = uid("b")), name: (b.name || "Body") + " (mirror)", seq: nextSeq(doc), color: b.color, hole: !!b.hole, hidden: false, m: IDENTITY.slice(), node: { t: "mirror", srcBody: b.id, plane: P, mods: [] } });
+            doc.bodies.push({ id: (st.ids || (st.ids = {}))[id] || (st.ids[id] = uid("b")), name: (b.name || "Body") + " (mirror)", seq: nextSeq(doc), color: b.color, ...(b.role === undefined ? {} : { role: b.role }), hole: !!b.hole, hidden: false, m: IDENTITY.slice(), node: { t: "mirror", srcBody: b.id, plane: P, mods: [] } });
           }
         }
       },
@@ -3298,7 +3298,7 @@ export function initAdvanced(app) {
         const b = findBody(doc, st.body);
         if (!b) return;
         const before = clone(b.node);
-        const piece = { id: st.newId || (st.newId = uid("b")), name: (b.name || "Body") + " (split)", seq: nextSeq(doc), color: BODY_COLORS[(doc.bodies.length + 3) % BODY_COLORS.length], hole: false, hidden: false, m: b.m.slice(), node: before };
+        const piece = { id: st.newId || (st.newId = uid("b")), name: (b.name || "Body") + " (split)", seq: nextSeq(doc), color: BODY_COLORS[(doc.bodies.length + 3) % BODY_COLORS.length], hole: false, hidden: false, ...(b.role === undefined ? {} : { role: b.role }), m: b.m.slice(), node: before };
         piece.node.mods = (piece.node.mods || []).slice();
         b.node.mods = b.node.mods || [];
         if (st.sketch) {
@@ -5381,7 +5381,7 @@ export function initAdvanced(app) {
       const box = scene.bodyTightBox(b.id);
       const size = box ? box.getSize(new THREE.Vector3()) : null;
       const dl = el("dl", {},
-        el("dt", {}, "Type"), el("dd", { style: { fontFamily: "var(--f-ui)" } }, b.node.t === "prim" ? primName(b.node.kind) : b.node.t === "group" ? "Combined" : b.node.t === "extrude" ? "Extrusion" : "Revolution"),
+        el("dt", {}, "Type"), el("dd", { style: { fontFamily: "var(--f-ui)" } }, bodyTypeName(b.node)),
         el("dt", {}, "Size"), el("dd", {}, size ? `${showLen(size.x, 1)} × ${showLen(size.y, 1)} × ${showLen(size.z, 1)} ${getUnit()}` : "–"),
         el("dt", {}, "Volume"), el("dd", {}, v && v.data && v.data.volume != null ? fmt(v.data.volume / 1000, 3) + " cm³" : "–"),
         el("dt", {}, "Features"), el("dd", {}, String((b.node.mods || []).length)));

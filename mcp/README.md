@@ -2,6 +2,9 @@
 
 ## Ownership and layout
 
+The [SOMA/text-to-cad adoption checklist](ADOPTION-CHECKLIST.md) records the
+implemented fit-check slice, verification evidence, and the remaining feature backlog.
+
 This is the MCP interface for the self-hosted JumpStart build. MCP code, tests,
 benchmarks, fixtures, and status tokens live here. The editor source is in
 `src/`, based on the author source snapshot documented in [SOURCES.md](../SOURCES.md).
@@ -177,8 +180,8 @@ apply commits a successful preview as one undoable edit.
 | --- | --- |
 | `jumpstart_list_imports` | List operator-managed CAD files by metadata and SHA-256 asset id; returns no file contents. |
 | `jumpstart_list_editors` | List connected editor tabs and their connection state. |
-| `jumpstart_get_document` | Read the current document, revision, bodies, features, and optional geometry selectors. |
-| `jumpstart_get_capabilities` | Read tool schemas, modeling operations, limits, and unsupported features. |
+| `jumpstart_get_document` | Read the document revision and selected bodies, with optional feature trees, sketches, and geometry selectors. |
+| `jumpstart_get_capabilities` | Read compact capabilities or filter schemas by tool name and typed plan operation. |
 | `jumpstart_preview_model` | Preview a typed model plan with primitives, sketches, features, operations, and digest-referenced managed imports. |
 | `jumpstart_preview_resize_body` | Preview an exact body resize while preserving its base, center, or corner anchor. |
 | `jumpstart_preview_new_document` | Preview an empty document as a recoverable edit. |
@@ -187,13 +190,13 @@ apply commits a successful preview as one undoable edit.
 | `jumpstart_preview_parameters` | Preview parameter changes to a saved MCP model template. |
 | `jumpstart_preview_frame` | Preview a rectangular spacer frame. |
 | `jumpstart_preview_lathe` | Preview a turned part from an axial profile, with optional hollowing and scale. |
-| `jumpstart_inspect_geometry` | Measure live or preview geometry, including dimensions, sections, samples, and mesh checks. |
+| `jumpstart_inspect_geometry` | Measure live/preview dimensions, sections and meshes, or native-solid pair distance and intersection volume. |
 | `jumpstart_select_geometry` | Find native edges or faces by geometric properties; reports ambiguity instead of guessing. |
 | `jumpstart_apply_model` | Apply a successful preview as one undoable edit; duplicate applies are ignored. |
 | `jumpstart_undo` | Undo one edit when the document revision still matches. |
 | `jumpstart_save_document` | Save the current document to browser-local project storage; optionally save a version. |
 | `jumpstart_reopen_document` | Reopen the current project's saved document as a recoverable edit. |
-| `jumpstart_export_model` | Export visible solid bodies as STL, STEP, or 3MF. |
+| `jumpstart_export_model` | Export printable design bodies or an explicit design/hardware assembly as STL, STEP, or 3MF. |
 | `jumpstart_start_tutorial` | Start native tutorial checks on the current blank document. |
 | `jumpstart_get_tutorial_status` | Read observed tutorial checks; manual steps are not certified. |
 
@@ -217,6 +220,72 @@ face after topology changes. Imported STL/STEP/3MF bodies can be inspected,
 resized, and exported through the existing tools, but MCP does not open a file
 picker or accept host file paths.
 
+### Phone cradles and orientation
+
+`jumpstart_preview_model` accepts an editable `phoneCradle` operation with an
+explicit `topEdgeToward` direction. Its frame is X across the part, +Y toward the
+dashboard, and Z up. `topEdgeToward: "+Y"` leans the phone's top edge toward the
+dashboard and faces the screen toward the driver (-Y); `"-Y"` reverses both.
+The operation builds a thin contact plate, two side ribs, and a lower stop as
+native editable primitive and boolean features in one cradle body. Later plan
+operations can combine that cradle with a tray or another editable base. Supply the phone contact width,
+contact length along the incline, angle, plate/rib thicknesses, stop dimensions,
+and lower-edge position in millimetres.
+
+Preview images carry an XYZ axis triad and camera-direction labels. For a
+`phoneCradle`, inspect the returned orientation metadata, then call
+`jumpstart_inspect_geometry` with mesh validation. It reports whether the plate,
+ribs, and stop form one connected mesh. Applying a phone-cradle preview is
+rejected until that check passes. This checks generated-model connectivity only;
+it does not certify vehicle fit, minimum wall thickness, strength, or printability.
+
+### Body roles and export selection
+
+Bodies accept optional native `role` metadata: `design`, `reference`, or `hardware`.
+An absent role means `design`, including existing files and generated fasteners.
+Roles do not hide bodies, change their dimensions or freeze their feature nodes.
+Assign a role through a typed operation in `jumpstart_preview_model`, inspect the
+preview, then apply its id:
+
+```json
+{
+  "name": "Classify assembly context",
+  "operations": [
+    { "id": "phone-reference", "type": "setRole", "target": "existing-phone-body-id", "role": "reference" },
+    { "id": "purchased-screw", "type": "setRole", "target": "existing-screw-body-id", "role": "hardware" }
+  ]
+}
+```
+
+`target` accepts an existing body id or an earlier plan alias, including a pattern
+alias covering multiple bodies. Locked bodies reject classification edits.
+Document and preview responses report the effective role; changed-body reports
+include before/after roles. Role edits retain saved parameter controls; subsequent
+numeric parameter revisions preserve the latest roles. Native saves, reopen and
+undo retain the metadata. Geometry edits still invalidate incompatible templates.
+
+`jumpstart_export_model` accepts `scope` and optional `bodyIds`:
+
+| Scope | Included visible solids | Excluded |
+| --- | --- | --- |
+| `printable` (default) | Design bodies | Reference, hardware, hidden bodies, holes, preview cutters |
+| `assembly` | Design and hardware bodies | Reference, hidden bodies, holes, preview cutters |
+
+An explicit `bodyIds` list must contain 1–128 unique, existing, eligible ids.
+Invalid selections and empty exports fail instead of falling back to another
+body. All three formats use the same selection; results identify exported ids,
+roles and scope. Exports leave the document unchanged. The editor's regular
+STL/3MF/STEP menu also uses printable bodies, with its existing selection option.
+Native JSON projects retain every body, including references and hardware.
+
+Copies, linked mirrors and split outputs inherit their source role when created.
+Union/intersection results conservatively inherit `reference` before `hardware`
+before `design`; subtractive hole bodies do not promote a result. Cuts keep the
+target role. Group children retain their original roles for ungroup; a later role
+assignment to the group does not overwrite these stored child roles. Inspect and
+explicitly reclassify a result if its manufacturing intent has changed. Roles do
+not establish that an assembly is fused, printable, or physically fits.
+
 ## Agent workflow
 
 The top-bar AI indicator uses a visible state label such as `AI ready` or
@@ -236,7 +305,7 @@ permissions.
 
 1. Call `jumpstart_list_editors`; specify `editorId` if more than one editor is open, even if one reports focus. Listings include `lastSeenAt`, `connectionState`, and the number of tabs sharing a document id. After a tab reload or disconnect, relist and verify its document before editing.
 2. Call `jumpstart_get_document({ includeGeometry: true })` to read the current revision, world bounds, body-local dimensions, sketches, feature nodes, and capped edge/face selectors.
-3. Call `jumpstart_preview_model` with a typed plan. Plans support JumpStart primitives, circle/polygon/rounded-rectangle/line-arc-spline contour profiles, reusable line/arc path sketches, extrude/revolve/loft/sweep/pipe/coil features, native spur, straight bevel, and rack gears, body transforms, linked or joined body mirrors, linear/circular/path body patterns, patterns of editable hole, emboss, and sketch-backed boolean features, plane-based body splits, groups, booleans, metric/inch fasteners, fitted planar hole patterns, and native fillet/chamfer/offset/shell/hole/thread/emboss/scale modifiers. They can add bodies or edit existing bodies by id. For a direct imported-body size change, `jumpstart_preview_resize_body` remains the shortest form.
+3. Call `jumpstart_preview_model` with a typed plan. Plans support JumpStart primitives, circle/polygon/rounded-rectangle/line-arc-spline contour profiles, reusable line/arc path sketches, extrude/revolve/loft/sweep/pipe/coil features, native spur, straight bevel, and rack gears, axial knurled knobs, the `phoneCradle` operation, body transforms, linked or joined body mirrors, linear/circular/path body patterns, patterns of editable hole, emboss, and sketch-backed boolean features, plane-based body splits, groups, booleans, metric/inch fasteners, fitted planar hole patterns, and native fillet/chamfer/offset/shell/hole/thread/emboss/scale modifiers. They can add bodies or edit existing bodies by id. For a direct imported-body size change, `jumpstart_preview_resize_body` remains the shortest form.
 4. Inspect preview validity, errors, dimensions, and the returned image before applying.
 5. Call `jumpstart_apply_model` with the returned `previewId`. Applying the same id twice does not duplicate the edit.
 6. Read the new revision before calling `jumpstart_undo`. The revision check prevents undoing a later user edit.
@@ -363,6 +432,28 @@ For non-round cuts, set `shape` to `square`, `hex`, or `slot` and provide `width
 
 Fit and spacing checks use the shape's bounding radius, so a pattern that barely fits may be rejected conservatively. Inspect the preview geometry before applying as usual.
 
+### Native knurled knobs
+
+Use a `knurl` plan operation for a straight axial V-groove knob. It creates a
+hidden editable sketch and a standard extrusion, keeping the profile and length
+in the native feature tree. Diameter defaults to 20 mm and supports 6–150 mm;
+length defaults to 15 mm and supports 1–200 mm. Groove count defaults to about
+one groove per millimeter of circumference and is limited to 8–120. Depth
+defaults to half the groove pitch and is validated to prevent vanished grooves
+or a collapsed core. Optional bores are `round`, `hex`, or `d`; `boreSize` is a
+diameter, or across-flats for hex. The validator preserves at least 1 mm beneath
+the groove roots. These are axial grooves, not crossed diamond texture.
+The groove pitch is circumference divided by groove count; pitches below
+0.8 mm are allowed but may print without a clear grip pattern on common FDM
+printers.
+
+```json
+{
+  "name": "Knurled control knob",
+  "operations": [{ "id": "knob", "type": "knurl", "diameter": 24, "length": 18, "grooves": 32, "bore": "d", "boreSize": 6 }]
+}
+```
+
 `jumpstart_preview_resize_body` changes the exact local X, Y, and/or Z size of an existing body by adding or updating JumpStart's native scale feature. It works on imported STL/3MF meshes and preserves their mesh source. Omitted dimensions stay unchanged. `base` keeps the bottom center fixed; `center` keeps the center fixed; `corner` keeps the minimum corner fixed. Imported meshes remain meshes: resize, placement, and feature-based cuts are editable, while the original triangle surface is not a parametric sketch or feature tree.
 
 For fillet and chamfer, use current local edge signatures. For offset and shell, use current face signatures from `get_document({ includeGeometry: true })` with center, surface type, and the planar normal where applicable. Offset distance is signed: positive pushes the face out; negative pulls it in. Offset rejects far or ambiguous face matches. Hole positions/normals, thread face centers, and emboss face frames are also body-local. Preview again after editing an earlier feature because edge and face references can change when geometry changes.
@@ -371,11 +462,185 @@ The current MCP sketch input uses explicit point coordinates and circle radii, p
 
 ## Inspection and parameter revisions
 
-Call `jumpstart_get_capabilities` for exact tool schemas, examples and budgets.
+Start with compact capabilities, then request only the exact tool schemas needed.
 Tool inputs are validated at runtime, including unknown keys, numeric ranges,
 payload sizes and array limits. Maximum tool arguments are 256 KiB. Inspection
 is bounded to 200,000 triangles and an estimated eight million triangle visits;
 split expensive inspection requests into smaller read-only calls.
+
+### Focused discovery and document reads
+
+Existing calls without filters retain their full response. To avoid loading the
+schema catalog again for every modeling step:
+
+```json
+{ "includeSchemas": false }
+```
+
+Pass that to `jumpstart_get_capabilities` for a tool-name summary, operation
+support, limits, and unsupported geometry. Request selected schemas when needed:
+
+```json
+{ "toolNames": ["jumpstart_preview_model"], "operationTypes": ["knurl", "holePattern"] }
+```
+
+`operationTypes` filters variants in `plan.operations`; extrude, revolve, loft,
+sweep, pipe and coil are in `plan.features`. Unknown tool or operation filters
+fail explicitly. Filtering returns schema copies and does not narrow the
+broker's actual validation contract or change `tools/list`.
+
+For `jumpstart_get_document`, use `bodyIds` to return selected bodies. With
+`includeGeometry: true`, only their referenced sketches are returned, including
+sketches used through linked mirrors. `includeSketches: false` omits sketches;
+`includeSelectors: false` omits edge/face arrays; `includeFeatureTree: false`
+omits native feature nodes. Geometry flags default to the previous behavior.
+Unknown or duplicate body ids fail instead of returning an ambiguous empty list.
+The response includes selection counts and retains document identity/revision.
+
+### Preview acceptance requirements
+
+Every preview tool accepts a `requirements` object alongside its plan or edit.
+Write acceptance values from the user's request before constructing the model.
+For example, a new bracket can require a 40 mm width, one connected component,
+and preservation of an existing tray:
+
+```json
+{
+  "requirements": {
+    "bodyCount": 2,
+    "preserveBodyIds": ["existing-tray-id"],
+    "bodies": [{
+      "target": "bracket",
+      "checks": [
+        { "id": "width", "kind": "dimension", "axis": "X", "expected": 40, "tolerance": 0.05 },
+        { "id": "connected", "kind": "components", "expected": 1 }
+      ]
+    }]
+  }
+}
+```
+
+`bodyCount` counts all candidate document bodies, including hidden bodies and
+hole tools. A per-body `target` is an existing native body id or a plan reference
+that resolves to exactly one body. Up to 16 target bodies and 64 checks are
+supported, with at most 8 checks per target and an aggregate eight-million
+triangle-visit budget. Duplicate target/check ids fail validation.
+
+Supported per-body checks use generated world-space tessellation:
+
+| Kind | Measurement |
+| --- | --- |
+| `dimension` | X, Y, or Z extent against `expected`, in mm. |
+| `bound` | World-space `min` or `max` coordinate along an axis; includes placement. |
+| `components` | Integer connected-component count at the inspector's weld tolerance. |
+| `channels` | Existing straight parallel, flat-bottom channel measurements and counts. |
+
+Results return `acceptance.status` as `passed`, `failed`, or `unknown`, with
+expected and measured values for numerical checks. Unknown includes an
+uninspectable target, an unsupported section, or an exhausted measurement
+budget. Failed and unknown contracts block apply. Later optional inspection
+checks cannot overwrite the attached acceptance result. Successful geometry
+with failed acceptance stays cached for read-only inspection; the saved document
+is unchanged. Requirements are scoped to that preview: resubmit them on every
+later preview or parameter revision. They are not persisted as model constraints.
+
+`preserveBodyIds` compares native body definitions, referenced sketches, resolved
+geometry inputs, asset fingerprints and placements. It does not perform an exact
+solid-volume difference. Components do not establish contact strength, absence
+of self-intersection, minimum wall thickness everywhere, or physical fit. Native
+cylindrical-face counts are not exposed as a general hole-recognition checker.
+
+### Native solid pair measurements
+
+For two native CAD or valid STEP solids, `jumpstart_inspect_geometry` accepts
+`againstBodyId`. Pin `expectedRevision`; use `previewId` when both operands come
+from a proposed document. Both bodies must belong to that same current document
+or preview. For example:
+
+```json
+{
+  "editorId": "selected-editor-id",
+  "expectedRevision": "current-document-revision",
+  "bodyId": "base-body-id",
+  "againstBodyId": "lid-body-id",
+  "pairChecks": { "minimumClearance": 0.3, "maximumOverlapVolume": 0 }
+}
+```
+
+`pairChecks` is optional for a measurement-only request. When supplied, it needs
+`minimumClearance` (mm) and/or `maximumOverlapVolume` (mm3). These example
+thresholds are synthetic fixtures, not universal printing tolerances.
+
+The `pair` result separates `distanceMm`, world-space `witnessPoints`, and
+`overlapVolumeMm3`. Zero set distance includes touching, overlapping and
+contained solids; it is not penetration depth. Witnesses may be non-unique and
+need not lie on both boundaries when solid interiors intersect. A positive
+intersection volume identifies material overlap. Entire-body minimum distance
+also includes intentional contacts, so establish what may touch before using a
+minimum-clearance requirement.
+
+A completed native query reports `status: "measured"`. Invalid/non-solid,
+disconnected, unsupported or failed geometry reports `unknown` with null
+measurements. Intersection failure never becomes a successful zero. Initial
+support is one positive-volume, valid native or STEP solid per operand, with
+rigid or uniform-scale placement. Nonuniform, sheared and perspective placement
+matrices are unknown rather than silently normalized. STL/3MF
+and Lathe recipe meshes are explicitly unsupported; no analytic reconstruction
+or implicit mesh conversion is performed by this query.
+
+Attach immutable pair acceptance to any preview using plan references or native
+body ids:
+
+```json
+{
+  "requirements": {
+    "pairs": [{
+      "id": "lid-fit",
+      "a": "base",
+      "b": "lid",
+      "minimumClearance": 0.3,
+      "maximumOverlapVolume": 0
+    }]
+  }
+}
+```
+
+Pair requirements need `expectedRevision`. Both references must resolve to one
+different body. Results appear in `acceptance.pairs`, and threshold results join
+the other acceptance checks. Failed or unknown pair requirements block apply;
+a later optional inspection cannot loosen that preview's contract. Resubmit
+requirements on each later preview or parameter revision.
+
+The comparison tolerances are explicit: `distanceTolerance` defaults to
+0.0001 mm and `volumeTolerance` to 0.000001 mm3. They are numerical tolerances,
+not manufacturing allowances. Up to eight pairs and 2,000 faces per operand are
+supported; their thresholds count toward the shared 64-check preview limit.
+Analysis uses a temporary OCCT worker with a 20-second budget including startup.
+Timeout terminates only that analysis worker and returns unknown; the editor's
+build worker and its caches remain available. The bridge checks the document
+revision again after native work completes before returning or caching results.
+
+The adapted measurement semantics come from text-to-cad's MIT geometry helpers;
+see `SOURCES.md` and `third_party/text-to-cad/LICENSE`. No Python runtime or
+additional dependency is required. CAD measurements remain separate from
+physical-fit and manufacturing certification.
+
+### Review changes and recover from failures
+
+All previews return `changes` with added, removed, changed and unchanged body
+ids. Changed bodies include before/after world bounds, dimensions, volume and
+numeric deltas when available. This distinguishes placement changes from size
+changes without centering either model. Equal dimensions or volume alone do
+not establish identical geometry. This source comparison is separate from the
+existing parameter-template `diff`.
+
+Tool errors preserve the `error` string and add `guidance` containing a recovery
+category, cause certainty, and next checks. Categories distinguish timeouts,
+resource limits, stale state, unsupported operations, acceptance failures, and
+other validation/execution failures. Geometry-build failures identify the CAD
+construction stage or timeout. Categories guide recovery and do not diagnose an
+unverified geometric cause. Read current state before retrying an uncertain
+mutation, and reuse its preview id when appropriate.
 
 ### Named parameters
 

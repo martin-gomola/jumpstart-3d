@@ -395,6 +395,14 @@ export function bodyKey(resolved) {
 const PRIM_NAMES = { box: "Box", cylinder: "Cylinder", sphere: "Sphere", cone: "Cone", pyramid: "Pyramid", wedge: "Wedge", torus: "Torus", tube: "Tube", hemisphere: "Hemisphere", prism: "Prism", text: "Text", star: "Star", heart: "Heart", roof: "Roof", roundroof: "Round roof", paraboloid: "Paraboloid", gem: "Gem", spring: "Spring", gear: "Spur gear", bevelgear: "Straight bevel gear", rack: "Rack", capsule: "Capsule", arrow: "Arrow" };
 export function primName(kind) { return PRIM_NAMES[kind] || kind; }
 
+export function bodyTypeName(node) {
+  if (!node) return "Body";
+  const base = node.t === "prim" ? primName(node.kind)
+    : node.t === "group" ? "Combined"
+      : ({ mesh: "Imported mesh", step: "Imported STEP", extrude: "Extrusion", revolve: "Revolution", loft: "Loft", sweep: "Sweep", pipe: "Pipe", coil: "Coil", mirror: "Mirror" })[node.t] || "Body";
+  return node.t !== "group" && (node.mods || []).some((modifier) => modifier.t === "bool") ? `Combined (${base})` : base;
+}
+
 export function timeline(doc) {
   const items = [];
   for (const s of doc.sketches) items.push({ seq: s.seq, kind: "sketch", label: s.name, sketch: s.id });

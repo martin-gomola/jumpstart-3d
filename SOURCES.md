@@ -34,3 +34,21 @@ For a community feature, inspect the relevant source and license, then adapt
 only the behavior that fits this product. Keep preview/apply, revision,
 idempotency, undo, and loopback constraints intact. Build and run the relevant
 checks before accepting the change.
+
+## Native pair inspection
+
+- Repository: <https://github.com/earthtojake/text-to-cad>
+- Reviewed snapshot: `2f793659fb7bab537e2f00836e06448fc4087cb2`.
+- Source: `packages/cadgen/src/cadgen/geometry.py` (`closest_points`, `overlap_volume`).
+- License: MIT, Copyright (c) 2026 Thompson Labs LLC. Full notice:
+  `third_party/text-to-cad/LICENSE`; also preserved in `src/pairGeometry.js` and the built worker.
+- Adaptation: native solid validation, independent distance/intersection queries,
+  explicit failure states and private query operands. Runs in our isolated OCCT
+  Web Worker, without the Python runtime. Initial support is one native/STEP solid
+  per operand; it does not reconstruct analytic geometry from meshes.
+- SOMA was reviewed for workflow inspiration only; its GPL application/library
+  code was not copied. Process and fit instructions are authored for our MCP.
+- SOMA's `python/soma/registry.py` and export selection in `cli.py` also informed
+  the design/reference/hardware workflow. Native role metadata, typed `setRole`
+  plans and printable/assembly filtering in `src/bodyRoles.js` were implemented
+  independently. No SOMA code or runtime dependency is included.

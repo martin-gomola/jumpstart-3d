@@ -17,7 +17,8 @@ test('native Lathe cavity has correct straight cylindrical wall and base',()=>{
 test('compiled Lathe recipe preserves input, stable identity, native metadata and scale history',()=>{
  const source=document(), compiled=compileLathePlan({document:source,plan:cup});assert.equal(source.bodies.length,0);assert.equal(compiled.document.name,cup.name);
  const body=compiled.document.bodies[0];assert.equal(body.turned.hollow,true);assert.equal(body.node.t,'mesh');assert.equal(body.node.mods[0].t,'scale');assert.deepEqual(body.node.mods[0].k,[1.1,1.1,1.1]);assert.deepEqual(body.mcpLathe.plan.hollow,cup.hollow);
- const revised=compileLathePlan({document:compiled.document,bodyId:body.id,plan:{...cup,scale:1.2}});assert.equal(revised.document.bodies.length,1);assert.equal(revised.document.bodies[0].id,body.id);assert.deepEqual(revised.createdBodyIds,[]);
+ body.role='reference';
+ const revised=compileLathePlan({document:compiled.document,bodyId:body.id,plan:{...cup,scale:1.2}});assert.equal(revised.document.bodies.length,1);assert.equal(revised.document.bodies[0].id,body.id);assert.deepEqual(revised.createdBodyIds,[]);assert.equal(revised.document.bodies[0].role,'reference');
  const changed=structuredClone(compiled.document);changed.bodies[0].m[12]=1;assert.throws(()=>compileLathePlan({document:changed,bodyId:body.id,plan:cup}),/changed outside/);
  changed.bodies[0].locked=true;assert.throws(()=>compileLathePlan({document:changed,bodyId:body.id,plan:cup}),/unlocked/);
 });

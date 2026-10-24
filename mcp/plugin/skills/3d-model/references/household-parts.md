@@ -1,4 +1,51 @@
-# Modeling workflows
+# Household parts and editable representations
+
+Use this reference for frames, trays, brackets, hooks, knobs, turned parts, and
+native or template parameter revisions. Example sizes are not fit measurements.
+
+## Contents
+
+- Choose an editable representation
+- Rectangular frames, native parameters and turned parts
+- Common household part recipes
+
+## Choose an editable representation
+
+- For rectangular spacers and frames, use `jumpstart_preview_frame`. Obtain outer
+  width/depth and height. Explain any omitted wall value as an assumption. Inspect
+  the measured opening, wall samples, and open centre. Use the rectangular-frame example below.
+- For general CAD, use `jumpstart_preview_model` with supported primitives,
+  dimensioned circle, polygon, rounded-rectangle, or line/arc/spline contour
+  sketches, extrude/revolve/loft/sweep/pipe/coil features, transforms, body and
+  feature patterns, booleans, fasteners, axial knurled knobs, and round or
+  shaped hole patterns.
+  The plan also supports plane-based body splits, linked or joined mirrors,
+  face modifiers, and native spur, straight-bevel, and rack gears. Read
+  `jumpstart_get_capabilities` for current limits and supported feature types.
+- For angled vehicle phone holders, use the typed `phoneCradle` operation instead
+  of manually rotated wedges. Supply phone contact width and length, angle,
+  plate/rib thickness, stop dimensions, lower-edge position, and `topEdgeToward`.
+  The operation creates a thin contact plate, two side ribs, and a lower stop.
+  It returns a cradle body that later plan operations can combine with an
+  editable tray or base.
+  `+Y` points toward the dashboard; the screen faces opposite the phone's top
+  edge. Use the preview's axis triad and verify the driver's view before apply.
+- For gear models, supply module, tooth count, pressure angle, face width, bore,
+  cone angle, and placement as needed. Straight bevel gears are a conical loft
+  approximation; do not claim tooth-contact accuracy or a matched gear pair.
+- For repeated existing features, use `featurePattern` only for holes, planar
+  embosses, and sketch-backed extrude/revolve/sweep booleans. Use `pathPattern`
+  for repeated editable bodies along a typed line/arc path. Other feature types
+  are rejected; do not substitute arbitrary scripts.
+- For a native rectangle with parameter-bound extrusion, use
+  `jumpstart_preview_native_model` on a blank document; revise using
+  `jumpstart_preview_native_parameters`. Native parameters and MCP template
+  parameters are separate systems. Use `jumpstart_preview_parameters` for the
+  latter. Do not overwrite an occupied document to satisfy a creation restriction.
+- For turned parts, use `jumpstart_preview_lathe`. Its persisted recipe is editable
+  mesh generation, not a sketch-based CAD feature tree. Inspect sampled thickness
+  and resolution; requested hollow-bottom thickness can be quantized.
+
 
 ## Rectangular spacer
 
@@ -30,14 +77,6 @@ Inspect the complete image before applying its preview ID. The preset stores
 revisions. Change the wall if the user supplies a different value. The frame's
 axis-aligned wall samples do not establish minimum thickness everywhere or fit.
 
-## Revise an imported mesh
-
-Read the body ID and measured bounds. Clarify whether a request such as "make it
-larger" means a target outside dimension, a uniform percentage, or independent
-axis changes. Preview the resize and inspect all three resulting dimensions.
-Resizing an imported lid scales its locking details too; it does not independently
-adjust a fit clearance. Report that it remains a mesh with unverified physical fit.
-
 ## Choose native parameters or a template
 
 For a new rectangular bracket on a blank document, discover the schema for
@@ -58,11 +97,45 @@ reconcile native edits outside that recipe before regeneration. Inspect actual
 hollowing and `latheSampling.axialStepMm`; coarse samples can change the effective
 bottom thickness. Do not present a recipe mesh as a complete CAD feature tree.
 
+
 ## Common household parts
 
 Treat these as dimensioned examples only. Replace dimensions with measurements
 from the user's part or requirements. Preview and inspect the result; a valid
 mesh does not establish installation fit or printability.
+
+### Angled vehicle phone cradle
+
+Use the typed `phoneCradle` operation for a thin rest with two side ribs and a
+lower stop. Its world frame is X across, +Y toward the dashboard, and Z up. A
+`topEdgeToward: "+Y"` means the phone's upper edge leans toward the dashboard;
+the screen faces -Y, toward the driver. The operation makes one editable body
+with a native plate primitive and native boolean joins for the ribs and stop.
+
+```json
+{
+  "name": "Angled phone cradle",
+  "operations": [{
+    "id": "cradle",
+    "type": "phoneCradle",
+    "width": 72,
+    "phoneLength": 145,
+    "angle": 50,
+    "plateThickness": 3,
+    "ribThickness": 8,
+    "stopHeight": 12,
+    "stopDepth": 8,
+    "topEdgeToward": "+Y",
+    "position": [0, -30, 5]
+  }]
+}
+```
+
+Inspect the axis-labeled top, driver-side, and isometric images. Run
+`jumpstart_inspect_geometry` with mesh validation and require the returned
+`phoneCradle.supportConnectivity.passed` check before apply. This confirms the
+generated supports form one connected mesh; it does not establish vehicle fit,
+phone-case clearance, structural strength, or printability.
 
 ### Divided tray
 

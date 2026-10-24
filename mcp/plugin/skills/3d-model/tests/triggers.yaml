@@ -1,4 +1,4 @@
-version: 1
+version: 3
 status: not-run
 cases:
   - prompt: "Use $3d-model to make an 86 mm square spacer, 10 mm high."
@@ -17,6 +17,9 @@ cases:
     expected: invoke
     mode: implicit
   - prompt: "Create an M2 straight bevel gear with a 24 tooth profile and 45 degree cone."
+    expected: invoke
+    mode: implicit
+  - prompt: "Make a phone cradle in JumpStart with its top leaning toward the dashboard and screen facing the driver."
     expected: invoke
     mode: implicit
   - prompt: "Pattern the selected mounting slots across this plate."
@@ -46,3 +49,12 @@ cases:
   - prompt: "Make this bigger."
     expected: clarify-target
     mode: ambiguous
+  - prompt: "Move this mounting hook and preserve the other imported body in JumpStart."
+    expected: invoke
+    mode: implicit
+  - prompt: "Summarize AgentCAD's architecture without designing a part."
+    expected: do-not-invoke
+    mode: implicit
+  - prompt: "Check clearance and overlap between the tray and lid in JumpStart before applying."
+    expected: invoke
+    mode: implicit

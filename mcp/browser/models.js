@@ -66,6 +66,10 @@ export function compileMcpModel(document, rawPlan, replaceBodyIds = [], options 
         }
       }
       for (const body of compiled.document.bodies) if (remap.has(body.id)) body.id = remap.get(body.id);
+      for (const body of compiled.document.bodies.filter(body => previous.bodyIds.includes(body.id))) {
+        const original = document.bodies.find(entry => entry.id === body.id);
+        if (original?.role !== undefined) body.role = original.role;
+      }
       for (const pattern of compiled.pendingHolePatterns || []) pattern.bodyId = remap.get(pattern.bodyId) || pattern.bodyId;
       for (const key of ["createdBodyIds", "affectedBodyIds"]) compiled[key] = compiled[key].map((id) => remap.get(id) || id);
       for (const [feature, ids] of Object.entries(compiled.featureBodyIds)) compiled.featureBodyIds[feature] = Array.isArray(ids) ? ids.map((id) => remap.get(id) || id) : remap.get(ids) || ids;
@@ -103,7 +107,23 @@ export function compileMcpModel(document, rawPlan, replaceBodyIds = [], options 
       }),
     };
   } else {
-    compiled.document.mcpModels = (compiled.document.mcpModels || []).filter((model) => !model.bodyIds.some((id) => replaceBodyIds.includes(id) || compiled.affectedBodyIds.includes(id) || !compiled.document.bodies.some((body) => body.id === id)));
+    const withoutRole = body => {
+      if (!body) return null;
+      const { role, ...rest } = body;
+      return JSON.stringify(rest);
+    };
+    const onlyRoleChanges = new Set(input.bodies.filter(body => compiled.affectedBodyIds.includes(body.id) && withoutRole(body) === withoutRole(compiled.document.bodies.find(entry => entry.id === body.id))).map(body => body.id));
+    compiled.document.mcpModels = (compiled.document.mcpModels || []).filter((model) => {
+      if (model.bodyIds.some(id => onlyRoleChanges.has(id)) && (
+        state(input, model.bodyIds, "bodies") !== model.bodyState ||
+        state(input, model.sketchIds, "sketches") !== model.sketchState ||
+        state(input, model.planeIds, "planes") !== model.planeState
+      )) return false;
+      return !model.bodyIds.some((id) => replaceBodyIds.includes(id) || compiled.affectedBodyIds.includes(id) && !onlyRoleChanges.has(id) || !compiled.document.bodies.some((body) => body.id === id));
+    });
+    for (const model of compiled.document.mcpModels) {
+      if (model.bodyIds.some(id => onlyRoleChanges.has(id))) refreshMcpModelBodyState(compiled.document, model.id);
+    }
   }
   return { ...compiled, plan };
 }

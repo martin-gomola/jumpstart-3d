@@ -72,6 +72,7 @@ export function compileLathePlan({document,plan:input,bodyId,idFactory = prefix 
   doc.seq ??=0;
   const mods=plan.scale!==1?[{id:idFactory('f'),seq:++doc.seq,t:'scale',k:[plan.scale,plan.scale,plan.scale],o:[0,0,0]}]:[];
   const body={id:previous?.id ?? idFactory('b'),name:plan.name,seq:previous?.seq ?? ++doc.seq,color:previous?.color ?? '#9fb1c4',hole:false,hidden:false,m:IDENTITY.slice(),node:{t:'mesh',asset,keepPos:true,mods},turned:{hollow:mesh.hollow}};
+  if(previous?.role !== undefined) body.role=previous.role;
   body.mcpLathe={version:1,plan,sampling,fingerprint:fingerprint(body)};
   if(previous) doc.bodies[doc.bodies.indexOf(previous)]=body; else doc.bodies.push(body);
   if(previous && previous.node.asset !== asset) {

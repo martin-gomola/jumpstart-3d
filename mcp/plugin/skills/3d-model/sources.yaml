@@ -53,3 +53,41 @@ sources:
     path: mcp/benchmarks/tutorial-cases.mjs
     trust: "Typed-plan acceptance cases for representative tutorial models; dimensions remain tutorial examples, not general fit specifications."
     mutable: true
+  - id: preview-requirements
+    path: mcp/browser/preview-requirements.js
+    trust: "Independent generated-geometry acceptance checks and source-preservation comparison; not physical fit certification."
+    mutable: true
+  - id: focused-discovery
+    path: mcp/server/discovery.mjs
+    trust: "Capability filtering implementation; original schemas remain unchanged."
+    mutable: true
+  - id: agentcad-workflow
+    repository: https://github.com/jdilla1277/agentcad
+    revision: 52af472ddade4b26d8b0d47f304ac5f9f6183d53
+    locator: "src/agentcad/guide.py; commands/check_spec.py; validation_guidance.py"
+    trust: "Reviewed implementation informing inspect/specify/validate discipline; guidance adapted independently to JumpStart typed plans. No external runtime dependency."
+    mutable: false
+  - id: native-pair-inspection
+    path: src/pairGeometry.js
+    trust: "Shipped OCCT native single-solid distance, witness points and intersection-volume queries; explicit unknown results on failure."
+    mutable: true
+  - id: pair-contract
+    path: mcp/shared/pairs.js
+    trust: "Typed pair thresholds and numerical acceptance semantics; no manufacturing-fit guarantee."
+    mutable: true
+  - id: text-to-cad-fit
+    repository: https://github.com/earthtojake/text-to-cad
+    revision: 2f793659fb7bab537e2f00836e06448fc4087cb2
+    locator: "packages/cadgen/src/cadgen/geometry.py; skills/cad/references/positioning.md; skills/dfam-check/SKILL.md"
+    trust: "Reviewed MIT query algorithms and workflow ideas adapted to our native MCP, without an external runtime."
+    mutable: false
+  - id: soma-workflow-ideas
+    repository: https://github.com/Kai-Jungsthoefel/SOMA
+    revision: f66cbd97d6ff670c77a2b8ed236daebde363cbc2
+    locator: "app/resources/skills/design-workflow.md; tolerances.md"
+    trust: "Interface-first design and named-clearance workflow inspiration only; GPL application/library code was not copied. Numeric rules are not treated as universal limits."
+    mutable: false
+  - id: body-roles
+    path: src/bodyRoles.js
+    trust: "Native role defaults, conservative combination and printable/assembly selection. Independently implemented from SOMA workflow ideas; no GPL code copied."
+    mutable: true

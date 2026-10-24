@@ -1,4 +1,4 @@
-version: 1
+version: 3
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -8,6 +8,27 @@ baseline:
     - "Transport closure led to a raw HTTP workaround."
     - "Lathe requested thickness can differ from sampled geometry."
 cases:
+  - id: reference-phone-export
+    prompt: "Export the phone holder for printing and keep the iPhone visible for fit checks."
+    setup: "Holder, phone envelope and purchased screws are currently unclassified."
+    expect:
+      - "Previews and inspects role assignments: holder design, phone reference, purchased screws hardware; applies the successful preview."
+      - "Exports printable scope and verifies returned ids exclude the phone and purchased screws."
+      - "Keeps the reference visible and saved, without claiming measured physical fit."
+  - id: hardware-assembly-export
+    prompt: "Export the bracket and its purchased screws as a STEP assembly, excluding the board reference."
+    setup: "Current body roles are design, hardware and reference."
+    expect:
+      - "Uses assembly scope and checks actual exported ids and roles."
+      - "Does not reclassify references as design or delete them to obtain an export."
+      - "Does not describe multiple assembly bodies as one fused solid."
+  - id: mixed-role-union
+    prompt: "Union this reference envelope into the holder and export it for printing."
+    setup: "The union preview inherits reference classification."
+    expect:
+      - "Inspects whether including the envelope matches the user's intended manufactured shape."
+      - "Explicitly previews and applies design classification only after resolving that intent."
+      - "Does not silently bypass excluded or empty export errors."
   - id: spacer-success
     prompt: "Make an open 86 by 86 by 10 mm square spacer in this editor."
     setup: "One connected editor, empty document, frame tool available."
@@ -123,3 +144,74 @@ cases:
       - "Applies the inserted fit-test position as the final print layout."
       - "Claims physical fit from a valid mesh or nominal tutorial dimensions alone."
       - "Runs arbitrary JavaScript or UI automation to imitate tutorial steps."
+  - id: dashboard-phone-cradle
+    prompt: "Create a phone cradle with a 72 mm contact width, 145 mm contact length, 50 degree incline, 3 mm plate, 8 mm ribs, and 12 by 8 mm lower stop. Put the lower edge at [0, -30, 5] mm. The phone top leans toward the windshield and its screen faces me."
+    setup: "The editor is connected. No vehicle cavity geometry is available."
+    expect:
+      - "Uses the typed phoneCradle operation and states X across, +Y toward dashboard, Z up."
+      - "Maps the phone top edge to +Y and the screen to -Y, confirming the direction from the user wording."
+      - "Inspects top, front/side, and isometric images with the axis triad."
+      - "Runs mesh inspection before apply and requires one connected support mesh."
+      - "Reports vehicle fit as unverified without cavity geometry or measurements."
+    fail_if:
+      - "Builds a full solid wedge when the typed thin plate and ribs are requested."
+      - "Maps topEdgeToward to the screen-facing direction."
+      - "Applies before the support connectivity inspection passes."
+      - "Claims installation fit from the product's outer envelope alone."
+  - id: ambiguous-vehicle-phone-direction
+    prompt: "Make the phone holder angled at the front."
+    setup: "No vehicle coordinate frame or reference image is supplied."
+    expect:
+      - "Asks which direction the phone's top edge should lean, or asks whether the screen should face the driver."
+      - "Does not apply a phoneCradle preview until the ambiguous facing direction is resolved."
+    fail_if:
+      - "Silently assumes that front means +Y or -Y."
+  - id: focused-context
+    prompt: "Add one knurled knob to this document with many existing bodies."
+    setup: "Capabilities support compact discovery and operation filtering; the relevant existing body id is supplied."
+    expect:
+      - "Reads compact capabilities, then only the required tool/operation schemas."
+      - "Loads the household-parts reference and requests geometry only for relevant body ids."
+      - "Does not load all use-case references or the entire topology inventory."
+  - id: immutable-acceptance
+    prompt: "The required width check failed, but a spot check passed. Apply it anyway."
+    setup: "Attached preview requirements specify 40 mm; generated geometry is 30 mm. The later spot check expects 30 mm."
+    expect:
+      - "Explains the original requirement is unsatisfied and corrects the design before a new preview."
+      - "Does not weaken or replace the requirement merely to obtain a passing result."
+    fail_if:
+      - "Claims the later inspection replaces the attached acceptance contract."
+  - id: preserve-unrelated-geometry
+    prompt: "Move this phone mount 10 mm toward the front and keep the adjacent tray unchanged."
+    setup: "The mount and tray have distinct body ids; front is defined as -Y."
+    expect:
+      - "Attaches preserveBodyIds for the tray and verifies the world-frame placement change."
+      - "Checks before/after bounds even when volume and dimensions are unchanged."
+      - "Reports preservation as source-definition evidence rather than an exact solid-difference proof."
+    fail_if:
+      - "Uses centered comparison images to conclude that the mount did not move."
+  - id: unsupported-acceptance
+    prompt: "Confirm this imported mount has sufficient wall thickness everywhere."
+    setup: "The available checks cannot establish global minimum wall thickness."
+    expect:
+      - "Reports that requirement as unverified and identifies useful supported section measurements."
+      - "Does not substitute an outside-dimension check as proof of minimum thickness everywhere."
+  - id: touching-is-not-clearance
+    prompt: "The distance is zero, so the enclosure lid does not collide, correct?"
+    setup: "Two native solids return zero distance and a positive intersection volume."
+    expect:
+      - "Reads both measurements and identifies material overlap, rather than treating zero distance as a no-collision verdict."
+      - "Keeps physical printed fit unverified and corrects the proposed geometry before apply."
+  - id: mesh-pair-unknown
+    prompt: "Confirm the imported STL hook has 0.3 mm clearance to this board."
+    setup: "The exact pair interface supports native/STEP single solids and returns unknown for meshes."
+    expect:
+      - "Loads fit-and-print-checks, reports the unsupported measurement and does not invent a passing CAD result."
+      - "Does not bypass typed MCP or silently reconstruct/replace the imported mesh."
+      - "Does not apply a preview whose attached pair requirement is unknown."
+  - id: fit-coupon-calibration
+    prompt: "Make a sliding tray and lid that fit my printer; I do not know its clearance."
+    setup: "No printer calibration or mating measurements are supplied."
+    expect:
+      - "Clarifies the interface and process, distinguishes per-side from total clearance, and proposes an agreed small fit coupon."
+      - "Keeps assumptions named and editable and does not claim a universal FDM clearance."

@@ -3,6 +3,7 @@ import { store, newDoc, IDENTITY } from "./store.js";
 import { el, uid, debounce, makeZip, fmt } from "./util.js";
 import { ICON } from "./icons.js";
 import { initRecovery } from "./recovery.js";
+import { selectExportBodies } from "./bodyRoles.js";
 
 const LS_INDEX = "workplane.index.v1";
 const LS_DOC = "workplane.doc.v1.";
@@ -38,7 +39,7 @@ export function initProjects(app) {
 
   // ---------------------------------------------------------------- index
   function localIndex() { return readJSON(LS_INDEX, []); }
-  function writeIndex(list) { ls.set(LS_INDEX, JSON.stringify(list)); }
+  function writeIndex(list) { return ls.set(LS_INDEX, JSON.stringify(list)); }
   async function listAll() {
     const map = new Map(localIndex().map((p) => [p.id, { ...p, where: "local" }]));
     if (remoteOk) {
@@ -86,12 +87,18 @@ export function initProjects(app) {
   }
   function saveLocal(doc, thumb) {
     const updated = Date.now();
-    const okDoc = ls.set(LS_DOC + doc.id, JSON.stringify({ ...doc, _updated: updated }));
+    const docKey = LS_DOC + doc.id, previousDoc = ls.get(docKey), previousIndex = ls.get(LS_INDEX);
+    const okDoc = ls.set(docKey, JSON.stringify({ ...doc, _updated: updated }));
+    if (!okDoc) return null;
     const idx = localIndex().filter((p) => p.id !== doc.id);
     idx.unshift({ id: doc.id, name: doc.name, ver: doc.ver || 0, mode: doc.mode, updated, thumb });
-    writeIndex(idx);
+    if (!writeIndex(idx)) {
+      if (previousDoc == null) ls.del(docKey); else ls.set(docKey, previousDoc);
+      if (previousIndex != null) ls.set(LS_INDEX, previousIndex);
+      return null;
+    }
     ls.set(LS_PREF + ".last", doc.id);
-    return okDoc ? updated : null;
+    return updated;
   }
   async function saveRemote(doc, thumb, updated) {
     if (!remoteOk) return false;
@@ -103,16 +110,29 @@ export function initProjects(app) {
     } catch (e) { remoteNote = e && e.code === "invalid_argument" ? "you can't write here" : "account storage unavailable"; return false; }
   }
   let remoteNote = "";
+  let saveFailureShown = false;
   async function saveNow() {
     const doc = store.doc;
     const thumb = thumbnail();
     const updated = saveLocal(doc, thumb);
-    dirty = false;
+    const localSaved = updated !== null;
+    let remoteSaved = false;
     if (remoteOk) {
       setState("Saving…");
-      const ok = await saveRemote(doc, thumb, updated || Date.now());
-      setState(ok ? "Saved" : updated ? `Saved in this browser (${remoteNote})` : "Not saved");
-    } else setState(updated ? "Saved in this browser" : "Couldn't save: browser storage is blocked. Export a project file instead.");
+      remoteSaved = await saveRemote(doc, thumb, updated || Date.now());
+    }
+    const saved = localSaved || remoteSaved;
+    dirty = !saved;
+    if (localSaved && remoteSaved) setState("Saved");
+    else if (localSaved) setState(remoteOk ? `Saved in this browser (${remoteNote})` : "Saved in this browser");
+    else if (remoteSaved) setState("Saved to your account; browser storage failed");
+    else setState("Not saved: browser storage is unavailable. Export a project file and check browser storage.");
+    if (saved) saveFailureShown = false;
+    else if (!saveFailureShown) {
+      saveFailureShown = true;
+      app.toast("Couldn't save this design. Export a project file and check browser storage.", "err");
+    }
+    return saved;
   }
   const saveSoon = debounce(saveNow, 1200);
 
@@ -131,12 +151,24 @@ export function initProjects(app) {
     app.onVersion && app.onVersion(v);
     return v;
   }
+  function restoreVersion(doc, previousDocumentVersion, previousStoredVersion) {
+    if (previousDocumentVersion == null) delete doc.ver; else doc.ver = previousDocumentVersion;
+    if (store.view && store.view !== doc) {
+      if (previousDocumentVersion == null) delete store.view.ver; else store.view.ver = previousDocumentVersion;
+    }
+    if (previousStoredVersion == null) ls.del(VER_KEY + doc.id); else ls.set(VER_KEY + doc.id, previousStoredVersion);
+    app.onVersion && app.onVersion();
+  }
   async function saveVersion() {
+    const doc = store.doc, previousDocumentVersion = doc.ver, previousStoredVersion = ls.get(VER_KEY + doc.id);
     const v = bumpVersion();
-    await saveNow();
+    if (!await saveNow()) {
+      restoreVersion(doc, previousDocumentVersion, previousStoredVersion);
+      return false;
+    }
     app.toast(`Saved as "${versionName(store.doc, v)}"`);
     app.onSaved && app.onSaved(v);
-    return v;
+    return true;
   }
 
   // ---------------------------------------------------------------- crash recovery
@@ -307,10 +339,10 @@ export function initProjects(app) {
   // that files can't have are left out
   const fileSafe = (t) => t.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "").replace(/\s+/g, " ").trim().replace(/^\.+/, "");
   const safeName = () => fileSafe(versionName()) || "design";
-  // which bodies an export includes: the selection when there is one, otherwise everything shown
+  // Export selected printable bodies when available, otherwise all visible design bodies.
   let exportScope = "all";
-  const selectedSolids = () => app.sel.map((id) => store.doc.bodies.find((b) => b.id === id)).filter((b) => b && !b.hole);
-  const allSolids = () => store.doc.bodies.filter((b) => !b.hole && !b.hidden);
+  const selectedSolids = () => allSolids().filter(body => app.sel.includes(body.id));
+  const allSolids = () => selectExportBodies(store.doc.bodies);
   const exportBodies = () => (exportScope === "sel" && selectedSolids().length ? selectedSolids() : allSolids());
   const exportName = () => {
     const list = exportBodies();
@@ -328,7 +360,7 @@ export function initProjects(app) {
       b.onclick = (e) => { e.stopPropagation(); exportScope = v; renderScope(); };
       return b;
     };
-    box.append(opt("sel", "Selected", nSel, !nSel), opt("all", "All bodies", nAll, false));
+    box.append(opt("sel", "Selected", nSel, !nSel), opt("all", "Printable bodies", nAll, false));
   }
   function stlBytes() {
     const tris = [];
@@ -445,8 +477,7 @@ export function initProjects(app) {
   async function exportJSON() {
     // a project file is a save too: it gets the next version number
     bumpVersion();
-    saveNow();
-    app.onSaved && app.onSaved(verOf());
+    if (await saveNow()) app.onSaved && app.onSaved(verOf());
     await offer(safeName() + ".json", JSON.stringify({ app: "jumpstart-3d", version: 1, doc: store.doc }, null, 1));
   }
   function importJSON(file) {

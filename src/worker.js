@@ -1,7 +1,7 @@
 // Web Worker hosting the OpenCascade kernel.
 import opencascade from "replicad-opencascadejs";
 import { gunzip } from "./inflate.js";
-import { initKernel, buildBodies, exportStep, clearCache, setAsset } from "./kernel.js";
+import { initKernel, buildBodies, exportStep, clearCache, setAsset, inspectSolidPairs } from "./kernel.js";
 
 let ready = null;
 
@@ -67,6 +67,9 @@ self.onmessage = async (ev) => {
       const blob = exportStep(msg.bodies);
       const buf = await blob.arrayBuffer();
       self.postMessage({ type: "step", req: msg.req, data: buf }, [buf]);
+    } else if (msg.type === "inspectPairs") {
+      await ready;
+      self.postMessage({ type: "inspectedPairs", req: msg.req, results: inspectSolidPairs(msg.pairs) });
     } else if (msg.type === "asset") {
       setAsset(msg.id, msg.kind, new Uint8Array(msg.bytes));
     } else if (msg.type === "clear") {

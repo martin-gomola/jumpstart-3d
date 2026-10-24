@@ -29,7 +29,7 @@ test('channel measurements derive from triangle intersections, with wrong expect
 test('unsupported sections fail explicitly rather than trusting submitted dimensions',()=>{
  assert.throws(()=>measureParallelChannels(groovedMesh(),{axis:'Z'}),/supports/);
  const result=inspectGeometry(groovedMesh(),{checks:[{id:'outside',kind:'channels',axis:'Y',crossAt:30,expected:{count:3}}]});
- assert.equal(result.checks[0].pass,false);assert.equal(result.physicalFit,'unverified');
+ assert.equal(result.checks[0].pass,null);assert.equal(result.geometricRequirements,'unknown');assert.equal(result.physicalFit,'unverified');
  const mesh=groovedMesh();
  assert.throws(()=>inspectGeometry({...mesh,triangles:Array.from({length:600000},()=>0)},{checks:[{kind:'channels'}]}),/budget/);
 });

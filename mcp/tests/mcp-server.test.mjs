@@ -66,11 +66,20 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     const contour = profileVariants.find((profile) => profile.properties.type.const === "contour");
     assert.ok(contour);
     assert.deepEqual(contour.properties.segments.items.oneOf.map((segment) => segment.properties.type.const), ["line", "arc", "spline"]);
-    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.length, 13);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.length, 16);
+    const roleSchema = listing.result.tools.find(tool => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find(operation => operation.properties.type.const === "setRole");
+    assert.deepEqual(roleSchema.properties.role.enum, ["design", "reference", "hardware"]);
+    const exportSchema = listing.result.tools.find(tool => tool.name === "jumpstart_export_model").inputSchema;
+    assert.deepEqual(exportSchema.properties.scope.enum, ["printable", "assembly"]);
+    assert.equal(exportSchema.properties.scope.default, "printable");
+    assert.equal(exportSchema.properties.bodyIds.maxItems, 128);
     const importOperation = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find((operation) => operation.properties.type.const === "import");
     assert.equal(importOperation.properties.assetId.pattern, "^[a-f0-9]{64}$");
     assert.equal(importOperation.properties.units.description.includes("Required for STL"), true);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "gear"), true);
+    const knurlSchema = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find((operation) => operation.properties.type.const === "knurl");
+    assert.deepEqual([knurlSchema.properties.diameter.oneOf[0].minimum, knurlSchema.properties.diameter.oneOf[0].maximum], [6, 150]);
+    assert.deepEqual([knurlSchema.properties.grooves.oneOf[0].minimum, knurlSchema.properties.grooves.oneOf[0].maximum], [8, 120]);
     const gearSchema = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find((operation) => operation.properties.type.const === "gear");
     assert.deepEqual(gearSchema.properties.gearType.enum, ["spur", "rack", "bevel"]);
     assert.deepEqual([gearSchema.properties.coneAngle.oneOf[0].minimum, gearSchema.properties.coneAngle.oneOf[0].maximum], [5, 80]);
@@ -79,6 +88,9 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "splitBody"), true);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "pathPattern"), true);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.some((operation) => operation.properties.type.const === "featurePattern"), true);
+    const phoneCradleSchema = listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.operations.items.oneOf.find((operation) => operation.properties.type.const === "phoneCradle");
+    assert.deepEqual(phoneCradleSchema.properties.topEdgeToward.enum, ["+Y", "-Y"]);
+    assert.match(phoneCradleSchema.properties.topEdgeToward.description, /\+Y means.*toward the dashboard/);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_resize_body").inputSchema.properties.size.additionalProperties, false);
     const invalid = await send({ jsonrpc: "2.0", id: 20, method: "tools/call", params: { name: "jumpstart_preview_parameters", arguments: { modelId: "x", values: { diameter: -1 }, arbitraryCode: "bad" } } });
     assert.equal(invalid.result.isError, true);
@@ -87,6 +99,7 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.equal(capabilityData.schemaVersion, 1);
     assert.equal(capabilityData.limits.importFileBytes, 24 * 1024 * 1024);
     assert.ok(capabilityData.operations.includes("operator-managed STL/3MF/STEP/STP imports by digest id"));
+    assert.ok(capabilityData.operations.some((entry) => entry.includes("native phone cradle")));
 
     const portReady = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Server did not report its port: ${stderr}`)), 5_000);

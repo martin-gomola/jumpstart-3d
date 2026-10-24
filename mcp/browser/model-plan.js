@@ -1,5 +1,7 @@
 import { clone } from "../../src/util.js";
+import { findRegions, resolveSketch } from "../../src/regions.js";
 import { createFastener } from "./fasteners.js";
+import { BODY_ROLES, bodyRole, combinedRole } from "../../src/bodyRoles.js";
 
 export const MCP_PLAN_LIMITS = {
   sketches: 12,
@@ -15,6 +17,7 @@ export const MCP_PLAN_LIMITS = {
   holePatternPositions: 200,
   coilTurns: 100,
   gearTeeth: 120,
+  knurlGrooves: 120,
   pathSegments: 64,
   coordinate: 10000,
 };
@@ -448,6 +451,24 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
     const type = text(operation.type, `operations[${i}].type`);
     const id = text(operation.id, `operations[${i}].id`);
     if (featureIds.has(id) || primitiveIds.has(id)) fail(`Duplicate model id: ${id}`);
+    if (type === "phoneCradle") {
+      strictObject(operation, `operations[${i}]`, ["id", "type", "name", "width", "phoneLength", "angle", "plateThickness", "ribThickness", "stopHeight", "stopDepth", "topEdgeToward", "position"]);
+      const width = number(operation.width, `operations[${i}].width`, { min: 30, max: 500 });
+      const phoneLength = number(operation.phoneLength, `operations[${i}].phoneLength`, { min: 30, max: 300 });
+      const angle = number(operation.angle, `operations[${i}].angle`, { min: 10, max: 70 });
+      const plateThickness = number(operation.plateThickness, `operations[${i}].plateThickness`, { min: 1, max: 10 });
+      const ribThickness = number(operation.ribThickness, `operations[${i}].ribThickness`, { min: 2, max: 30 });
+      if (ribThickness * 2 >= width) fail(`operations[${i}].ribThickness must leave room between the two ribs`);
+      const stopHeight = number(operation.stopHeight, `operations[${i}].stopHeight`, { min: 3, max: 40 });
+      const stopDepth = number(operation.stopDepth, `operations[${i}].stopDepth`, { min: 2, max: 20 });
+      const topEdgeToward = text(operation.topEdgeToward, `operations[${i}].topEdgeToward`).toUpperCase();
+      if (!["+Y", "-Y"].includes(topEdgeToward)) fail(`operations[${i}].topEdgeToward must be +Y (toward dashboard) or -Y (toward driver)`);
+      const position = triple(operation.position, `operations[${i}].position`);
+      const run = phoneLength * Math.cos(angle * Math.PI / 180);
+      const rise = phoneLength * Math.sin(angle * Math.PI / 180);
+      if (run < 10 || rise < 5) fail(`operations[${i}] cradle angle and phoneLength produce an unusable support footprint`);
+      return { type, id, name: text(operation.name, `operations[${i}].name`, "Angled phone cradle"), width, phoneLength, angle, plateThickness, ribThickness, stopHeight, stopDepth, topEdgeToward, position, run, rise };
+    }
     if (type === "group") {
       strictObject(operation, `operations[${i}]`, ["id", "type", "name", "members", "operation"]);
       if (!Array.isArray(operation.members) || operation.members.length < 1 || operation.members.length > MCP_PLAN_LIMITS.primitives) fail(`operations[${i}].members must contain 1 to ${MCP_PLAN_LIMITS.primitives} body ids`);
@@ -574,6 +595,28 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
       const rotation = triple(operation.rotation ?? [0, 0, 0], `operations[${i}].rotation`).map((v, axis) => number(v, `operations[${i}].rotation[${axis}]`, { min: -360, max: 360 }));
       return { type, id, gearType, module, teeth, pressureAngle, thickness, ...(bore === undefined ? {} : { bore }), ...(baseDepth === undefined ? {} : { baseDepth }), ...(coneAngle === undefined ? {} : { coneAngle }), position: triple(operation.position ?? [0, 0, 0], `operations[${i}].position`), rotation, name: text(operation.name, `operations[${i}].name`, gearType === "spur" ? `Spur gear ${teeth}T` : gearType === "bevel" ? `Straight bevel gear ${teeth}T` : `Rack ${teeth}T`) };
     }
+    if (type === "knurl") {
+      strictObject(operation, `operations[${i}]`, ["id", "type", "diameter", "length", "grooves", "depth", "bore", "boreSize", "position", "rotation", "name"]);
+      const diameter = number(operation.diameter ?? 20, `operations[${i}].diameter`, { min: 6, max: 150 });
+      const length = number(operation.length ?? 15, `operations[${i}].length`, { min: 1, max: 200 });
+      const grooves = number(operation.grooves ?? Math.min(MCP_PLAN_LIMITS.knurlGrooves, Math.max(8, Math.round(Math.PI * diameter))), `operations[${i}].grooves`, { min: 8, max: MCP_PLAN_LIMITS.knurlGrooves });
+      if (!Number.isInteger(grooves)) fail(`operations[${i}].grooves must be a whole number from 8 to ${MCP_PLAN_LIMITS.knurlGrooves}`);
+      const radius = diameter / 2;
+      const maxDepth = Math.floor(radius / 2 * 1000 + 1e-6) / 1000;
+      const minDepth = Math.ceil(radius * (1 - Math.cos(Math.PI / grooves)) * 1000 - 1e-6) / 1000;
+      const depth = number(operation.depth ?? Math.round(Math.PI * diameter / grooves / 2 * 1000) / 1000, `operations[${i}].depth`, { min: 0.1, max: maxDepth });
+      if (depth < minDepth - 1e-9) fail(`operations[${i}].depth must be at least ${minDepth} mm for ${grooves} grooves; shallower grooves vanish`);
+      const bore = text(operation.bore, `operations[${i}].bore`, "none").toLowerCase();
+      if (!["none", "round", "hex", "d"].includes(bore)) fail(`operations[${i}].bore must be none, round, hex, or d`);
+      if (bore === "none" && operation.boreSize !== undefined) fail(`operations[${i}].boreSize is only supported when a bore is selected`);
+      const rootRadius = radius - depth;
+      const maxBore = Math.floor((bore === "hex" ? Math.sqrt(3) : 2) * (rootRadius - 1) * 1000 + 1e-6) / 1000;
+      const defaultBore = bore === "hex" ? 8 : 5;
+      const boreSize = bore === "none" ? undefined : number(operation.boreSize ?? defaultBore, `operations[${i}].boreSize`, { min: 1, max: Math.max(0, maxBore) });
+      const position = triple(operation.position ?? [0, 0, 0], `operations[${i}].position`);
+      const rotation = triple(operation.rotation ?? [0, 0, 0], `operations[${i}].rotation`).map((v, axis) => number(v, `operations[${i}].rotation[${axis}]`, { min: -360, max: 360 }));
+      return { type, id, diameter, length, grooves, depth, bore, ...(boreSize === undefined ? {} : { boreSize }), position, rotation, name: text(operation.name, `operations[${i}].name`, `Knurled knob ${diameter} x ${length}`) };
+    }
     if (type === "holePattern") {
       strictObject(operation, `operations[${i}]`, ["id", "type", "target", "face", "layout", "hole", "shape", "width", "length", "depth"]);
       const face = text(operation.face, `operations[${i}].face`).toLowerCase();
@@ -633,11 +676,16 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
       }
       return { type, id, target: text(operation.target, `operations[${i}].target`), face, layout: normalizedLayout, shape, ...(normalizedHole ? { hole: normalizedHole } : {}) };
     }
+    if (type === "setRole") {
+      strictObject(operation, `operations[${i}]`, ["id", "type", "target", "role"]);
+      if (!BODY_ROLES.includes(operation.role)) fail(`operations[${i}].role must be design, reference or hardware`);
+      return { type, id, target: text(operation.target, `operations[${i}].target`), role: operation.role };
+    }
     if (type === "modifier") {
       strictObject(operation, `operations[${i}]`, ["id", "type", "target", "modifier"]);
       return { type, id, target: text(operation.target, `operations[${i}].target`), modifier: normalizeModifier(operation.modifier, `operations[${i}].modifier`) };
     }
-    fail(`operations[${i}].type must be import, group, mirror, pattern, pathPattern, featurePattern, transform, combine, modifier, fastener, gear, holePattern, or splitBody`);
+    fail(`operations[${i}].type must be import, group, mirror, pattern, pathPattern, featurePattern, transform, combine, modifier, fastener, gear, knurl, holePattern, phoneCradle, splitBody, or setRole`);
   });
   const allIds = new Set([...existingBodyIds, ...primitiveIds, ...featureIds]);
   for (const operation of operations) {
@@ -646,14 +694,14 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
       for (const member of operation.members) if (!allIds.has(member)) fail(`Group ${operation.id} references unknown or later body ${member}`);
     } else if (operation.type === "mirror" || operation.type === "pattern" || operation.type === "pathPattern") {
       if (!allIds.has(operation.source)) fail(`${operation.type === "mirror" ? "Mirror" : operation.type === "pathPattern" ? "Path pattern" : "Pattern"} ${operation.id} references unknown or later body ${operation.source}`);
-    } else if (operation.type === "transform" || operation.type === "modifier" || operation.type === "holePattern" || operation.type === "featurePattern" || operation.type === "splitBody") {
+    } else if (operation.type === "setRole" || operation.type === "transform" || operation.type === "modifier" || operation.type === "holePattern" || operation.type === "featurePattern" || operation.type === "splitBody") {
       if (!allIds.has(operation.target)) fail(`${operation.type} ${operation.id} references unknown or later body ${operation.target}`);
     } else if (operation.type === "combine") {
       if (!allIds.has(operation.target) || !allIds.has(operation.tool)) fail(`Combine ${operation.id} references an unknown or later body`);
     }
     allIds.add(operation.id);
   }
-  const inferredMode = features.length || sketches.length || operations.some((operation) => operation.type === "gear") ? "advanced" : defaultMode || "beginner";
+  const inferredMode = features.length || sketches.length || operations.some((operation) => operation.type === "gear" || operation.type === "knurl" || operation.type === "phoneCradle") ? "advanced" : defaultMode || "beginner";
   const mode = text(input.mode, "plan.mode", inferredMode).toLowerCase();
   if (!["beginner", "advanced"].includes(mode)) fail("plan.mode must be beginner or advanced");
   return { name: text(input.name, "plan.name", "AI model"), mode, sketches, features, primitives, operations, planes };
@@ -1224,7 +1272,42 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
   }
 
   for (const operation of plan.operations) {
-    if (operation.type === "import") {
+    if (operation.type === "phoneCradle") {
+      if (doc.bodies.length >= MCP_PLAN_LIMITS.bodies) fail(`Phone cradle ${operation.id} would exceed ${MCP_PLAN_LIMITS.bodies} document bodies`);
+      const [centerX, lowerEdgeY, baseZ] = operation.position;
+      const direction = operation.topEdgeToward === "+Y" ? 1 : -1;
+      const radians = operation.angle * Math.PI / 180;
+      const centerY = lowerEdgeY + direction * operation.run / 2;
+      const panelPosition = [centerX, centerY + direction * Math.sin(radians) * 0.4, baseZ + operation.rise / 2 - Math.cos(radians) * 0.4];
+      const panelRotation = [direction * operation.angle, 0, 0];
+      const panelTransform = matrixForTransform(panelPosition, panelRotation);
+      const panel = { t: "prim", kind: "box", p: { w: operation.width, d: operation.phoneLength, h: operation.plateThickness }, mods: [] };
+      const body = addBody(operation.name, panel, panelTransform);
+      const addSupport = (kind, parameters, position, rotation = [0, 0, 0]) => {
+        body.node.mods.push({
+          id: idFactory("f"), seq: ++doc.seq, t: "bool", src: "phoneCradle", op: "join",
+          tool: { t: "prim", kind, p: clone(parameters), mods: [] },
+          m: matrixMultiply(matrixInverse(body.m), matrixForTransform(position, rotation)),
+        });
+      };
+      for (const side of [-1, 1]) {
+        const ribX = centerX + side * (operation.width / 2 - operation.ribThickness / 2);
+        addSupport("wedge", { w: operation.ribThickness, d: operation.run, h: operation.rise }, [ribX, centerY, baseZ], direction < 0 ? [0, 0, 180] : [0, 0, 0]);
+      }
+      const stopOverlap = Math.min(1, operation.stopDepth / 4);
+      const stopY = lowerEdgeY - direction * (operation.stopDepth / 2 - stopOverlap);
+      addSupport("box", { w: operation.width, d: operation.stopDepth, h: operation.stopHeight }, [centerX, stopY, baseZ]);
+      body.mcpPhoneCradle = {
+        coordinateFrame: { description: "X across · Y front/back · Z up", orientation: "+Y = dashboard", screen: direction > 0 ? "Screen faces -Y (driver side)" : "Screen faces +Y (dashboard side)" },
+        topEdgeToward: operation.topEdgeToward,
+        screenFacesToward: direction > 0 ? "-Y" : "+Y",
+        width: operation.width, phoneLength: operation.phoneLength, angle: operation.angle,
+        plateThickness: operation.plateThickness, ribThickness: operation.ribThickness,
+        stopHeight: operation.stopHeight, stopDepth: operation.stopDepth,
+        run: operation.run, rise: operation.rise, position: operation.position.slice(), supportRibs: 2,
+      };
+      remember(operation.id, [body]);
+    } else if (operation.type === "import") {
       const asset = doc.assets[operation.assetId];
       const ext = String(asset.name || "").slice(String(asset.name || "").lastIndexOf(".") + 1).toLowerCase();
       const format = ext === "stp" ? "step" : ext;
@@ -1237,13 +1320,15 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
       const members = operation.members.flatMap((member) => bodyList(member));
       if (members.length < 2) fail(`Group ${operation.id} must contain at least two bodies`);
       if (new Set(members.map((body) => body.id)).size !== members.length) fail(`Group ${operation.id} contains the same body more than once`);
-      const first = members[0];
       const children = members.map((body, i) => ({
         node: clone(body.node), m: body.m.slice(), hole: operation.operation === "cut" ? i > 0 : !!body.hole,
         name: body.name, color: body.color,
+        ...(members.some(member => member.role !== undefined) ? { role: bodyRole(body) } : {}),
       }));
       const node = { t: "group", ...(operation.operation === "intersect" ? { op: "intersect" } : {}), children, mods: [] };
       const group = addBody(operation.name, node, IDENTITY.slice(), children.every((child) => child.hole));
+      const role = combinedRole(members, operation.operation);
+      if (role !== undefined) group.role = role;
       doc.bodies = doc.bodies.filter((body) => !members.some((member) => member.id === body.id));
       remember(operation.id, [group]);
     } else if (operation.type === "pattern") {
@@ -1332,6 +1417,7 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
         const mirrors = sources.map((source) => {
           const mirror = addBody(`${source.name || "Body"} (mirror)`.slice(0, 80), { t: "mirror", srcBody: source.id, plane: clone(operation.plane), mods: [] }, IDENTITY.slice(), !!source.hole);
           if (source.color !== undefined) mirror.color = source.color;
+          if (source.role !== undefined) mirror.role = source.role;
           return mirror;
         });
         remember(operation.id, mirrors);
@@ -1372,8 +1458,17 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
       otherNode.mods.push({ id: idFactory("f"), seq: ++doc.seq, t: "halfspace", plane: clone(localPlane), side: -1 });
       const other = addBody(`${source.name || "Body"} (split)`.slice(0, 80), otherNode, source.m, !!source.hole);
       if (source.color !== undefined) other.color = source.color;
+      if (source.role !== undefined) other.role = source.role;
       affectedBodyIds.add(source.id);
       remember(operation.id, [source, other]);
+    } else if (operation.type === "setRole") {
+      const targets = bodyList(operation.target);
+      for (const body of targets) {
+        if (body.locked) fail(`Unlock body ${body.id} before changing its role`);
+        body.role = operation.role;
+        affectedBodyIds.add(body.id);
+      }
+      remember(operation.id, targets);
     } else if (operation.type === "transform") {
       const targets = bodyList(operation.target);
       const transform = matrixForTransform(operation.position, operation.rotation);
@@ -1393,6 +1488,38 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
       if (doc.bodies.length >= MCP_PLAN_LIMITS.bodies) fail(`Model plan would exceed ${MCP_PLAN_LIMITS.bodies} document bodies`);
       const node = { t: "prim", kind: operation.gearType === "spur" ? "gear" : operation.gearType === "bevel" ? "bevelgear" : "rack", p: { module: operation.module, teeth: operation.teeth, pressureAngle: operation.pressureAngle, thickness: operation.thickness, ...(operation.bore === undefined ? {} : { bore: operation.bore }), ...(operation.baseDepth === undefined ? {} : { baseDepth: operation.baseDepth }), ...(operation.coneAngle === undefined ? {} : { coneAngle: operation.coneAngle }) }, mods: [] };
       remember(operation.id, [addBody(operation.name, node, matrixForTransform(operation.position, operation.rotation))]);
+    } else if (operation.type === "knurl") {
+      if (doc.bodies.length >= MCP_PLAN_LIMITS.bodies) fail(`Knurl ${operation.id} would exceed ${MCP_PLAN_LIMITS.bodies} document bodies`);
+      const radius = operation.diameter / 2, rootRadius = radius - operation.depth;
+      const sketch = { id: idFactory("s"), name: `${operation.name} profile`, seq: ++doc.seq, plane: planeFor("XY", [0, 0, 0]), pts: [], ents: [], hidden: true };
+      const point = (x, y) => { const id = idFactory("p"); sketch.pts.push({ id, x: Math.round(x * 1e6) / 1e6 || 0, y: Math.round(y * 1e6) / 1e6 || 0 }); return id; };
+      const line = (a, b) => sketch.ents.push({ id: idFactory("e"), t: "line", a, b });
+      const ring = [];
+      for (let i = 0; i < operation.grooves; i++) {
+        const tip = 2 * Math.PI * i / operation.grooves;
+        const root = tip + Math.PI / operation.grooves;
+        ring.push(point(radius * Math.cos(tip), radius * Math.sin(tip)), point(rootRadius * Math.cos(root), rootRadius * Math.sin(root)));
+      }
+      for (let i = 0; i < ring.length; i++) line(ring[i], ring[(i + 1) % ring.length]);
+      if (operation.bore === "round") sketch.ents.push({ id: idFactory("e"), t: "circle", c: point(0, 0), r: operation.boreSize / 2 });
+      else if (operation.bore === "hex") {
+        const cornerRadius = operation.boreSize / Math.sqrt(3);
+        const vertices = Array.from({ length: 6 }, (_, i) => point(cornerRadius * Math.cos(i * Math.PI / 3), cornerRadius * Math.sin(i * Math.PI / 3)));
+        for (let i = 0; i < vertices.length; i++) line(vertices[i], vertices[(i + 1) % vertices.length]);
+      } else if (operation.bore === "d") {
+        const boreRadius = operation.boreSize / 2, flatX = 0.4 * operation.boreSize;
+        const y = Math.sqrt(boreRadius ** 2 - flatX ** 2), center = point(0, 0), top = point(flatX, y), bottom = point(flatX, -y);
+        sketch.ents.push({ id: idFactory("e"), t: "arc", c: center, a: top, b: bottom });
+        line(bottom, top);
+      }
+      doc.sketches.push(sketch);
+      const outerEdge = sketch.ents[0]?.id;
+      const profile = findRegions(resolveSketch(sketch)).find((region) => region.ents.includes(outerEdge));
+      if (!profile) fail(`Knurl ${operation.id} could not resolve its outer groove profile`);
+      const profileRef = { key: profile.key, pt: profile.pt };
+      const body = addBody(operation.name, { t: "extrude", sketch: sketch.id, profiles: [profileRef], dist: operation.length, mode: "one", dist2: 0, mods: [] }, matrixForTransform(operation.position, operation.rotation));
+      body.mcpKnurl = { diameter: operation.diameter, length: operation.length, grooves: operation.grooves, pitch: Math.PI * operation.diameter / operation.grooves, depth: operation.depth, bore: operation.bore, ...(operation.boreSize === undefined ? {} : { boreSize: operation.boreSize }) };
+      remember(operation.id, [body]);
     } else if (operation.type === "holePattern") {
       const targets = bodyList(operation.target);
       if (targets.length !== 1) fail(`Hole pattern ${operation.id} must target exactly one body`);
@@ -1414,6 +1541,8 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
       const tools = bodyList(operation.tool);
       if (target.length !== 1 || tools.length !== 1 || target[0].id === tools[0].id) fail(`Combine ${operation.id} requires two distinct single bodies`);
       const [base, tool] = [target[0], tools[0]];
+      const role = combinedRole([base, tool], operation.operation);
+      if (role !== undefined) base.role = role;
       base.node.mods = base.node.mods || [];
       base.node.mods.push({ id: idFactory("f"), seq: ++doc.seq, t: "bool", src: "combine", ...(operation.operation === "join" ? {} : { op: operation.operation }), tool: clone(tool.node), m: matrixMultiply(matrixInverse(base.m), tool.m) });
       affectedBodyIds.add(base.id);

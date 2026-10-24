@@ -1,54 +1,91 @@
-version: 1
-scope: "Source paths resolve from repository root; URLs remain mutable."
+version: 2
+scope: "Source paths resolve from repository root; skillFile paths resolve from the skill root. Core and direct references contain the instructions. Remote sources are not runtime dependencies."
 rules:
+  - instruction: "Printable scope excludes references and hardware; assembly scope includes hardware and still excludes references."
+    skillFile: references/mounts-and-assemblies.md
+    sources: [body-roles, server, model-plan]
+    locator: "setRole plans and shared export selection"
   - instruction: "Use current tool schemas rather than guessing fields or relying on a copied catalog."
+    skillFile: SKILL.md
     sources: [tool-contracts, server]
-    locator: "extendMcpTools and typed tools definitions"
+    locator: "Tool discovery contracts"
   - instruction: "Model coordinates are millimetres."
+    skillFile: SKILL.md
     sources: [server]
-    locator: "MCP initialize instructions"
+    locator: "MCP coordinate convention"
   - instruction: "Ask which editor when the target is ambiguous."
+    skillFile: SKILL.md
     sources: [server]
-    locator: "host(args) rejects multiple editors without editorId"
+    locator: "Explicit target selection"
   - instruction: "An imported STL remains a mesh."
+    skillFile: SKILL.md
     sources: [modeling-contract]
-    locator: "Imported meshes and resize limitations"
+    locator: "Managed import representation"
   - instruction: "Apply only the successful `previewId` using `jumpstart_apply_model` against the same editor."
+    skillFile: SKILL.md
     sources: [server, modeling-contract]
-    locator: "apply_model dispatch and preview/apply revision guards"
+    locator: "Cached preview and revision guards"
   - instruction: "Never claim physical fit from an image, nominal product size, or a successful mesh export."
+    skillFile: SKILL.md
     sources: [user-workflow, modeling-contract]
-    locator: "Spacer assumptions, frame inspection limits, fit requirements"
+    locator: "Physical-fit evidence boundary"
   - instruction: "Never bypass the MCP transport through raw HTTP, arbitrary JavaScript, or UI clicks."
+    skillFile: SKILL.md
     sources: [user-workflow]
-    locator: "Explicit MCP-only modeling scope and local validated operations"
+    locator: "MCP-only modeling boundary"
   - instruction: "Native parameters and MCP template parameters are separate systems."
+    skillFile: SKILL.md
     sources: [modeling-contract]
-    locator: "Native 2.0 compatibility"
+    locator: "Native and template parameter revisions"
   - instruction: "Its persisted recipe is editable mesh generation, not a sketch-based CAD feature tree."
+    skillFile: references/household-parts.md
     sources: [modeling-contract]
-    locator: "Native 2.0 compatibility; Lathe recipe semantics"
+    locator: "Lathe representation"
   - instruction: "For repeated existing features, use `featurePattern` only for holes, planar embosses, and sketch-backed extrude/revolve/sweep booleans."
+    skillFile: references/household-parts.md
     sources: [server, model-plan, modeling-contract]
-    locator: "featurePattern schema and patternableFeature validation"
-  - instruction: "Straight bevel gears are a conical loft approximation and do not establish tooth-contact accuracy."
+    locator: "Supported patternable native features"
+  - instruction: "Straight bevel gears are a conical loft approximation; do not claim tooth-contact accuracy or a matched gear pair."
+    skillFile: references/household-parts.md
     sources: [server, modeling-contract]
-    locator: "Native straight-bevel gear operation limitations"
-  - instruction: "Import only by asset id from jumpstart_list_imports; do not pass host paths or file contents through model plans."
-    sources: [server, managed-imports, modeling-contract]
-    locator: "Managed read-only imports directory and typed digest references"
-  - instruction: "For a mounted assembly, establish mating sides and hook direction before applying transforms; bounding-box overlap alone does not establish fit."
+    locator: "Gear limits"
+  - instruction: "Use a typed `import` operation with that `assetId`; never request or invent a host path or send file bytes."
+    skillFile: references/imported-parts.md
+    sources: [server, managed-imports]
+    locator: "Operator-managed digest-only imports"
+  - instruction: "Do not choose placement from bounding-box overlap alone."
+    skillFile: references/mounts-and-assemblies.md
     sources: [mount-assembly-incident, modeling-contract]
-    locator: "User's Skådis correction and MCP's physical-fit validation boundary"
-  - instruction: "Use an available localhost browser screenshot as visual context for the open editor, but use MCP geometry data for dimensions and fit checks."
+    locator: "Mounting relationship failure"
+  - instruction: "Use the screenshot only as visual context; use MCP document data for body identity and dimensions."
+    skillFile: references/mounts-and-assemblies.md
     sources: [local-browser-context, modeling-contract]
-    locator: "User's browser-access clarification and MCP measurement/fit boundaries"
-  - instruction: "When a matching JumpStart tutorial is available, translate its ordered recipe into native typed features and verify its geometric milestones rather than reproducing UI clicks."
+    locator: "Read-only localhost context"
+  - instruction: "Preserve the tutorial's logical feature order; don't imitate UI clicks or replace an editable feature tree with a single primitive or mesh."
+    skillFile: references/tutorial-models.md
     sources: [tutorial-recipes, tutorial-model-benchmark, model-plan]
-    locator: "The a-drawer tutorial steps and matching native-plan acceptance case"
-  - instruction: "Treat tutorial clearances as example values; preview fit and print positions separately and apply the requested final layout."
-    sources: [tutorial-recipes, tutorial-model-benchmark, modeling-contract]
-    locator: "The drawer tutorial fit-test and print-layout steps; physical-fit validation boundary"
-  - instruction: "When a document revision changes outside the agent's preview, reread it and confirm intent before undoing, replacing, or saving the changed geometry."
-    sources: [server, modeling-contract, user-workflow]
-    locator: "Preview/apply revision guards and save-only-after-agreement workflow"
+    locator: "Native recipe stages"
+  - instruction: "Treat tutorial clearances and dimensions as example values, not universal printer tolerances or proof of fit for the user's materials or hardware."
+    skillFile: references/tutorial-models.md
+    sources: [tutorial-recipes, modeling-contract]
+    locator: "Tutorial fit boundary"
+  - instruction: "Treat changes not explained by your preview as user work: do not undo, replace, or save them until their intent is clear."
+    skillFile: references/mounts-and-assemblies.md
+    sources: [server, user-workflow]
+    locator: "Stale and unrelated user edits"
+  - instruction: "Write a measurable acceptance checklist before building."
+    skillFile: SKILL.md
+    sources: [agentcad-workflow, preview-requirements]
+    locator: "Specify independently testable requirements"
+  - instruction: "A later optional inspection cannot replace them."
+    skillFile: references/inspection-and-recovery.md
+    sources: [preview-requirements]
+    locator: "Acceptance is immutable within one cached preview"
+  - instruction: "Zero distance does not distinguish contact from overlap or containment."
+    skillFile: references/fit-and-print-checks.md
+    sources: [text-to-cad-fit, native-pair-inspection]
+    locator: "closest_points set-distance semantics and separate intersection-volume query"
+  - instruction: "Failed or unknown attached pair requirements block apply."
+    skillFile: references/fit-and-print-checks.md
+    sources: [preview-requirements, pair-contract]
+    locator: "Immutable cached acceptance result and apply gate"

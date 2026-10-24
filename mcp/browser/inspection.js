@@ -1,3 +1,4 @@
+import { failureGuidance } from "../shared/failure-guidance.js";
 import { inspectRectangularFrame } from "./frame-plan.js";
 import { inspectTriangleMesh, sectionTriangleMesh, sampleSolidIntervals } from "../shared/geometry.js";
 
@@ -55,9 +56,10 @@ export function inspectGeometry(mesh, options = {}) {
   const checks = (options.checks || []).map((check) => {
     try {
       const threshold = check.tolerance ?? tolerance;
-      if (check.kind === "dimension") {
+      if (check.kind === "dimension" || check.kind === "bound" || check.kind === "components") {
         const measurement = meshValidation || inspectTriangleMesh(mesh, { tolerance });
-        const measured = measurement.bounds?.dimensions[["X", "Y", "Z"].indexOf(check.axis)];
+        const index = ["X", "Y", "Z"].indexOf(check.axis);
+        const measured = check.kind === "components" ? measurement.disconnectedComponents : check.kind === "bound" ? measurement.bounds?.[check.side]?.[index] : measurement.bounds?.dimensions[index];
         return { id: check.id, kind: check.kind, expected: check.expected, measured, tolerance: threshold, pass: Number.isFinite(measured) && Math.abs(measured - check.expected) <= threshold };
       }
       if (check.kind === "channels") {
@@ -71,9 +73,9 @@ export function inspectGeometry(mesh, options = {}) {
         return { id: check.id, kind: check.kind, expected: check.expected, measured, tolerance: threshold, pass: !errors.length, errors };
       }
       throw new Error("Unsupported geometry check");
-    } catch (error) { return { id: check.id, kind: check.kind, expected: check.expected, pass: false, error: error.message }; }
+    } catch (error) { return { id: check.id, kind: check.kind, expected: check.expected, pass: null, error: error.message, guidance: failureGuidance(error) }; }
   });
   return { coordinateSpace: "world", units: "mm", meshValidation, section, samples, checks, ...(options.frame ? { frame: inspectRectangularFrame(mesh, options.frame, tolerance) } : {}),
-    geometricRequirements: checks.length ? checks.every((check) => check.pass) ? "passed" : "failed" : "not_requested",
+    geometricRequirements: checks.length ? checks.every((check) => check.pass === true) ? "passed" : checks.some((check) => check.pass === false) ? "failed" : "unknown" : "not_requested",
     physicalFit: "unverified", manufacturingPerformance: "unverified" };
 }

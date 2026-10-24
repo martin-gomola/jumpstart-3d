@@ -2,6 +2,7 @@
 import * as THREE from "three";
 import { store, IDENTITY, nextSeq, findBody, primName } from "./store.js";
 import { uid, clone, nextColor } from "./util.js";
+import { bodyRole, combinedRole } from "./bodyRoles.js";
 
 export const M4 = (arr) => new THREE.Matrix4().fromArray(arr);
 export const arr = (m) => m.toArray();
@@ -117,8 +118,10 @@ export function groupBodies(ids, opts = {}) {
     const ordered = [first, ...bodies.filter((b) => b !== first)];
     const children = ordered.map((b) => ({
       node: b.node, m: b.m, hole: opts.op === "cut" ? b !== first : !!b.hole, name: b.name, color: b.color,
+      ...(ordered.some(body => body.role !== undefined) ? { role: bodyRole(b) } : {}),
     }));
     const allHoles = children.every((c) => c.hole);
+    const role = combinedRole(ordered, opts.op);
     const g = {
       id: uid("b"),
       name: opts.name || (opts.op ? first.name : nextName(doc, allHoles ? "Hole group" : "Group")),
@@ -126,6 +129,7 @@ export function groupBodies(ids, opts = {}) {
       color: first.hole ? (bodies.find((b) => !b.hole) || first).color : first.color,
       hole: allHoles,
       hidden: false,
+      ...(role === undefined ? {} : { role }),
       m: IDENTITY.slice(),
       node: { t: "group", op: opts.op === "intersect" ? "intersect" : undefined, children, mods: [] },
     };
@@ -187,6 +191,7 @@ export function ungroupBody(id) {
         hidden: false,
         m: arr(gm.clone().multiply(M4(c.m))),
         node: c.node,
+        ...(c.role !== undefined || g.role !== undefined ? { role: c.role ?? g.role } : {}),
       };
       out.push(b.id);
       return b;

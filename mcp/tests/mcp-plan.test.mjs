@@ -78,6 +78,72 @@ test("managed imports compile to native mesh and STEP nodes and require STL unit
   assert.throws(() => buildModelPlan(doc(), { name: "Missing asset", operations: [{ id: "housing", type: "import", assetId }] }, ids()), /managed import catalog/);
 });
 
+test("phone cradles compile to an editable angled plate, two ribs and a lower stop with explicit front-back intent", () => {
+  const base = {
+    name: "Dashboard phone cradle",
+    operations: [{ id: "cradle", type: "phoneCradle", width: 92, phoneLength: 145, angle: 50, plateThickness: 3, ribThickness: 8, stopHeight: 12, stopDepth: 8, topEdgeToward: "+Y", position: [0, -30, 5] }],
+  };
+  const result = buildModelPlan(doc(), base, ids());
+  const body = result.document.bodies[0];
+  assert.equal(body.name, "Angled phone cradle");
+  assert.equal(body.node.t, "prim");
+  assert.equal(body.node.kind, "box");
+  assert.deepEqual(body.node.p, { w: 92, d: 145, h: 3 });
+  assert.equal(body.node.mods.length, 3);
+  assert.deepEqual(body.node.mods.map((modifier) => modifier.tool.kind), ["wedge", "wedge", "box"]);
+  assert.ok(body.node.mods.every((modifier) => modifier.src === "phoneCradle" && modifier.op === "join"));
+  assert.ok(body.m[6] > 0, "+Y top edge rises toward the dashboard");
+  assert.deepEqual(body.mcpPhoneCradle, {
+    coordinateFrame: { description: "X across · Y front/back · Z up", orientation: "+Y = dashboard", screen: "Screen faces -Y (driver side)" },
+    topEdgeToward: "+Y", screenFacesToward: "-Y", width: 92, phoneLength: 145, angle: 50,
+    plateThickness: 3, ribThickness: 8, stopHeight: 12, stopDepth: 8,
+    run: 145 * Math.cos(50 * Math.PI / 180), rise: 145 * Math.sin(50 * Math.PI / 180),
+    position: [0, -30, 5], supportRibs: 2,
+  });
+  assert.deepEqual(result.featureBodyIds, { cradle: body.id });
+
+  const reverse = buildModelPlan(doc(), { ...base, operations: [{ ...base.operations[0], id: "reverse", topEdgeToward: "-Y" }] }, ids()).document.bodies[0];
+  assert.ok(reverse.m[6] < 0, "-Y top edge leans toward the driver");
+  assert.equal(reverse.mcpPhoneCradle.screenFacesToward, "+Y");
+});
+
+test("knurls compile into a native editable sketch extrusion with validated groove and bore dimensions", () => {
+  const result = buildModelPlan(doc(), { name: "Knob", operations: [{ id: "knob", type: "knurl", diameter: 20, length: 15, grooves: 32, bore: "hex", boreSize: 6, position: [1, 2, 3] }] }, ids());
+  const sketch = result.document.sketches[0], body = result.document.bodies[0];
+  assert.equal(sketch.hidden, true);
+  assert.equal(sketch.ents.filter(({ t }) => t === "line").length, 70);
+  assert.equal(sketch.ents.filter(({ t }) => t === "circle").length, 0);
+  assert.equal(body.node.t, "extrude");
+  assert.equal(body.node.sketch, sketch.id);
+  assert.equal(body.node.profiles[0].key, sketch.ents.slice(0, 64).map(({ id }) => id).sort().join(","));
+  assert.ok(Math.hypot(...body.node.profiles[0].pt) > 0);
+  assert.deepEqual({ dist: body.node.dist, mode: body.node.mode, dist2: body.node.dist2, mods: body.node.mods }, { dist: 15, mode: "one", dist2: 0, mods: [] });
+  assert.equal(body.name, "Knurled knob 20 x 15");
+  assert.deepEqual(body.m.slice(12, 15), [1, 2, 3]);
+  assert.deepEqual(body.mcpKnurl, { diameter: 20, length: 15, grooves: 32, pitch: Math.PI * 20 / 32, depth: Math.round(Math.PI * 20 / 32 / 2 * 1000) / 1000, bore: "hex", boreSize: 6 });
+  assert.equal(result.document.mode, "advanced");
+
+  for (const bore of ["round", "hex", "d"]) {
+    const bored = buildModelPlan(doc(), { name: "Bored", operations: [{ id: "knob", type: "knurl", diameter: 24, grooves: 24, bore, boreSize: 5 }] }, ids());
+    assert.ok(bored.document.sketches[0].ents.some(({ t }) => t === (bore === "round" ? "circle" : bore === "d" ? "arc" : "line")));
+  }
+  assert.throws(() => normalizeModelPlan({ name: "Bad size", operations: [{ id: "k", type: "knurl", diameter: 5 }] }), /diameter must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ name: "Bad length", operations: [{ id: "k", type: "knurl", length: 0 }] }), /length must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ name: "Bad count", operations: [{ id: "k", type: "knurl", grooves: 7 }] }), /grooves must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ name: "Too many", operations: [{ id: "k", type: "knurl", grooves: 121 }] }), /grooves must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ name: "Vanished grooves", operations: [{ id: "k", type: "knurl", diameter: 20, grooves: 8, depth: 0.1 }] }), /grooves vanish/);
+  assert.throws(() => normalizeModelPlan({ name: "No wall", operations: [{ id: "k", type: "knurl", diameter: 20, depth: 5, bore: "round", boreSize: 10 }] }), /boreSize must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ name: "Unexpected size", operations: [{ id: "k", type: "knurl", boreSize: 4 }] }), /only supported when a bore is selected/);
+});
+
+test("phone cradle rejects invalid angles, undersized rib layouts and unsupported direction values", () => {
+  const base = { name: "Phone cradle", operations: [{ id: "cradle", type: "phoneCradle", width: 80, phoneLength: 140, angle: 45, plateThickness: 3, ribThickness: 8, stopHeight: 10, stopDepth: 6, topEdgeToward: "+Y", position: [0, 0, 0] }] };
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], angle: 85 }] }), /angle must be a finite number/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], width: 16, ribThickness: 8 }] }), /width must be a finite number|leave room between the two ribs/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], topEdgeToward: "+X" }] }), /topEdgeToward must be \+Y .* or -Y/);
+  assert.throws(() => normalizeModelPlan({ ...base, operations: [{ ...base.operations[0], extra: true }] }), /extra is not supported/);
+});
+
 test("ordered contours compile line, arc, and fit-point spline segments as editable native entities", () => {
   const result = buildModelPlan(doc(), {
     name: "Curved tray",

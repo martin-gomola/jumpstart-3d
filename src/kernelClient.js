@@ -113,6 +113,42 @@ export class KernelClient {
     this.onResults && this.onResults(res);
     this.start();
   }
+  // A temporary worker bounds native query time without interrupting builds, STEP exports, or cache ownership.
+  inspectPairs(pairs, { timeoutMs = 20000 } = {}) {
+    if (!Array.isArray(pairs) || !pairs.length || pairs.length > 8) return Promise.reject(new Error("Pair inspection requires 1 to 8 pairs"));
+    return new Promise((resolve) => {
+      let worker, timer, finished = false;
+      const unknown = (error) => pairs.map(({ id }) => ({ id, status: "unknown", error, distanceMm: null, overlapVolumeMm3: null, physicalFit: "unverified" }));
+      const finish = (results) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        worker?.terminate();
+        resolve(results);
+      };
+      try {
+        worker = new Worker(this.workerUrl, this.workerType === "classic" ? {} : { type: "module" });
+        timer = setTimeout(() => finish(unknown("Native pair inspection timed out; reduce query complexity and inspect again")), timeoutMs);
+        worker.onerror = () => finish(unknown("Native pair inspection worker failed"));
+        worker.onmessage = ({ data }) => {
+          if (data.type === "ready") {
+            const assetIds = new Set();
+            const nativePairs = pairs.filter((pair) => { let mesh = false; JSON.stringify(pair, (key, value) => { if (key === "t" && value === "mesh") mesh = true; return value; }); return !mesh; });
+            JSON.stringify(nativePairs, (key, value) => { if (key === "asset" && typeof value === "string") assetIds.add(value); return value; });
+            for (const id of assetIds) {
+              const asset = this.assets.get(id);
+              if (!asset) { finish(unknown("Pair inspection asset is unavailable")); return; }
+              const bytes = asset.bytes.slice().buffer;
+              worker.postMessage({ type: "asset", id, kind: asset.kind, bytes }, [bytes]);
+            }
+            worker.postMessage({ type: "inspectPairs", req: 1, pairs });
+          } else if (data.type === "inspectedPairs") finish(data.results);
+          else if (data.type === "error") finish(unknown(data.error || "Native pair inspection failed"));
+        };
+        worker.postMessage({ type: "init", parts: this.parts });
+      } catch (error) { finish(unknown(error.message || "Could not start pair inspection worker")); }
+    });
+  }
   step(bodies) {
     const req = ++this.req;
     return new Promise((resolve, reject) => {

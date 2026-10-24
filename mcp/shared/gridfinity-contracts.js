@@ -4,12 +4,16 @@ const text = maxLength => ({ type: "string", minLength: 1, maxLength });
 const vector = (length, bound = 10000) => ({ type: "array", minItems: length, maxItems: length, items: number(-bound, bound) });
 const object = (properties, required) => ({ type: "object", additionalProperties: false, properties, required });
 const point2 = vector(2);
+export const magnetPocketsSchema = { oneOf: [
+  { type: "boolean" },
+  object({ diameter: number(2, 8), depth: number(0.5, 4) }, []),
+], description: "Optional four magnet pockets per 42 mm cell, on 26 mm centers. true uses 6.5 mm pocket diameter and 2.4 mm pocket depth for nominal 6x2 magnets with glue clearance. Object dimensions describe the pocket, not the magnet. Printed fit needs calibration." };
 export const gridfinityOperationSchema = object({
   id: text(80), type: { const: "gridfinity" }, name: text(80), kind: { type: "string", enum: ["insert", "bin", "baseplate"] },
   columns: integer(1, 4), rows: integer(1, 4), heightUnits: integer(2, 12), floor: number(0.8, 6), wall: number(0.8, 4), lip: { type: "boolean" },
-  dividers: object({ x: integer(0, 6), y: integer(0, 6) }, []), position: vector(3), rotation: vector(3, 360),
+  dividers: object({ x: integer(0, 6), y: integer(0, 6) }, []), magnets: magnetPocketsSchema, position: vector(3), rotation: vector(3, 360),
 }, ["id", "type", "kind"]);
-gridfinityOperationSchema.description = "Editable Gridfinity insert, bin or matching baseplate. 42 mm pitch; insert/bin footprint 42*n-0.5 mm, top Z=7*heightUnits. Baseplate is 5 mm high. Lip/dividers are bin-only. Insert bottom Z=0.25 on a baseplate at Z=0 gives intentional bridge contact. Maximum 4x4 cells.";
+gridfinityOperationSchema.description = "Editable Gridfinity insert, bin or matching baseplate. 42 mm pitch; insert/bin footprint 42*n-0.5 mm, top Z=7*heightUnits. Plain baseplate height is 5 mm; magnets add a perforated carrier of pocket depth +0.8 mm beneath it. Its baseplatePlacementZ reports the aligned bin-bottom height. Lip/dividers are bin-only. Maximum 4x4 cells.";
 const segment = { oneOf: [
   object({ type: { const: "line" }, start: point2, end: point2 }, ["type", "start", "end"]),
   object({ type: { const: "arc" }, start: point2, through: point2, end: point2 }, ["type", "start", "through", "end"]),
@@ -29,7 +33,7 @@ pocketOperationSchema.description = "Measured vertical pocket in an unchanged Gr
 export const drawerLayoutOperationSchema = object({
   id: text(80), type: { const: "drawerLayout" }, layoutId: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-zA-Z0-9_-]+$" }, name: text(80),
   width: number(42, 881.99), depth: number(42, 881.99), height: number(14, 10000),
-  includeBaseplate: { type: "boolean" }, replaceExisting: { type: "boolean" }, floor: number(0.8, 6), wall: number(0.8, 4),
-  bins: { type: "array", minItems: 1, maxItems: 16, items: object({ id: text(80), label: text(80), x: integer(0, 19), y: integer(0, 19), columns: integer(1, 4), rows: integer(1, 4), heightUnits: integer(2, 12), kind: { type: "string", enum: ["bin", "insert"] }, lip: { type: "boolean" }, dividers: object({ x: integer(0, 6), y: integer(0, 6) }, []) }, ["id", "x", "y", "columns", "rows"]) },
+  includeBaseplate: { type: "boolean" }, baseplateMagnets: magnetPocketsSchema, replaceExisting: { type: "boolean" }, floor: number(0.8, 6), wall: number(0.8, 4),
+  bins: { type: "array", minItems: 1, maxItems: 16, items: object({ id: text(80), label: text(80), x: integer(0, 19), y: integer(0, 19), columns: integer(1, 4), rows: integer(1, 4), heightUnits: integer(2, 12), kind: { type: "string", enum: ["bin", "insert"] }, lip: { type: "boolean" }, magnets: magnetPocketsSchema, dividers: object({ x: integer(0, 6), y: integer(0, 6) }, []) }, ["id", "x", "y", "columns", "rows"]) },
 }, ["id", "type", "width", "depth", "height", "bins"]);
 drawerLayoutOperationSchema.description = "Measured rectangular drawer in mm with nonoverlapping cell-aligned bins. x/y are whole cells from the front-left; +Y points to the back. Grid pitch is 42 mm. Matching baseplates are tiled into parts no larger than 4x4. Up to 16 bins, 20 cells per direction and 144 generated grid cells. layoutId persists native layout ownership; replaceExisting explicitly regenerates an unchanged existing layout. Rejects native edits, missing parts, locks and dependencies. Preview and inspect before apply.";

@@ -1,6 +1,9 @@
 version: 4
 status: not-run
 cases:
+  - prompt: "Add magnet pockets to the Gridfinity baseplate and matching bins in JumpStart."
+    expected: invoke
+    mode: implicit
   - prompt: "Plan native Gridfinity bins for my 500 by 380 by 65 mm drawer in JumpStart."
     expected: invoke
     mode: implicit

@@ -279,13 +279,17 @@ function imageDataUrl(app, box, coordinateFrame = {}) {
   return canvas.toDataURL("image/jpeg", 0.78);
 }
 
-function previewImages(app, box, section, coordinateFrame = { description: "World axes", orientation: "+X / +Y / +Z" }) {
+function previewImages(app, box, section, coordinateFrame = { description: "World axes", orientation: "+X / +Y / +Z" }, bodyIds) {
   const vp = app.vp;
+  const visibleBodies = new Set(bodyIds);
+  const visibility = new Map([...app.scene.views.values()].map(view => [view.group, view.group.visible]));
   const saved = { view: { ...vp.view, target: vp.view.target.clone() }, ortho: vp.useOrtho, anim: vp.anim, grid: vp.grid.visible, overlay: vp.overlay.visible, section: clone(app.section?.info || null), time: performance.now() };
   const images = [], imageErrors = [];
   try {
     vp.anim = null; vp.useOrtho = true; vp.grid.visible = false; vp.overlay.visible = false;
     app.section?.clear();
+    // Frame and render the same proposal, excluding existing overlapping parts.
+    for (const [id, view] of app.scene.views) view.group.visible &&= visibleBodies.has(id);
     // Selection tint hides same-normal channel floors in orthographic previews.
     for (const body of store.view.bodies) {
       const view = app.scene.views.get(body.id);
@@ -310,6 +314,7 @@ function previewImages(app, box, section, coordinateFrame = { description: "Worl
       } catch (error) { imageErrors.push({ view: name, error: error.message }); }
     }
   } finally {
+    for (const [group, visible] of visibility) group.visible = visible;
     app.section?.set(saved.section);
     vp.view = saved.view; vp.useOrtho = saved.ortho; vp.grid.visible = saved.grid; vp.overlay.visible = saved.overlay;
     vp.anim = saved.anim;
@@ -471,7 +476,7 @@ export function initMcp(app) {
         const phoneCradle = compiled.document.bodies.find((body) => body.mcpPhoneCradle)?.mcpPhoneCradle;
         const coordinateFrame = phoneCradle?.coordinateFrame || { description: "X across · Y depth · Z up", orientation: "+X / +Y / +Z" };
         if (phoneCradle) result.phoneCradle = clone(phoneCradle);
-        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, section, coordinateFrame));
+        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, section, coordinateFrame, compiled.affectedBodyIds));
         const geometries = new Map(results.map(({ body, view }) => [body.id, {
           nativeBody: { node: resolveNode(body.node, compiled.document), m: body.m.slice() },
           mesh: { vertices: view.data.vertices, triangles: view.data.triangles, matrix: Array.from(view.group.matrix.elements) },

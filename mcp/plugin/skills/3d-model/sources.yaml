@@ -1,6 +1,10 @@
 version: 1
 owner: JumpStart 3D self-hosted maintainers
 sources:
+  - id: gridfinity-magnets
+    path: mcp/shared/gridfinity-magnets.js
+    trust: "Strict optional pocket dimensions, 26 mm spacing and magnetic carrier height. Defaults are not universal printed-fit tolerances."
+    mutable: true
   - id: drawer-layout
     path: mcp/shared/drawer-layout.js
     trust: "Typed measured drawer coordinates, overlap/height limits, native part placements and tiled baseplates."

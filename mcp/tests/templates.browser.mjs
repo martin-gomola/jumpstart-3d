@@ -198,3 +198,47 @@ test("a selected reference body supplies envelope dimensions and remains in the 
   expect(final.bodies.find(body => body.gridfinity)).toBeDefined();
   expect(errors).toEqual([]);
 });
+
+test("a new template preview excludes existing parts and restores their viewport visibility", async ({ page }, testInfo) => {
+  const errors = watchErrors(page);
+  const editorId = await editor(page);
+  await page.click("#ai-status");
+  await page.click("#ai-templates-tab");
+  await page.getByRole("button", { name: "Single part", exact: true }).click();
+  await page.locator('[data-template="bin"]').click();
+  const preview = async () => {
+    await page.click("#ai-templates-panel button[type=submit]");
+    await expect(page.locator("#ai-template-message")).toContainText("Preview ready", { timeout: 90_000 });
+  };
+  await preview();
+  await page.getByRole("button", { name: "Add to document", exact: true }).click();
+  await expect(page.locator("#ai-template-message")).toContainText("Added to the document");
+  const before = await tool("jumpstart_get_document", { editorId });
+  expect(before.bodies).toHaveLength(1);
+  await page.evaluate(() => {
+    const app = window.__app, render = app.vp.render.bind(app.vp);
+    window.__capturedBodyIds = [];
+    app.vp.render = (...args) => {
+      if (window.__store.preview && !app.vp.grid.visible) {
+        window.__capturedBodyIds.push([...app.scene.views].filter(([, view]) => view.group.visible).map(([id]) => id));
+      }
+      return render(...args);
+    };
+  });
+  await page.fill("#ai-template-columns", "1");
+  await preview();
+  const captures = await page.evaluate(() => window.__capturedBodyIds);
+  expect(captures.length).toBeGreaterThanOrEqual(3);
+  for (const ids of captures) {
+    expect(ids).toHaveLength(1);
+    expect(ids).not.toContain(before.bodies[0].id);
+  }
+  const after = await tool("jumpstart_get_document", { editorId });
+  expect(after.revision).toBe(before.revision);
+  expect(after.bodies).toEqual(before.bodies);
+  expect(await page.evaluate(id => window.__app.scene.views.get(id)?.group.visible, before.bodies[0].id)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("isolated-template-preview.png") });
+  await page.getByRole("button", { name: "Cancel preview", exact: true }).click();
+  expect(await page.evaluate(id => window.__app.scene.views.get(id)?.group.visible, before.bodies[0].id)).toBe(true);
+  expect(errors).toEqual([]);
+});

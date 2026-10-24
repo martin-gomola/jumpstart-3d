@@ -2431,7 +2431,8 @@ function holeTool(shape, mod) {
 
 // ---------------------------------------------------------------- evaluation
 function stableKey(node) {
-  return JSON.stringify(node, (k, v) => (k === "name" || k === "color" || k === "id" || k === "hidden" ? undefined : v));
+  // Timeline sequence does not change resolved geometry; repeated parts can share the cache.
+  return JSON.stringify(node, (k, v) => (k === "name" || k === "color" || k === "id" || k === "seq" || k === "hidden" ? undefined : v));
 }
 
 // ---------------------------------------------------------------- imported models

@@ -1,6 +1,14 @@
 version: 2
 scope: "Source paths resolve from repository root; skillFile paths resolve from the skill root. Core and direct references contain the instructions. Remote sources are not runtime dependencies."
 rules:
+  - instruction: "These are pocket dimensions, not the physical magnet's diameter/depth."
+    skillFile: references/gridfinity-magnets.md
+    sources: [gridfinity-magnets, gridfinity-generator]
+    locator: "Actual pocket sizing and standard defaults"
+  - instruction: "Use the recipe's `baseplatePlacementZ`; do not retain the plain plate's 0.25 mm seating value for a magnetic plate."
+    skillFile: references/gridfinity-magnets.md
+    sources: [gridfinity-magnets, gridfinity-generator]
+    locator: "Raised carrier placement and drawer height checks"
   - instruction: "Physical printed fit remains unverified."
     skillFile: references/drawer-layouts.md
     sources: [drawer-layout, drawer-ownership]

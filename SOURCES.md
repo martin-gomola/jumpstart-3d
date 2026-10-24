@@ -67,6 +67,12 @@ checks before accepting the change.
 - Custom pocket guidance is authored for our typed measured-profile workflow.
   Imported models and manufacturer drawings remain evidence for the specific
   item and variant, not a source of universal printer clearances or guaranteed fit.
+- Magnet-pocket dimensions and 26 mm center spacing use the same pinned
+  `standard.scad`. The raised perforated carrier is independently implemented;
+  retaining floor/wall geometry and matching bin placement are measured in tests.
+- User-supplied design reference: <https://www.printables.com/model/250550-gridfinity-magnet-light-baseplate/comments>.
+  The comments/model page could not be fetched during this review. No model files,
+  comments or implementation from Printables were copied or treated as verified specifications.
 
 ## Drawer planning interaction reference
 

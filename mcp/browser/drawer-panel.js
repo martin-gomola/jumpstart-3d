@@ -1,5 +1,7 @@
 import { el } from "../../src/util.js";
-import { drawerMetrics, normalizeDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS } from "../shared/drawer-layout.js";
+import { drawerMetrics, normalizeDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../shared/drawer-layout.js";
+import { normalizeMagnetPockets, magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
+import { magnetControls } from "./magnet-controls.js";
 
 const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);
@@ -7,7 +9,7 @@ const copy = value => structuredClone(value);
 export function initDrawerPanel({ root, request, subscribe, onBusy }) {
   let draft, selectedId = null, documentId = null, savedLayouts = [], counter = 0, cached = null, busy = false, gesture = null, view = "layout";
   let undo = [], redo = [], measurementsCollapsed = false;
-  const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, floor: 2, wall: 1.2, bins: [] });
+  const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, baseplateMagnets: false, floor: 2, wall: 1.2, bins: [] });
   draft = fresh();
   const field = (name, label, initial = "", step = "any") => {
     const id = `drawer-${name}`, input = el("input", { id, type: "number", min: name === "height" ? 14 : 42, max: name === "height" ? 10000 : 881.99, step, value: initial, required: true, "aria-describedby": "drawer-message" });
@@ -33,6 +35,15 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
   advancedFloor.input.min = 0.8; advancedFloor.input.max = 6; advancedWall.input.min = 0.8; advancedWall.input.max = 4;
   const construction = el("details", { class: "drawer-advanced" }, el("summary", {}, "Advanced construction"), el("div", { class: "ai-template-fields" }, advancedFloor.label, advancedWall.label));
   construction.append(baseplateField);
+  const baseMagnets = magnetControls({ id: "drawer-baseplate-magnets", label: "Baseplate magnet pockets",
+    onInput: () => { invalidate(); previewButton.disabled = true; },
+    onChange: value => {
+      invalidate();
+      try { const next = copy(draft); next.baseplateMagnets = normalizeMagnetPockets(value); commit(next); }
+      catch (error) { render(); announce(error.message, true); }
+    } });
+  const carrierNote = el("p", { class: "ai-template-note", hidden: true });
+  construction.append(baseMagnets.element, carrierNote);
   const measureSummary = el("summary", {}, "Drawer measurements");
   const measureDetails = el("details", { class: "drawer-measurements", open: true }, measureSummary, el("div", { class: "drawer-measure-fields" }, nameLabel, measurements, example));
   const settings = el("div", { class: "ai-template-settings drawer-settings" }, el("h3", {}, "Your drawer"), saved, measureDetails, fit,
@@ -71,11 +82,11 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
   }
   const picked = () => draft.bins.find(bin => bin.id === selectedId);
   const focusBin = id => [...board.querySelectorAll("[data-bin-id]")].find(button => button.dataset.binId === id)?.focus();
-  const nextBin = rect => ({ id: `bin-${++counter}`, label: `Bin ${counter}`, ...rect, heightUnits: Math.max(2, Math.min(3, Math.floor((draft.height - (draft.includeBaseplate ? 0.25 : 0)) / 7))), kind: "bin", dividers: { x: 0, y: 0 }, lip: false });
+  const nextBin = rect => ({ id: `bin-${++counter}`, label: `Bin ${counter}`, ...rect, heightUnits: Math.max(2, Math.min(3, Math.floor((draft.height - drawerBinBaseZ(draft)) / 7))), kind: "bin", dividers: { x: 0, y: 0 }, lip: false, magnets: false });
   function updateBin(changes) {
     const bin = picked(); if (!bin || busy) return false;
     const candidate = { ...bin, ...changes }, next = copy(draft);
-    if (JSON.stringify(candidate) === JSON.stringify(bin)) return true;
+    if (JSON.stringify(candidate) === JSON.stringify(bin)) { render(); return true; }
     const error = placementError(draft, candidate, bin.id);
     if (error) { announce(error, true); return false; }
     next.bins[next.bins.findIndex(entry => entry.id === bin.id)] = candidate;
@@ -109,6 +120,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
   function syncFields() {
     title.value = draft.name; width.input.value = draft.width || ""; depth.input.value = draft.depth || ""; height.input.value = draft.height || "";
     baseplate.checked = draft.includeBaseplate; advancedFloor.input.value = draft.floor; advancedWall.input.value = draft.wall;
+    baseMagnets.set(draft.baseplateMagnets || false);
     for (const input of [width.input, depth.input, height.input, advancedFloor.input, advancedWall.input]) {
       if (input.value) input.setAttribute("aria-invalid", String(!input.validity.valid)); else input.removeAttribute("aria-invalid");
     }
@@ -125,7 +137,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     };
   }
   title.onchange = () => { const next = copy(draft); next.name = title.value; commit(next); };
-  baseplate.onchange = () => { const next = copy(draft); next.includeBaseplate = baseplate.checked; commit(next); };
+  baseplate.onchange = () => { const next = copy(draft); next.includeBaseplate = baseplate.checked; if (!next.includeBaseplate) { next.baseplateMagnets = false; baseMagnets.set(false); } commit(next); };
   example.onclick = () => { const next = fresh(); Object.assign(next, { width: 336, depth: 252, height: 50, name: "Example drawer" }); selectedId = null; commit(next); syncFields(); announce("Example size loaded. Replace it with your own inside measurements."); };
 
   function renderInspector() {
@@ -154,7 +166,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     inspector.append(el("span", {}, "Height"));
     const heights = el("div", { class: "ai-template-shapes", role: "group", "aria-label": "Bin height" });
     for (const units of [...new Set([2, 3, 5, 7, bin.heightUnits])].sort((a, b) => a - b)) {
-      const total = units * 7 + (bin.lip ? 4.4 : 0) + (draft.includeBaseplate ? 0.25 : 0);
+      const total = units * 7 + (bin.lip ? 4.4 : 0) + drawerBinBaseZ(draft);
       const button = el("button", { type: "button", disabled: busy || total > draft.height, "aria-pressed": String(bin.heightUnits === units) }, `${units * 7} mm`);
       button.onclick = () => updateBin({ heightUnits: units }); heights.append(button);
     }
@@ -180,7 +192,13 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     });
     remove.onclick = () => { const next = copy(draft); next.bins = next.bins.filter(entry => entry.id !== bin.id); selectedId = null; commit(next, "Bin removed. Undo layout restores it."); addBin.focus(); };
     inspector.append(el("div", { class: "ai-template-actions" }, rotate, duplicate, remove));
-    inspector.append(el("details", { class: "drawer-advanced", open: moreOpen || null }, el("summary", {}, "More bin options"), kinds));
+    const binMagnets = magnetControls({ id: "drawer-bin-magnets", label: "Magnet pockets under this part",
+      onInput: () => { invalidate(); previewButton.disabled = true; },
+      onChange: value => { invalidate(); if (!updateBin({ magnets: value })) previewButton.disabled = true; } });
+    binMagnets.set(bin.magnets || false); binMagnets.setDisabled(busy);
+    const allMagnets = el("button", { type: "button", disabled: busy || !bin.magnets }, "Use this magnet fit in all bins");
+    allMagnets.onclick = () => { const next = copy(draft); next.bins.forEach(part => { part.magnets = copy(bin.magnets); }); commit(next, "Magnet pockets enabled for all current bins."); };
+    inspector.append(el("details", { class: "drawer-advanced", open: moreOpen || null }, el("summary", {}, "More bin options"), kinds, binMagnets.element, allMagnets));
     if (focus) {
       const target = focus.id ? document.getElementById(focus.id) : [...inspector.querySelectorAll("button")].find(button =>
         focus.label ? button.getAttribute("aria-label") === focus.label : button.textContent === focus.text && button.closest('[role="group"]')?.getAttribute("aria-label") === focus.group);
@@ -220,9 +238,13 @@ export function initDrawerPanel({ root, request, subscribe, onBusy }) {
     measureSummary.textContent = validDimensions ? `${draft.name} · ${draft.width} × ${draft.depth} × ${draft.height} mm · Edit drawer` : "Drawer measurements";
     example.hidden = validDimensions;
     fit.textContent = validDimensions ? `${m.columns} × ${m.rows} grid · ${m.gridWidth} × ${m.gridDepth} mm. Spare space: ${(m.spareWidth / 2).toFixed(1)} mm per side, ${(m.spareDepth / 2).toFixed(1)} mm front/back.` : "Enter the drawer’s inside measurements in millimetres.";
-    partsSummary.textContent = validDimensions ? `${draft.bins.length} bins · ${m.occupied} of ${m.total} cells used (${m.fill}%).${draft.includeBaseplate ? " Matching baseplates included." : ""}` : "";
+    const magnetCount = draft.bins.reduce((sum, bin) => sum + (bin.magnets ? bin.columns * bin.rows * 4 : 0), 0) + (draft.includeBaseplate && draft.baseplateMagnets ? m.total * 4 : 0);
+    partsSummary.textContent = validDimensions ? `${draft.bins.length} bins · ${m.occupied} of ${m.total} cells used (${m.fill}%).${draft.includeBaseplate ? " Matching baseplates included." : ""}${magnetCount ? ` ${magnetCount} magnet pockets.` : ""}` : "";
     let error; try { normalizeDrawerLayout(draft); } catch (failure) { error = failure.message; }
-    previewButton.disabled = busy || !!error; previewButton.title = error || "";
+    baseMagnets.setDisabled(busy || !draft.includeBaseplate);
+    carrierNote.hidden = !draft.baseplateMagnets;
+    if (draft.baseplateMagnets) { const lift = magnetCarrierHeight(draft.baseplateMagnets); carrierNote.textContent = `Magnet carrier adds ${lift.toFixed(1)} mm. Baseplate height: ${(5 + lift).toFixed(1)} mm. Bin seating height is included in drawer-fit checks.`; }
+    previewButton.disabled = busy || !!error || !baseMagnets.valid(); previewButton.title = error || "";
     addBin.disabled = busy || !validDimensions || draft.bins.length >= 16; fill.disabled = busy || !validDimensions;
     undoButton.disabled = busy || !undo.length; redoButton.disabled = busy || !redo.length;
     const supplied = [draft.width, draft.depth, draft.height].every(value => Number.isFinite(value) && value > 0);

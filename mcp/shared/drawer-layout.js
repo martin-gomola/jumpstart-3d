@@ -1,6 +1,8 @@
 // Drawer planning uses grid cells; the native Gridfinity generator owns interface geometry.
+import { normalizeMagnetPockets, magnetCarrierHeight } from "./gridfinity-magnets.js";
 export const DRAWER_LIMITS = Object.freeze({ axisCells: 20, cells: 144, bins: 16, partCells: 4 });
 export const GRID_PITCH = 42;
+export const drawerBinBaseZ = drawer => drawer.includeBaseplate === false ? 0 : magnetCarrierHeight(drawer.baseplateMagnets) + 0.25;
 const fail = message => { throw new Error(`Drawer layout: ${message}`); };
 function object(value, keys, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object`);
@@ -39,7 +41,7 @@ export function firstDrawerSpace(drawer, columns = 1, rows = 1, ignoreId) {
   return null;
 }
 export function normalizeDrawerLayout(raw) {
-  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "floor", "wall", "bins", "replaceExisting"], "plan");
+  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "baseplateMagnets", "floor", "wall", "bins", "replaceExisting"], "plan");
   if (raw.type !== "drawerLayout") fail("type must be drawerLayout");
   const id = text(raw.id, "id"), layoutId = text(raw.layoutId, "layoutId", id);
   if (!/^[a-zA-Z0-9_-]+$/.test(layoutId)) fail("layoutId must use letters, numbers, underscores or hyphens");
@@ -47,23 +49,24 @@ export function normalizeDrawerLayout(raw) {
   const height = number(raw.height, 14, 10000, "usable height");
   for (const key of ["includeBaseplate", "replaceExisting"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") fail(`${key} must be a boolean`);
   const result = { type: "drawerLayout", id, layoutId, name: text(raw.name, "name", "Drawer layout"), width, depth, height,
-    includeBaseplate: raw.includeBaseplate !== false, replaceExisting: raw.replaceExisting === true,
+    includeBaseplate: raw.includeBaseplate !== false, baseplateMagnets: normalizeMagnetPockets(raw.baseplateMagnets, "baseplateMagnets"), replaceExisting: raw.replaceExisting === true,
     floor: number(raw.floor ?? 2, 0.8, 6, "floor"), wall: number(raw.wall ?? 1.2, 0.8, 4, "wall"), bins: [] };
+  if (result.baseplateMagnets && !result.includeBaseplate) fail("baseplate magnet pockets require matching baseplates");
   if (!Array.isArray(raw.bins) || !raw.bins.length || raw.bins.length > DRAWER_LIMITS.bins) fail(`add between 1 and ${DRAWER_LIMITS.bins} bins`);
   const ids = new Set();
   for (const [i, entry] of raw.bins.entries()) {
-    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip"], `bin ${i + 1}`);
+    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets"], `bin ${i + 1}`);
     const bin = { id: text(entry.id, `bin ${i + 1} id`), label: text(entry.label, `bin ${i + 1} label`, `Bin ${i + 1}`),
       x: number(entry.x, 0, 19, "column", true), y: number(entry.y, 0, 19, "row", true),
       columns: number(entry.columns, 1, 4, "bin width", true), rows: number(entry.rows, 1, 4, "bin depth", true),
-      heightUnits: number(entry.heightUnits ?? 3, 2, 12, "bin height", true), kind: entry.kind ?? "bin", lip: entry.lip === true };
+      heightUnits: number(entry.heightUnits ?? 3, 2, 12, "bin height", true), kind: entry.kind ?? "bin", lip: entry.lip === true, magnets: normalizeMagnetPockets(entry.magnets, `${entry.label || entry.id} magnets`) };
     if (ids.has(bin.id)) fail("bin ids must be unique"); ids.add(bin.id);
     if (!["bin", "insert"].includes(bin.kind)) fail("parts must be bins or insert blanks");
     if (entry.lip !== undefined && typeof entry.lip !== "boolean") fail("stacking lip must be a boolean");
     const dividers = object(entry.dividers ?? {}, ["x", "y"], "compartments");
     bin.dividers = { x: number(dividers.x ?? 0, 0, 6, "width dividers", true), y: number(dividers.y ?? 0, 0, 6, "depth dividers", true) };
     if (bin.kind === "insert" && (bin.lip || bin.dividers.x || bin.dividers.y)) fail("insert blanks do not use dividers or stacking lips");
-    const baseZ = result.includeBaseplate ? 0.25 : 0;
+    const baseZ = drawerBinBaseZ(result);
     if (bin.heightUnits * 7 + (bin.lip ? 4.4 : 0) + baseZ > height + 1e-7) fail(`${bin.label} is too tall for the drawer; reduce its height or stacking lip`);
     if (bin.kind === "bin" && bin.heightUnits * 7 - 7 - result.floor < 1) fail(`${bin.label} has insufficient space above its floor`);
     const error = placementError(result, bin); if (error) fail(`${bin.label}: ${error}`);
@@ -77,11 +80,11 @@ export function normalizeDrawerLayout(raw) {
 export function drawerParts(raw) {
   const drawer = normalizeDrawerLayout(raw), m = drawerMetrics(drawer), parts = [];
   const part = (id, kind, x, y, columns, rows, extra = {}) => ({ id, type: "gridfinity", kind, columns, rows,
-    position: [(x + columns / 2) * 42 - m.gridWidth / 2, (y + rows / 2) * 42 - m.gridDepth / 2, kind === "baseplate" ? 0 : drawer.includeBaseplate ? 0.25 : 0], ...extra });
+    position: [(x + columns / 2) * 42 - m.gridWidth / 2, (y + rows / 2) * 42 - m.gridDepth / 2, kind === "baseplate" ? 0 : drawerBinBaseZ(drawer)], ...extra });
   for (const bin of drawer.bins) parts.push(part(bin.id, bin.kind, bin.x, bin.y, bin.columns, bin.rows,
-    { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, dividers: bin.dividers }));
+    { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, dividers: bin.dividers, magnets: bin.magnets }));
   if (drawer.includeBaseplate) for (let y = 0; y < m.rows; y += 4) for (let x = 0; x < m.columns; x += 4) {
-    parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(4, m.columns - x), Math.min(4, m.rows - y), { name: `Baseplate ${x / 4 + 1}, ${y / 4 + 1}` }));
+    parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(4, m.columns - x), Math.min(4, m.rows - y), { name: `Baseplate ${x / 4 + 1}, ${y / 4 + 1}`, magnets: drawer.baseplateMagnets }));
   }
   return parts;
 }

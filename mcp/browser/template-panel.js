@@ -1,5 +1,7 @@
 import { el } from "../../src/util.js";
 import { initDrawerPanel } from "./drawer-panel.js";
+import { magnetControls } from "./magnet-controls.js";
+import { magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
 
 const TEMPLATES = [
   ["insert", "Custom insert", "A solid blank with measured pockets"],
@@ -27,6 +29,7 @@ export function templatePlan(state) {
     grid.lip = state.lip;
     grid.dividers = { x: number("dividersX", state.dividersX, "count"), y: number("dividersY", state.dividersY, "count") };
   }
+  if (state.magnets) grid.magnets = { diameter: number("magnetPocketDiameter", state.magnets.diameter), depth: number("magnetPocketDepth", state.magnets.depth) };
   const operations = [grid];
   if (state.kind === "insert") for (const [index, pocket] of state.pockets.entries()) {
     const prefix = `pocket${index + 1}`;
@@ -131,13 +134,17 @@ export function initTemplatePanel({ request, subscribe }) {
   controls.dividersX = numberField(dividerFields, "dividersX", "Width dividers", 0, 0, 6, 1);
   controls.dividersY = numberField(dividerFields, "dividersY", "Depth dividers", 0, 0, 6, 1);
   binFields.append(dividerFields);
+  const magnets = magnetControls({ id: "ai-template-magnets", onChange: () => { invalidate(); updateDimensions(); } });
   const pockets = el("div", { class: "ai-template-pockets" });
   const addPocket = el("button", { type: "button" }, "Add pocket");
   const pocketSection = el("section", { class: "ai-template-group" }, el("h3", {}, "Pockets"), el("p", { class: "ai-template-note" }, "Clearance is per side. Suggested values need a fit test on your printer."), pockets, addPocket);
   const updateDimensions = () => {
     const width = value(controls.columns) * 42 - (kind === "baseplate" ? 0 : 0.5);
     const depth = value(controls.rows) * 42 - (kind === "baseplate" ? 0 : 0.5);
-    dimensions.textContent = `Footprint ${width} × ${depth} mm. X width, Y depth, Z up.`;
+    let magneticHeight = "";
+    if (kind === "baseplate" && magnets.valid()) magneticHeight = ` Baseplate height ${(5 + magnetCarrierHeight(magnets.get())).toFixed(1)} mm.`;
+    if (magnets.get() && magnets.valid()) magneticHeight += ` ${value(controls.columns) * value(controls.rows) * 4} magnet pockets, ${kind === "baseplate" ? "open from the top of the carrier" : "open underneath"}.`;
+    dimensions.textContent = `Footprint ${width} × ${depth} mm. X width, Y depth, Z up.${magneticHeight}`;
   };
   function addPocketForm() {
     if (pocketForms.length >= 8) return;
@@ -215,7 +222,7 @@ export function initTemplatePanel({ request, subscribe }) {
     addPocket.disabled = pocketForms.length >= 8; invalidate();
   }
   addPocket.onclick = addPocketForm;
-  fieldset.append(basic, dimensions, heightFields, binFields, pocketSection);
+  fieldset.append(basic, dimensions, heightFields, binFields, magnets.element, pocketSection);
   form.append(fieldset, message, el("div", { class: "ai-template-submit" }, previewButton));
   const settings = el("div", { class: "ai-template-settings" }, el("h3", {}, "Gridfinity"), list, form);
   const singlePart = el("div", { class: "ai-single-part", hidden: true }, settings, el("div", { class: "ai-template-review" }, emptyPreview, previewArea));
@@ -232,7 +239,7 @@ export function initTemplatePanel({ request, subscribe }) {
   }
   root.append(modeSwitch, drawerRoot, singlePart);
   const drawerPanel = initDrawerPanel({ root: drawerRoot, request, subscribe, onBusy: active => modeButtons.forEach(button => { button.disabled = active; }) });
-  const readState = () => ({ kind, ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
+  const readState = () => ({ kind, magnets: magnets.get(), ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
   form.addEventListener("input", () => { invalidate(); updateDimensions(); });
   form.addEventListener("change", () => invalidate());
   form.onsubmit = async event => {

@@ -1,8 +1,8 @@
 ---
 name: 3d-model
-description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
+description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.7.0"
+  version: "1.8.0"
 ---
 
 # Model a part in JumpStart
@@ -18,6 +18,7 @@ copy the entire tool catalog into working notes.
 
 | Request | Read before modeling |
 | --- | --- |
+| Magnet pockets in Gridfinity bins, inserts or matching baseplates | [Gridfinity magnets](references/gridfinity-magnets.md) |
 | Drawer organization, multi-bin layouts and fitting a measured drawer | [Drawer layouts](references/drawer-layouts.md) |
 | Gridfinity inserts, bins, baseplates, measured cutouts and item-source research for those models | [Gridfinity](references/gridfinity.md) |
 | Frames, trays, brackets, hooks, knobs, turned parts, parameter models | [Household parts](references/household-parts.md) |

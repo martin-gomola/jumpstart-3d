@@ -75,6 +75,10 @@ and disables **Add to document**. Select **Preview** to rebuild and inspect the
 new values before adding them. **Cancel preview** discards the proposal. The
 Connection tab contains client setup instructions.
 
+Preview images show only the proposed or changed bodies. Existing document parts
+remain in the editor but are excluded from the image, even when they overlap the
+proposal's position.
+
 **Drawer layout** begins with inside width, depth, and usable height in mm.
 The planner calculates the cell grid and leftover space, lets you draw/move bins,
 and exposes settings for the selected bin. Add bin and Fill gaps provide pointer-free
@@ -88,8 +92,31 @@ the 3D preview before Add. Save the project after adding to persist the layout.
 Saved layouts can be loaded and regenerated; native edits, missing/locked parts
 and external dependencies block replacement rather than discarding those edits.
 
-The operation accepts `width`, `depth`, `height`, `bins`, optional `layoutId`,
-`includeBaseplate`, `floor`, `wall`, and explicit `replaceExisting`. Bin positions
+### Optional magnet pockets
+
+Single part provides a **Magnet pockets** checkbox for bins, insert blanks and
+baseplates. In Drawer layout, open **More bin options** for a selected bin and
+**Advanced construction** for baseplate pockets. **Use this magnet fit in all bins**
+copies a selected bin's pocket sizes to every current bin.
+
+The typed `gridfinity` input accepts `magnets: true` or
+`magnets: { "diameter": 6.5, "depth": 2.4 }`; omit it or use false to keep pockets
+off. Dimensions describe the pocket in mm. These defaults provide glue clearance
+for nominal 6 by 2 mm magnets; a press fit depends on the actual magnets and printer.
+There are four blind pockets per 42 mm cell on 26 mm centers. Bin/insert pockets
+open underneath. Magnetic baseplates use a perforated carrier with a 0.8 mm floor
+and top-opening pockets. The carrier adds pocket depth +0.8 mm below the socket
+grid: default magnetic plate height is 8.2 mm, with bin seating at Z=3.45 mm.
+The footprint and shaped socket interface retain their standard dimensions.
+
+`drawerLayout.baseplateMagnets` controls its baseplates, and each bin's `magnets`
+controls that part. Drawer height checks include the raised seating position,
+and save/reopen and explicit updates retain these choices. Pocket diameter is
+bounded to 2–8 mm and depth to 0.5–4 mm to retain the foot walls and base roof.
+Magnet polarity, retention and physical printed fit need assembly/calibration checks.
+
+The `drawerLayout` operation accepts `width`, `depth`, `height`, `bins`, optional `layoutId`,
+`includeBaseplate`, `baseplateMagnets`, `floor`, `wall`, and explicit `replaceExisting`. Bin positions
 `x`/`y` are whole cells from the front-left; +Y goes toward the back. Each bin has
 `id`, `label`, `columns`, `rows`, `heightUnits`, `kind` (bin/insert), optional
 `dividers` and `lip`. Limits: 20 cells per direction, 16 bins, and 144 generated

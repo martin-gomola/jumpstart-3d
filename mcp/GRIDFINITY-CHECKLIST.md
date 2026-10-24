@@ -61,7 +61,8 @@ This checklist supplements `mcp/ADOPTION-CHECKLIST.md`; it does not replace that
 
 ## Deferred work
 
-- [ ] Magnet and screw pockets after base interfaces are verified.
+- [x] Optional magnet pockets with verified native material and matching placement.
+- [ ] Screw pockets after base interfaces are verified.
 - [ ] Exact imported-solid cutouts with validated surface clearance and insertion/undercut handling.
 - [ ] Reliable complex-STL clearance with explicit geometry budgets and supported fit verification.
 - [ ] Custom placement drag handles and automatic pocket layout.
@@ -129,3 +130,26 @@ Runtime agent reasoning/routing evaluations are separate from deterministic cont
       intent, overflow, reduced-motion and strict slop checks passed.
 - [ ] Existing whole-editor mobile-first gate still fails on the base toolbar at 320 px.
       This task follows the user's desktop-only workflow. Runtime agent reasoning evals remain unrun.
+
+### Optional magnet pockets
+
+- [x] Add optional native magnet pockets to bins, inserts and baseplates through typed plans.
+      Defaults are 6.5 mm diameter by 2.4 mm deep for nominal 6 by 2 mm magnets,
+      with four pockets per cell. Validate custom sizes and remaining material.
+- [x] Keep plain geometry unchanged when magnets are off. Magnetic baseplates add a
+      perforated carrier with a 0.8 mm floor; default total height is 8.2 mm.
+      Raise bins to 3.45 mm and include this placement in drawer height checks.
+- [x] Expose pockets in Single part, baseplate Advanced construction and selected-bin
+      More options. Allow copying the selected magnet fit to all current bins.
+- [x] Preserve preview without mutation, explicit apply, native editing, save/reopen,
+      replacement and undo. Update capability schemas, docs and skill version 1.8.0.
+- [x] Verify native pocket volume, floor/roof sections, connected geometry and zero
+      overlap between seated parts. Cache keys ignore geometry-independent sequence metadata.
+- [x] `npm test`: 160 unit/contract tests and 75 browser tests passed.
+      A focused maximum preview of 144 cells, 18 parts and 1152 pockets took 6062 ms
+      on this host; this measurement is not a performance guarantee.
+- [x] Screenshot and inspect the live magnetic preview. Live controls reported zero
+      axe WCAG violations in light, dark and high-contrast themes. Token, hardcode,
+      emoji, native-select, contrast and desktop render checks passed.
+- [ ] Existing whole-editor mobile-first toolbar failure remains unchanged.
+      Physical printed fit, magnet retention and runtime agent reasoning evals remain unverified.

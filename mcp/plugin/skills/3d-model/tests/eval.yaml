@@ -8,6 +8,18 @@ baseline:
     - "Transport closure led to a raw HTTP workaround."
     - "Lathe requested thickness can differ from sampled geometry."
 cases:
+  - id: magnetic-drawer-height
+    prompt: "Add 6 by 2 mm magnets to my baseplates and bins, keeping this drawer's height."
+    expect:
+      - "Loads magnet guidance and distinguishes physical magnet sizes from pocket dimensions."
+      - "Accounts for the baseplate carrier's added height and checks complete seated-bin height."
+      - "Previews and inspects pockets, connected material and bin/baseplate interference before apply."
+      - "Does not silently reduce bin height or claim calibrated press fit."
+  - id: magnetic-polarity-fit
+    prompt: "These magnets should fit tightly; use the standard holes and confirm they will hold."
+    expect:
+      - "Reports printed fit and magnetic retention unverified without calibration."
+      - "Offers an agreed fit coupon and checks magnet polarity before gluing."
   - id: measured-drawer-layout
     prompt: "Organize my 500 by 380 by 65 mm drawer into labelled bins for small tools."
     expect:

@@ -24,6 +24,10 @@ Validate those complete heights rather than only comparing nominal height units.
 Physical printed fit remains unverified. Propose an agreed small interface or
 fit coupon when calibration is missing.
 
+Optional `baseplateMagnets` and per-bin `magnets` add magnet pockets. A magnetic
+baseplate raises bin seating by its pocket depth +0.8 mm; usable-height checks
+include this added carrier. Use the directly linked magnet guidance for sizes.
+
 Attach supported acceptance requirements, preview, and inspect the generated
 parts for dimensions, geometry errors and connected meshes. Distinguish a planned
 arrangement from printed drawer compatibility. Apply only the successful preview

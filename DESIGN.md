@@ -27,6 +27,9 @@ desktop workspace has independently scrollable settings and model-review columns
   edits, missing parts, locks or external dependencies that regeneration would discard.
 - Applied layouts belong to the native project and survive save/reopen. Do not
   imply an unapplied draft is already saved in the project.
+- Keep magnet pockets optional and off by default. Show pocket dimensions, not
+  ambiguous magnet diameters, and account for the magnetic carrier's added height
+  in drawer-fit checks. Place these controls under More bin options/Advanced.
 
 ## Reference adaptation
 

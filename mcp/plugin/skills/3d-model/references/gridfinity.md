@@ -44,9 +44,9 @@ Choose `kind: "insert"`, `"bin"` or `"baseplate"`, with `columns` and `rows`.
 For inserts/bins, set `heightUnits`, `floor` and `wall`; bins can also use `lip`
 and `dividers`. Check current capability limits before requesting a large layout.
 The nominal top height and any additional stacking lip are separate dimensions.
-Baseplates are 5 mm tall; bin/insert width and depth are 42 times the cell count
+Plain baseplates are 5 mm tall; bin/insert width and depth are 42 times the cell count
 minus 0.5 mm, while a baseplate spans the full cell grid. The initial generator
-omits magnet and screw pockets.
+supports optional magnet pockets; screw pockets remain outside this generator.
 
 Use named parameters for dimensions likely to change. Save/reopen and numerical
 revisions must retain the native recipe. A reference item's placement should

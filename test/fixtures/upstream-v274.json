@@ -1,0 +1,299 @@
+{
+  "version": "2.7.4",
+  "source": "User-supplied full-source archive, app/src",
+  "manifestSha256": "8613a90f098b892b0abb6904fdd30cc7bad0f91bda5aeb8cc7473bb8bc224f78",
+  "files": [
+    {
+      "path": "advanced.js",
+      "sha256": "5097c00f0808ec73e919d1383804f7a5cf2438e67988b14e50c79f62a5b98382"
+    },
+    {
+      "path": "app.js",
+      "sha256": "f5ffb3e26f5b117bd13079a1edcb0a9c5396a925bfeb1d770cf8cffef5145235"
+    },
+    {
+      "path": "appearance.js",
+      "sha256": "22a080fcc7c83579d87fee4e47a5ffb49a099cdbfdb62d3302f57fd78d022e1f"
+    },
+    {
+      "path": "arch.js",
+      "sha256": "25c013d0d3b49e9fe4220cc45c5640d4ca2518cdcff6504b0bf7395e192f7971"
+    },
+    {
+      "path": "archflood.js",
+      "sha256": "42d1b9bf83f18864cb2cc917d2d4703fd0169384d295e7ff0c55824323451ee1"
+    },
+    {
+      "path": "archland.js",
+      "sha256": "443ccb7aa046276965385dea4ca6a618c2b52fcf58dfd34f0c9cb218525bba16"
+    },
+    {
+      "path": "archplan.js",
+      "sha256": "dbfefe78bbf1e295d3520050bd8d23b2490f0c40f5b0909c29b60b593ce75852"
+    },
+    {
+      "path": "archweather.js",
+      "sha256": "124095f475955f331b642fc6f0115a3d70fac354bbd905f00591a6f6b094008e"
+    },
+    {
+      "path": "beginner.js",
+      "sha256": "d2d229b6ad0ac4e2d12c0ba9c18ba7abb0d4c6a6fd24ea73dc2bcc98e93daeb0"
+    },
+    {
+      "path": "bricks.js",
+      "sha256": "3cd7d10582881f5f4765d9e1dc0d498df0dbe82cd4c08c83e1477be65244b436"
+    },
+    {
+      "path": "cam.js",
+      "sha256": "cd8d8850fe6fedd86bf72548374078360c224fce79e34e7f442a02a0eabfe1d9"
+    },
+    {
+      "path": "camcore.js",
+      "sha256": "265787dc2e9027d4f4bcfc76cc596bdcfba7d9cf7ffcefeedaff4ea39de9ce5a"
+    },
+    {
+      "path": "camworker.bundle.txt",
+      "sha256": "b97a045309fd454ef48b76600d372008824bf56651ace80c1a6c4bc3f9663e48"
+    },
+    {
+      "path": "camworker.js",
+      "sha256": "98eef0c0dfbf21fb1c336f4f1dd4d66e7fe9c75e9a2fc027547a1f65d865507f"
+    },
+    {
+      "path": "chisel.html",
+      "sha256": "4b1a806e247a42d01aad13e97b84eb25b7792e10562fc4267f8e08662ebabf96"
+    },
+    {
+      "path": "chisel.js",
+      "sha256": "cf1cd7d51a60b6cd30d9b1cfaabe9ca316a61a12cf0e2705f13066e130bcdf8c"
+    },
+    {
+      "path": "constraints.js",
+      "sha256": "6c146d2c65a6ff3fdced60325abcfa862746eb30309d1fe5182407010cde23e4"
+    },
+    {
+      "path": "cosbody.js",
+      "sha256": "efb821d7c9733c3b9827c2d20bea5c19c9fd203fac74fa1e77358d22e4b899c2"
+    },
+    {
+      "path": "coscut.js",
+      "sha256": "50f5fef7b578f10f790a4ce33e210ccd06db91221cc240a179cb7169c7f20ebc"
+    },
+    {
+      "path": "cosforge.js",
+      "sha256": "a5b180a54ddd954b424e33bf2bd212e4caf0248f815e8811058168a5e0bf1357"
+    },
+    {
+      "path": "cosmesh.js",
+      "sha256": "c86d15672b08a1971dd928b510779a2c1d7acdfd900aa162b7a685ce1af57ef4"
+    },
+    {
+      "path": "cosparts.js",
+      "sha256": "d31b054ecca96ddbfe9d00985efe2fae7db93ca9f3fea467dead47f61f595b9e"
+    },
+    {
+      "path": "dims.js",
+      "sha256": "7b4773c3a4683e37fc4ed481e009bc1dcf33fd3a89db04e7585609edebad9717"
+    },
+    {
+      "path": "dxf.js",
+      "sha256": "a671a7fb6ec9990246fa0e5403ce67bc24434a0217c2fa57b67d5ba519847aba"
+    },
+    {
+      "path": "facepat.js",
+      "sha256": "7951ed24684ead064f9e78ab1ccd805c4d0cdd339d13de35624aee08d675d3cf"
+    },
+    {
+      "path": "fea.js",
+      "sha256": "e64b6927a9f879520e1ba01f44f94b749cb21144384766fdb528f86c5907952d"
+    },
+    {
+      "path": "flexigen.html",
+      "sha256": "b638ba87c971278e82a217dde7eda76ebc14b43040e9e0cdadc876ec7c90d60e"
+    },
+    {
+      "path": "flexigen.js",
+      "sha256": "f48a36d6efe779bed4860e15a7c13fe70397c425ccf92a6a609e2f546d01f6c7"
+    },
+    {
+      "path": "fonts.js",
+      "sha256": "bd8559f9593c735396f75c5581743cb435e00acfccbcbf144490dbde3f7bfc4f"
+    },
+    {
+      "path": "icons.js",
+      "sha256": "5c287f6ba17db26e0a1f2bbe38d90b256aa48adfbf70d806a8b2d52a4053dece"
+    },
+    {
+      "path": "importers.js",
+      "sha256": "5259785a3e30a06f574e77ae8bf8707ecf02c1d381e580ed90e1eaed03e88af2"
+    },
+    {
+      "path": "index.html",
+      "sha256": "f9b5888a961a92a5266b1041a0d90526b3220e0e34a42573293243d2b6fe7c7c"
+    },
+    {
+      "path": "inflate.js",
+      "sha256": "c32a4b7bfa87600c3261a3b33faaabe2a7aa00d12c350b55f861864179c24318"
+    },
+    {
+      "path": "kernel.js",
+      "sha256": "2eb055868a3253ee8a2ac46b3894266ec8ed57c3fa641f68aae343ffb2c44eb9"
+    },
+    {
+      "path": "kernelClient.js",
+      "sha256": "627f5a7861c4a188d13c5f6fa29bf584a2dadc9a37b84a69420ec0afae6564e5"
+    },
+    {
+      "path": "lathe.js",
+      "sha256": "c4467fd65351789159ad2b789499c45c69d56c86548ac62085c6b272314af6cb"
+    },
+    {
+      "path": "licenses.js",
+      "sha256": "9c2f908c0329451817744bed0422e312504d82584e2dad6c5b0a6a5c65ae741d"
+    },
+    {
+      "path": "measure.js",
+      "sha256": "275e85f8092dd9e8008e9fb9aa666b36e19a3e9db95d9d4bf7d2c0ebb8566475"
+    },
+    {
+      "path": "media.js",
+      "sha256": "9ca06a4cb0f7e92a9c6afd11888dc3160f817cc8d1fe4f143fcb40369516a0d3"
+    },
+    {
+      "path": "meshimport.js",
+      "sha256": "8a71ac4425fa4295433440de0e0a79edf14e3d4b9316d69a8a9061e8ca2ad855"
+    },
+    {
+      "path": "meshstep.html",
+      "sha256": "47a5fd84e2bb887e239bf9cd828805855eb6ed7635d3b67cd68a15c834a15ad3"
+    },
+    {
+      "path": "meshstep.js",
+      "sha256": "0f7023c984b1470d42dd730c970362f1d3dad3848854990d92295b45b6fcad01"
+    },
+    {
+      "path": "ops.js",
+      "sha256": "1f66a83ace2b2761d6137738f5a481101bd1187726b51fce3deba43cbcc0f64e"
+    },
+    {
+      "path": "pipecoil.js",
+      "sha256": "786bd601f063ba692a307d5ae8a0e64d59b2052cf296390d6d6cee8d7deb7a4d"
+    },
+    {
+      "path": "printsim.js",
+      "sha256": "b739a5a80af30396da58a5418bd0fadc7a6bd85e980e83fbe663b13067a7cc7d"
+    },
+    {
+      "path": "projector.js",
+      "sha256": "7045bb056aa948ce17ff276f83c814f82213a959cd994b35e2278648ea8c7778"
+    },
+    {
+      "path": "projects.js",
+      "sha256": "2f3a5d3952940d3d6c1cec7292fc83e24ce64a1de4486fa8ebe5184ae25c4b1b"
+    },
+    {
+      "path": "puffy.js",
+      "sha256": "29d2038eb4d07da74855d66ef2b6b50f8cba4be310c9f3423ce42e17c15779ee"
+    },
+    {
+      "path": "recovery.js",
+      "sha256": "62744173e058cb1632e7e4d992a67421c331657cca5486833d68c7fbd0579294"
+    },
+    {
+      "path": "regions.js",
+      "sha256": "a030c70925f5e8e5f217270e9758e5bc24c68e71d5bd930a438910755e7b8b4f"
+    },
+    {
+      "path": "render.js",
+      "sha256": "ea7f2a72f13e63f5acfd7419b48ff63d43f94d18f9a2d7bcac43bd3dbbd95fdb"
+    },
+    {
+      "path": "scene.js",
+      "sha256": "cf8d6de817c952a5f3296fc8553969ec620e14583135cc5559c6b242f80d6c39"
+    },
+    {
+      "path": "section.js",
+      "sha256": "68e4306edad647853d9c313b94a2c94d9f1fa996068d31bd3b71792333a8d588"
+    },
+    {
+      "path": "simulate.js",
+      "sha256": "71982420843c7c4284567786fb1ff9d125b0d2663bc1af5ec182fb5683a1d4a5"
+    },
+    {
+      "path": "sketch3d.js",
+      "sha256": "0a49de47d0945d4154523d96cf4a99a435319606bd83856f7d7a757f274a27f1"
+    },
+    {
+      "path": "sketcher.js",
+      "sha256": "64d7af7a9fd8e3592797741a8cf55e97605fda9e5637a7af2c90423f60f93772"
+    },
+    {
+      "path": "store.js",
+      "sha256": "c83b434204b5d5b6caa89fc1a7dd44b5a967d92745181ccb1db9f994d47c2cf8"
+    },
+    {
+      "path": "textgeo.js",
+      "sha256": "6c2178c08ef013e5b52609340ac629b881f5e8405a9d403b8427b6ac0893ff74"
+    },
+    {
+      "path": "texture.js",
+      "sha256": "ff92cdd237efe6c0d05fc3b24cc6382fc5b5606ca4d652ef1a43ac05165917e3"
+    },
+    {
+      "path": "theme.js",
+      "sha256": "4a0d417895802f62cdeaf6338f8e16aa5e7dcb7d4b57847672917b76c40bd61a"
+    },
+    {
+      "path": "thickline.js",
+      "sha256": "d57e91b34928962229fa4ea2abd18c7c91d85e5e89a5f7334387c9729fd37919"
+    },
+    {
+      "path": "trace.js",
+      "sha256": "fda9925822c06faaba12f96f332e364c5f65a5c6259ae62066cc9741fb277cae"
+    },
+    {
+      "path": "tutorial_anims.js",
+      "sha256": "6d8c06c1471fc6264bb5dd131fcd1610c99ad85bd9f4cb2251aaba2a5b0a0e33"
+    },
+    {
+      "path": "tutorial_arch.js",
+      "sha256": "40c9f82d2add24805bbb877fd13d8016c89ad5a1eb20a98dbc044373d29f505e"
+    },
+    {
+      "path": "tutorial_data.js",
+      "sha256": "8880b4efd68f751f344ccfc817309f45f93804a752443cb25a4c558df56abbf8"
+    },
+    {
+      "path": "tutorial_data_more.js",
+      "sha256": "8e2381086682c1d165580177f850d141c60e56ac770dd7e07657e3a338066d75"
+    },
+    {
+      "path": "tutorials.js",
+      "sha256": "fc0c3d3bbc060a0c673f3f178bc6eb8ccdbcca2f7156ca83a28ea456fb3cced2"
+    },
+    {
+      "path": "units.js",
+      "sha256": "7924f6c1492d9a4720972853a349eb8601b0659830c92fcca2b9441c40e7c17a"
+    },
+    {
+      "path": "util.js",
+      "sha256": "cab57e1f2b442d4fa1be39ddbc97757d0fd0434a903272d63d311a8c7e9cbcbd"
+    },
+    {
+      "path": "version.js",
+      "sha256": "e62f6e008c1fda8411efb5328da93c588ece54bc5288cbc5078445200ab41182"
+    },
+    {
+      "path": "viewport.js",
+      "sha256": "dcb06ea1c163999a0c00417a48e177557b1cc6ec6d646d3a906678d218f05db3"
+    },
+    {
+      "path": "voxel.js",
+      "sha256": "9d61d6d795fbe65692aa2f2d65bc06e82bbe94218348a0ccd7e2f405eeaf88bc"
+    },
+    {
+      "path": "worker.js",
+      "sha256": "a0da100e9a40a90e46649fdb7e4545bb36e97c6ef53781bf1dae3f6192ce0305"
+    }
+  ]
+}

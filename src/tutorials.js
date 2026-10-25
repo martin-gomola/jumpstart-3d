@@ -3,7 +3,11 @@
 // and when it's the right tool; "Show me" points at the real button, tile or field with a pulsing
 // ring and a pop-up. Steps tick themselves off when the design shows they're done (or by hand).
 import * as THREE from "three";
-import { TUTORIALS } from "./tutorial_data.js";
+import { TUTORIALS as BASE_TUTORIALS } from "./tutorial_data.js";
+import { MORE } from "./tutorial_data_more.js";
+import { ARCH_TUTORIALS } from "./tutorial_arch.js";
+import { landArrays, GROUND, PLANTS } from "./archland.js";
+const TUTORIALS = [...BASE_TUTORIALS, ...MORE, ...ARCH_TUTORIALS];
 import { store } from "./store.js";
 import { el } from "./util.js";
 import { ICON } from "./icons.js";
@@ -12,7 +16,7 @@ import { animSVG, animFor } from "./tutorial_anims.js";
 const LS = "jumpstart3d.tutorial.";
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(LS + k) || "null"); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(LS + k, JSON.stringify(v)); } catch (e) {} };
-const LEVEL_ORDER = { Easy: 0, Proficient: 1, Advanced: 2 };
+const LEVEL_ORDER = { Easy: 0, Proficient: 1, Advanced: 2, Expert: 3 };
 
 export function initTutorials(app) {
   let cur = null; // { tut, i, done: Set, startVer, exported: Set }
@@ -77,6 +81,48 @@ export function initTutorials(app) {
     rAt: (w, f) => w.rowMax[Math.max(0, Math.min(w.N - 1, Math.round(f * (w.N - 1))))],
     roundness(w) { let n = 0; for (let i = 0; i < w.N; i++) { let lo = Infinity, hi = 0; for (let j = 0; j < 96; j++) { const r = w.r[i * 96 + j]; lo = Math.min(lo, r); hi = Math.max(hi, r); } if (hi - lo < 0.3) n++; } return n / w.N; },
     saved: () => !!cur && app.projects.version() > cur.startVer,
+    // Architect: the building in the design (all sizes in mm)
+    arch: () => store.doc.arch || { levels: [], walls: [], openings: [], roofs: [], slabs: [] },
+    archLevel: (n = 1) => (T.arch().levels[n - 1] || {}).id,
+    archWalls: (n = 1) => T.arch().walls.filter((w) => w.lvl === T.archLevel(n)),
+    archBox(n = 1) {
+      const ws = T.archWalls(n);
+      if (!ws.length) return null;
+      const xs = ws.flatMap((w) => [w.a[0], w.b[0]]), ys = ws.flatMap((w) => [w.a[1], w.b[1]]);
+      return { w: Math.max(...xs) - Math.min(...xs), d: Math.max(...ys) - Math.min(...ys), n: ws.length };
+    },
+    // walls around a w × d outline (either way round), within tol mm
+    archRect(w, d, tol = 150, n = 1) { const b = T.archBox(n); return !!b && b.n >= 4 && ((Math.abs(b.w - w) < tol && Math.abs(b.d - d) < tol) || (Math.abs(b.w - d) < tol && Math.abs(b.d - w) < tol)); },
+    archRaised(h, tol = 100, n = 1) { const ws = T.archWalls(n); return ws.length > 0 && ws.every((w) => w.h > 0 && (h == null || Math.abs(w.h - h) < tol)); },
+    archOpens: (k, n = 1) => T.arch().openings.filter((o) => (!k || o.k === k) && T.archWalls(n).some((w) => w.id === o.wall)),
+    archPreset: (ids) => T.arch().openings.filter((o) => ids.includes(o.preset)),
+    // an inside wall: one that isn't on the outline of the level
+    archInside(n = 1) {
+      const ws = T.archWalls(n); if (ws.length < 5) return [];
+      const xs = ws.flatMap((w) => [w.a[0], w.b[0]]), ys = ws.flatMap((w) => [w.a[1], w.b[1]]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), on = (v, a) => Math.abs(v - a) < 1;
+      return ws.filter((w) => !((on(w.a[0], x0) && on(w.b[0], x0)) || (on(w.a[0], x1) && on(w.b[0], x1)) || (on(w.a[1], y0) && on(w.b[1], y0)) || (on(w.a[1], y1) && on(w.b[1], y1))));
+    },
+    archOpenAt: (k, s, tol = 80) => T.arch().openings.some((o) => o.k === k && Math.abs(o.s - s) < tol),
+    archRoof: (kind) => T.arch().roofs.some((r) => !kind || r.kind === kind),
+    archRoofs: () => T.arch().roofs.length,
+    archSlab: () => T.arch().slabs.length > 0,
+    archSent: () => T.bodies().some((b) => b.arch),
+    archLogs: (kind) => { const ws = T.archWalls(); return ws.length >= 4 && ws.every((w) => w.log && (!kind || w.log === kind)); },
+    archLand: () => !!T.arch().land,
+    archLandArr: () => { const L = T.arch().land; return L ? landArrays(L) : null; },
+    archLandRange(min) { const r = T.archLandArr(); if (!r) return false; let lo = Infinity, hi = -Infinity; for (const v of r.h) { lo = Math.min(lo, v); hi = Math.max(hi, v); } return hi - lo >= min && hi > 200; },
+    archLandWater() { const r = T.archLandArr(); return !!r && r.w.some((v) => !isNaN(v)); },
+    archPainted(ids) { const r = T.archLandArr(); if (!r) return false; const want = new Set(ids.map((id) => GROUND.findIndex((g) => g.id === id)).filter((i) => i >= 0)); let n = 0; for (const v of r.m) if (want.has(v)) n++; return n >= 6; },
+    archPlants(which) { const L = T.arch().land; if (!L) return 0; return L.plants.filter((p) => !which || (Array.isArray(which) ? which.includes(p.k) : (PLANTS.find((q) => q.id === p.k) || {}).cat === which)).length; },
+    archWeather: () => !!(app.arch && app.arch.weather && app.arch.weather.on && app.arch.weather.kind !== "clear"),
+    archFloodDone: (mode) => { const F = app.arch && app.arch.state.flood; return !!(F && F.result && !F.running && (!mode || F.mode === mode)); },
+    archFloodDry: () => { const F = app.arch && app.arch.state.flood; return !!(F && F.result && !F.running && F.mode === "rain" && !F.result.flooded && !F.result.doors.some((d) => d.over > 0)); },
+    archFloorRaised: () => T.arch().levels.some((l) => l.elev > 100),
+    archFinished: (k) => (k === "wall" ? T.archWalls() : k === "roof" ? T.arch().roofs : T.arch().slabs).filter((q) => q.fin && q.fin.tex).length,
+    archUnitsPicked: () => !!(app.arch && app.arch.state.unitsPicked),
+    archPlanSeen: () => !!(app.arch && app.arch.state.planSeen),
+    archSelWall: () => !!(app.arch && app.arch.state.sel && app.arch.state.sel.k === "wall"),
     exported: (ext) => !!cur && cur.exported.has(ext),
   };
   const passes = (step) => { if (!step.check) return false; try { return !!step.check(T); } catch (e) { return false; } };
@@ -87,7 +133,7 @@ export function initTutorials(app) {
 
   // ---------------------------------------------------------------- the chooser
   function openChooser(mode) {
-    const want = mode || (app.mode === "advanced" ? "advanced" : "beginner");
+    const want = mode || (app.mode === "advanced" ? "advanced" : app.mode === "arch" ? "arch" : "beginner");
     const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) back.remove(); } });
     const list = el("div", { class: "tut-cards", id: "tut-cards" });
     const tabs = el("div", { class: "seg tut-tabs", role: "tablist" });
@@ -106,11 +152,11 @@ export function initTutorials(app) {
           doneN ? el("div", { class: "tut-prog" }, doneN >= t.steps.length ? "✓ Finished before" : `${doneN} of ${t.steps.length} steps done`) : null));
       }
     };
-    for (const [m, label] of [["beginner", "Beginner"], ["advanced", "Advanced"]]) tabs.append(el("button", { "data-m": m, id: "tut-tab-" + m, onclick: () => show(m) }, label));
+    for (const [m, label] of [["beginner", "Beginner"], ["advanced", "Advanced"], ["arch", "Architect"]]) tabs.append(el("button", { "data-m": m, id: "tut-tab-" + m, onclick: () => show(m) }, label));
     const modal = el("div", { class: "modal tut-modal", role: "dialog", "aria-label": "Tutorials" },
       el("header", {}, el("h2", {}, "Tutorials"), el("button", { class: "xbtn", "aria-label": "Close", html: ICON.close, onclick: () => back.remove() })),
       el("div", { class: "mbody" },
-        el("p", { class: "tut-intro" }, "Pick a project. Each one walks you through real tools to make a real, printable item. The short ones take 5-10 minutes; the bigger projects take 10-15."),
+        el("p", { class: "tut-intro" }, "Pick a project. Each one walks you through real tools to make a real, printable item. The short ones take 5-10 minutes; the bigger projects take 10-15, and Expert projects about 20."),
         el("div", { class: "tut-remind" }, el("b", {}, "Always start by naming your design: "), "Last name, First name, Item name ", el("span", { class: "tut-eg" }, "(Lopez, Maria, Keychain)"),
           el("br"), el("b", {}, "Always finish by saving "), "(Save or Ctrl+S: v1, v2…) ", el("b", {}, "and exporting an STL "), "(Export → STL)."),
         tabs, list));

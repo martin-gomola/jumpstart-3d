@@ -1,5 +1,13 @@
 # Gridfinity inserts, bins and baseplates
 
+## Contents
+
+- [Choose the object and evidence](#choose-the-object-and-evidence)
+- [Build the editable foundation](#build-the-editable-foundation)
+- [Define pockets and access](#define-pockets-and-access)
+- [Inspect, apply and deliver](#inspect-apply-and-deliver)
+- [Open sides for long-item bins](#open-sides-for-separately-printed-long-item-bins)
+
 ## Choose the object and evidence
 
 Use `gridfinity` for an editable insert blank, bin or baseplate. Prefer a custom
@@ -94,3 +102,20 @@ Apply the successful preview only. Check the final document, save when part of
 the agreed task, and verify the exported body ids. Report CAD measurements,
 conservative or unsupported checks, source assumptions and physical fit
 separately. Printed compatibility remains unverified until a physical fit test.
+
+## Open sides for separately printed long-item bins
+
+Use `openSides` on a `kind: "bin"` Gridfinity operation or drawer bin. It is an
+array of distinct `left`, `right`, `front`, and `back` values; omission leaves
+all walls closed. Sides are local XY: left/right are -X/+X, front/back are -Y/+Y.
+An opening clears its wall and stacking rim above the inside floor, preserving
+floor material and the protected base. Inserts and baseplates reject openings.
+
+For a long item, plan adjacent independently printable bins and open their
+facing sides. For example, a 5x2 main bin with `openSides: ["right"]` beside a
+2x2 extension with `openSides: ["left"]` spans seven cells (293.5 mm externally),
+while each part fits an example usable 246 × 246 mm bed. Measure the item’s
+width and clearance too; a 5+1 cell arrangement is insufficient for 280 mm length.
+Keep the item’s path clear of internal dividers. The normal seam remains. This
+does not add a connector or guarantee physical fit.
+Check per-part printer fit and native connected geometry before explicit apply.

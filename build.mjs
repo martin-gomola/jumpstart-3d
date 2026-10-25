@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { build } from "esbuild";
+import { renderToolCss } from "./mcp/tokens/render-tool-css.mjs";
 import { AI_STATUS_CSS } from "./mcp/browser/ai-status.js";
 
 const root = new URL(".", import.meta.url).pathname;
@@ -25,11 +26,17 @@ const wasmSize = statSync(wasm).size;
 
 rmSync(site, { recursive: true, force: true });
 mkdirSync(site, { recursive: true });
+// Compile the CAM worker from reviewed source; do not ship an opaque upstream bundle.
+const camWorker = await build({ ...common, entryPoints: [join(src, "camworker.js")], format: "iife", write: false });
 await build({ ...common, entryPoints: [join(src, "app.js")], format: "esm", outfile: join(site, "app.js"),
+  plugins: [{ name: "cam-worker-source", setup(builder) {
+    builder.onResolve({ filter: /^jumpstart:camworker$/ }, () => ({ path: "camworker", namespace: "cam-worker" }));
+    builder.onLoad({ filter: /.*/, namespace: "cam-worker" }, () => ({ contents: camWorker.outputFiles[0].text, loader: "text" }));
+  } }],
   loader: { ".html": "text" }, define: { __WASM_PARTS__: JSON.stringify([{ url: "occt-gz.wasm", gz: true, size: wasmSize }]) } });
 await build({ ...common, entryPoints: [join(src, "worker.js")], format: "esm", outfile: join(site, "worker.js"), external: ["node:*"] });
 
-const shell = `<html lang="en">\n${readFileSync(join(src, "index.html"), "utf8").replace("<style>", () => `<style>\n${AI_STATUS_CSS}\n${readFileSync(join(root, "mcp/browser/templates.css"), "utf8")}`)}\n</html>`;
+const shell = `<html lang="en">\n${readFileSync(join(src, "index.html"), "utf8").replace("<style>", () => `<style>\n${AI_STATUS_CSS}\n${readFileSync(join(root, "mcp/browser/templates.css"), "utf8")}`).replace("</style>", () => `\n${renderToolCss(readFileSync(join(src, "tool-ui.css"), "utf8"))}\n</style>`)}\n</html>`;
 if (!shell.includes('<script type="module" src="app.js"></script>\n')) throw new Error("src/index.html is missing the app.js script tag");
 writeFileSync(join(site, "index.html"), shell);
 cpSync(wasm, join(site, "occt-gz.wasm"));

@@ -9,8 +9,10 @@ Add to document.
 Use the existing editor theme variables and `mcp/tokens/ai-status.json`. Keep the
 CAD palette, typefaces, control states, and keyboard focus conventions. The
 desktop workspace has independently scrollable settings and model-review columns.
-The AI workspace fills the viewport below the main app header, with a 24 rem
-settings column and an expanding layout/preview area on desktop.
+The AI workspace fills the viewport below the main app header, with a 28 rem
+settings column and an expanding layout/preview area on desktop. Cap the column
+against the available workspace at intermediate widths and enlarged text sizes;
+let field groups respond to their container width instead of the window alone.
 Create and AI connection share this full width. Create opens by default; no AI
 connection is required to use the generators. Keep the title, workspace
 tabs and Close action on one compact desktop header row; switching tabs must not
@@ -26,8 +28,7 @@ surface. Hover feedback requires a hover-capable pointer and preserves selected
 states. Press feedback uses scale 0.96 over 150 ms ease-out only without reduced
 motion; grid dragging and rapid steppers stay static. Contain overlay scrolling.
 
-AI is the fourth entry beside Beginner, Advanced and Chisel in the shared mode
-control. Its label stays AI; connection/activity details remain in its accessible
+AI shares the mode control with Beginner, Advanced, Chisel and Architect. Its label stays AI; connection/activity details remain in its accessible
 name, tooltip and Connection tab. Opening the workspace highlights AI without
 changing the document's CAD mode. Closing it restores that mode's highlight;
 choosing a CAD mode closes the AI workspace.
@@ -65,7 +66,8 @@ choosing a CAD mode closes the AI workspace.
   and show spare space per side. Example measurements must be explicitly chosen and labelled.
 - Draw and move bins directly on the grid, with keyboard and stepper alternatives.
   Reject overlap and out-of-bounds placement; keep the previous valid arrangement.
-- Reveal only the selected bin's name, footprint, height and compartments. Put
+- Reveal only the selected bin's name, footprint and height initially. Keep
+  compartment choices in their disclosure, opening it for configured dividers. Put
   construction settings under Advanced. Show physical millimetres alongside cells.
 - Selecting a bin collapses drawer measurements and reveals the inspector near the
   top of the left column. Keep its bin name and Rotate/Duplicate/Remove actions
@@ -88,6 +90,16 @@ choosing a CAD mode closes the AI workspace.
   ambiguous magnet diameters, and account for the magnetic carrier's added height
   in drawer-fit checks. Place these controls under More bin options/Advanced.
 
+## Pictograms and control width
+
+Use the wider shared control-column token for the drawer, part and printer views.
+Keep the working canvas flexible and retain the stacked narrow layout. Supplement
+main navigation, drawer measurements and common spatial actions with the editor's
+SVG pictograms. Keep their text labels and accessible names; hide decorative
+icons from assistive technology and inherit each control's theme/state color.
+Use a consistent icon box and label alignment. Numeric entry and height choices
+remain text controls, rather than accumulating decorative icons.
+
 ## Beginner controls and review
 
 - Use a task heading and a Measure / Arrange / Review indicator for drawer work.
@@ -108,6 +120,26 @@ choosing a CAD mode closes the AI workspace.
   allowing apply. A printer envelope check does not certify physical printed fit.
 - Printer setup pairs editable controls with a proportional build-area diagram.
   Preserve browser preferences, per-drawer limits and print-fit metadata.
+
+## Open-sided bins for long items
+
+- Offer left, right, front and back openings on bins. Keep the entire floor and
+  protected Gridfinity base, and cut the matching stacking rim at the opening.
+  Inserts and baseplates do not accept wall openings.
+- Keep the option in the selected bin inspector and the single-part bin options.
+  Keep it collapsed until needed, and reveal configured openings on selection.
+  Use labeled pressed buttons with explicit Open/Closed state and a small side
+  diagram. Dashed bin edges and a shared legend show openings on the plan;
+  the selected-bin disclosure, tooltip and accessible name identify the sides.
+- Front is the lower edge of the plan (-Y); back is +Y. Rotate openings with the
+  footprint. Duplicate preserves them; draft undo and document save/reopen retain
+  them. Switching to an insert clears incompatible openings.
+- Adjacent bins remain independent printable parts. Match the two facing openings
+  and align them on a baseplate; a seam remains and no mechanical join is added.
+  Keep printer checks per part, including newly generated preview bounds.
+- Validate removed walls and rims with real native geometry, retained lower-base
+  overlap, connected meshes, and a long-item envelope crossing the seam. Physical
+  fit and the actual item's width/clearance remain user measurements.
 
 ## Reference adaptation
 
@@ -135,3 +167,22 @@ The panel gate harness bundles the production UI modules and original theme CSS.
 It derives the kit’s semantic contrast pairs from those actual theme definitions;
 no separate palette is maintained. Run `node mcp/tests/run-ai-panel-gates.mjs` for
 the panel gates, and `npm test` for native geometry and transaction coverage.
+
+## Imported manual tools
+
+The 2.7.4 source adaptation adds Architect alongside the existing manual modes;
+AI remains a separate workspace entry. Shared `tool-choice` controls expose
+combobox/listbox semantics, explicit selected and disabled states, typeahead,
+arrows, Home/End, Escape and commit with Enter/Space. Native option nodes are
+hidden metadata, not visible platform selects. Theme and sizing primitives come
+from `mcp/tokens/ai-status.json`; `src/tool-ui.css` shares the host CSS variables.
+
+On phones, the model view precedes the settings and parts list. Desktop tools
+expand the canvas between readable, scrollable control regions. Keep material,
+terrain and mesh colour choices as object data; interface accents follow the
+host theme. Manual tool lifecycles own their drafts. Leave Architect or close
+CAM, Voxel and CosForge before applying MCP mutations.
+
+The React boundary and staged rollout are recorded in
+[REACT-WORKSPACE-PLAN.md](REACT-WORKSPACE-PLAN.md). Keep the original document,
+workers and native CAD controllers while the maker workspace is ported.

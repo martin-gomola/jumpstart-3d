@@ -385,6 +385,8 @@ export function initMcp(app) {
   }
 
   function assertIdle() {
+    if (app.mode === "arch") throw new Error("Switch from Architect to Beginner or Advanced before using MCP edits");
+    if (app.cam?.isOpen || app.voxel?.isOpen || app.cosforge?.isOpen) throw new Error("Close CAM, Voxel or CosForge before using MCP edits");
     if (app.lathe?.active) throw new Error("Finish the interactive Lathe before using MCP edits");
     if (app.command || app.sketcher.active) throw new Error("Finish or cancel the open Sketch or CAD command before using MCP edits");
     if (store.preview) throw new Error("Finish or cancel the current preview before using MCP edits");

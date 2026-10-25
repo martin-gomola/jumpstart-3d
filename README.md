@@ -21,6 +21,14 @@ Stop the app with `make down`; inspect logs with `make logs`.
 For Codex, run `make codex-install`. For Claude Code and Antigravity CLI,
 register the host proxy described in [the MCP guide](mcp/README.md).
 
+## Editor version
+
+The editor includes the adapted 2.7.4 source: Architect, CAM Studio, CosForge,
+Voxel Studio, face patterns, sketch styles and expanded beginner tools. Existing
+Gridfinity generators and local MCP contracts remain available. Manual tool
+features do not automatically become MCP operations. The source identity and
+local adaptations are recorded in [SOURCES.md](SOURCES.md).
+
 ## MCP workflow
 
 The MCP API accepts typed modeling plans. Preview reports geometry and a visual

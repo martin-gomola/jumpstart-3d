@@ -1,3 +1,4 @@
+import { normalizeOpenSides, binTotalHeight } from "./gridfinity-walls.js";
 import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "./print-area.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "./drawer-spacers.js";
 import { GRIDFINITY_LIMITS, normalizeBinLimits } from "./gridfinity-limits.js";
@@ -34,7 +35,7 @@ export function placementError(drawer, candidate, ignoreId) {
   const limits = normalizeBinLimits(drawer.binLimits);
   if (candidate.columns < 1 || candidate.rows < 1 || candidate.columns > limits.columns || candidate.rows > limits.rows) return `Bin exceeds the configured ${limits.columns} × ${limits.rows} cell limit. Adjust Gridfinity Settings.`;
   if (candidate.x < 0 || candidate.y < 0 || candidate.x + candidate.columns > columns || candidate.y + candidate.rows > rows) return "Keep the bin inside the drawer grid.";
-  try { checkPrintFit(drawer.printArea, candidate.columns * 42 - 0.5, candidate.rows * 42 - 0.5, (candidate.heightUnits ?? 2) * 7 + (candidate.lip ? 4.4 : 0), candidate.label || "Bin"); } catch (error) { return error.message; }
+  try { checkPrintFit(drawer.printArea, candidate.columns * 42 - 0.5, candidate.rows * 42 - 0.5, candidate.kind === "insert" ? (candidate.heightUnits ?? 2) * 7 : binTotalHeight({ ...candidate, heightUnits: candidate.heightUnits ?? 2, floor: drawer.floor ?? 2 }), candidate.label || "Bin"); } catch (error) { return error.message; }
   const overlap = (drawer.bins || []).find(bin => bin.id !== ignoreId && bin.x < candidate.x + candidate.columns && bin.x + bin.columns > candidate.x && bin.y < candidate.y + candidate.rows && bin.y + bin.rows > candidate.y);
   return overlap ? `That space is occupied by ${overlap.label || "another bin"}.` : null;
 }
@@ -61,19 +62,20 @@ export function normalizeDrawerLayout(raw) {
   if (!raw.bins.length && !result.includeBaseplate) fail("Enable matching baseplates or add a bin before previewing.");
   const ids = new Set();
   for (const [i, entry] of raw.bins.entries()) {
-    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets"], `bin ${i + 1}`);
+    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets", "openSides"], `bin ${i + 1}`);
     const bin = { id: text(entry.id, `bin ${i + 1} id`), label: text(entry.label, `bin ${i + 1} label`, `Bin ${i + 1}`),
       x: number(entry.x, 0, 19, "column", true), y: number(entry.y, 0, 19, "row", true),
       columns: number(entry.columns, 1, GRIDFINITY_LIMITS.columns, "bin width", true), rows: number(entry.rows, 1, GRIDFINITY_LIMITS.rows, "bin depth", true),
-      heightUnits: number(entry.heightUnits ?? 3, 2, 12, "bin height", true), kind: entry.kind ?? "bin", lip: entry.lip === true, magnets: normalizeMagnetPockets(entry.magnets, `${entry.label || entry.id} magnets`) };
+      heightUnits: number(entry.heightUnits ?? 3, 2, 12, "bin height", true), kind: entry.kind ?? "bin", openSides: normalizeOpenSides(entry.openSides, `${entry.label || entry.id} openSides`), lip: entry.lip === true, magnets: normalizeMagnetPockets(entry.magnets, `${entry.label || entry.id} magnets`) };
     if (ids.has(bin.id)) fail("bin ids must be unique"); ids.add(bin.id);
     if (!["bin", "insert"].includes(bin.kind)) fail("parts must be bins or insert blanks");
+    if (bin.kind !== "bin" && bin.openSides.length) fail("insert blanks do not support open sides");
     if (entry.lip !== undefined && typeof entry.lip !== "boolean") fail("stacking lip must be a boolean");
     const dividers = object(entry.dividers ?? {}, ["x", "y"], "compartments");
     bin.dividers = { x: number(dividers.x ?? 0, 0, 6, "width dividers", true), y: number(dividers.y ?? 0, 0, 6, "depth dividers", true) };
     if (bin.kind === "insert" && (bin.lip || bin.dividers.x || bin.dividers.y)) fail("insert blanks do not use dividers or stacking lips");
     const baseZ = drawerBinBaseZ(result);
-    if (bin.heightUnits * 7 + (bin.lip ? 4.4 : 0) + baseZ > height + 1e-7) fail(`${bin.label} is too tall for the drawer; reduce its height or stacking lip`);
+    if ((bin.kind === "bin" ? binTotalHeight({ ...bin, floor: result.floor }) : bin.heightUnits * 7) + baseZ > height + 1e-7) fail(`${bin.label} is too tall for the drawer; reduce its height or stacking lip`);
     if (bin.kind === "bin" && bin.heightUnits * 7 - 7 - result.floor < 1) fail(`${bin.label} has insufficient space above its floor`);
     const error = placementError(result, bin); if (error) fail(`${bin.label}: ${error}`);
     result.bins.push(bin);
@@ -91,7 +93,7 @@ export function drawerParts(raw) {
   const part = (id, kind, x, y, columns, rows, extra = {}) => ({ id, type: "gridfinity", kind, columns, rows,
     position: [(x + columns / 2) * 42 - m.gridWidth / 2, (y + rows / 2) * 42 - m.gridDepth / 2, kind === "baseplate" ? 0 : drawerBinBaseZ(drawer)], ...extra });
   for (const bin of drawer.bins) parts.push(part(bin.id, bin.kind, bin.x, bin.y, bin.columns, bin.rows,
-    { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, dividers: bin.dividers, magnets: bin.magnets }));
+    { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, openSides: bin.openSides, dividers: bin.dividers, magnets: bin.magnets }));
   const tile = drawer.includeBaseplate ? baseplateTileLimits(drawer.printArea, m) : { columns: 4, rows: 4 };
   if (drawer.includeBaseplate) for (let y = 0; y < m.rows; y += tile.rows) for (let x = 0; x < m.columns; x += tile.columns) {
     parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(tile.columns, m.columns - x), Math.min(tile.rows, m.rows - y), { name: `Baseplate ${x / tile.columns + 1}, ${y / tile.rows + 1}`, magnets: drawer.baseplateMagnets }));

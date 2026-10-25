@@ -133,8 +133,8 @@ test("AI shares the mode switch and restores the CAD selection when closed", asy
   await page.waitForFunction(() => window.__app?.kernel?.ready);
   await page.waitForSelector("#loading", { state: "hidden" });
   const group = page.locator(".modeswitch"), ai = group.locator("#ai-status");
-  await expect(group.locator("button")).toHaveCount(4);
-  await expect(group.locator("button")).toHaveText(["Beginner", "Advanced", "Chisel", /AI/]);
+  await expect(group.locator("button")).toHaveCount(5);
+  await expect(group.locator("button")).toHaveText(["Beginner", "Advanced", "Chisel", "Architect", /AI/]);
   await expect(ai.locator(".ai-status-short")).toHaveText("AI");
   const originalMode = await page.evaluate(() => window.__app.mode);
   await page.evaluate(() => {

@@ -12,17 +12,19 @@ import { parseSVG, parseDXF, curvesBounds } from "./importers.js";
 import { traceImage, curvesFor } from "./trace.js";
 import { subjectMask, inflate, maskBox } from "./puffy.js";
 import { resolveSketch, sampleCurve, d2, polyArea } from "./regions.js";
-import { M4, arr, makePrimBody, frameOnFace, groupBodies, ungroupBody, deleteBodies, duplicateBodies, nextName, PRIM_DEFAULTS } from "./ops.js";
+import { M4, arr, makePrimBody, frameOnFace, groupBodies, ungroupBody, deleteBodies, duplicateBodies, nextName, PRIM_DEFAULTS, transformBodies } from "./ops.js";
 import { MATERIALS, matByKey, swatchCSS } from "./appearance.js";
 import { renderImage, QUALITY, LIGHT_COLORS, LIGHT_TYPES, BACKGROUNDS } from "./render.js";
 import { LIB, TEX_CATS, TEXTURE_DEFAULTS, textureThumb, texByKey, registerImageTexture, bytesToB64 } from "./texture.js";
 import { initSimulate } from "./simulate.js";
 import { readMeshFile, simplify, packMesh, meshBounds, toB64, contentId, MESH_LIMIT } from "./meshimport.js";
 import { initMeasure } from "./measure.js";
+import { textBounds } from "./textgeo.js";
 import { initSection } from "./section.js";
 import { sketchesDXF } from "./dxf.js";
 import { initPipeCoil } from "./pipecoil.js";
 import { initPrintSim } from "./printsim.js";
+import { FACEPAT, facePatCells } from "./facepat.js";
 
 const BODY_COLORS = ["#9fb1c4", "#c9a27a", "#8fb79a", "#b49ac8", "#c98f8f", "#8fb8c9"];
 
@@ -363,11 +365,38 @@ export function initAdvanced(app) {
     const ok = document.getElementById("cmd-ok");
     if (ok) ok.disabled = true;
   }
+  // ------------------------------------------------------------------ placing text on a face
+  // Snap a point on a flat face (all vectors in one space): to the face's center lines when close,
+  // otherwise to the grid measured from the face center. Returns the point and its offsets.
+  const gridMM = () => { const v = +(document.getElementById("snap") || {}).value; return v > 0 ? v : 1; };
+  function snapOnFace(p, c, x, up, tolMM, on) {
+    let u = p.clone().sub(c).dot(x), v = p.clone().sub(c).dot(up);
+    if (on) {
+      const g = gridMM();
+      u = Math.abs(u) < tolMM ? 0 : Math.round(u / g) * g;
+      v = Math.abs(v) < tolMM ? 0 : Math.round(v / g) * g;
+    }
+    const n = new THREE.Vector3().crossVectors(x, up).normalize();
+    const out = c.clone().addScaledVector(x, u).addScaledVector(up, v).addScaledVector(n, p.clone().sub(c).dot(n));
+    return { p: out, u, v };
+  }
+  // a text-sized outline on a face while dragging (the real letters follow when you let go)
+  function drawTextGhost(center, x, up, w, h, angleDeg, color = 0x1f4fa8) {
+    const a = (angleDeg * Math.PI) / 180, n = new THREE.Vector3().crossVectors(x, up).normalize();
+    const xr = x.clone().applyAxisAngle(n, a), ur = up.clone().applyAxisAngle(n, a);
+    const lift = n.clone().multiplyScalar(0.05);
+    const pt = (i, j) => center.clone().addScaledVector(xr, (i * w) / 2).addScaledVector(ur, (j * h) / 2).add(lift);
+    drawLine([pt(-1, -1), pt(1, -1), pt(1, 1), pt(-1, 1), pt(-1, -1)], color);
+    drawLine([center.clone().addScaledVector(xr, -w / 2 - 2).add(lift), center.clone().addScaledVector(xr, w / 2 + 2).add(lift)], 0x7fa6e0);
+    drawLine([center.clone().addScaledVector(ur, -h / 2 - 2).add(lift), center.clone().addScaledVector(ur, h / 2 + 2).add(lift)], 0x7fa6e0);
+  }
+  const textSize = (str, size, font) => { const b = textBounds({ str: String(str || "TEXT"), size, x: 0, y: 0, angle: 0, font }); return [Math.max(size * 0.6, b.maxX - b.minX), Math.max(size, b.maxY - b.minY)]; };
+
   // ------------------------------------------------------------------ Emboss / deboss text
   // Text raised from or cut into a face: flat faces, round faces (wrapped letter by
   // letter around a cylinder or a hole), spheres, and a straight push on other curves.
   function embossCmd(editing = null, pre = null) {
-    const st = { pick: null, str: "TEXT", font: "sans", size: 8, depth: 1, mode: "emboss", angle: 0, along: false, mirror: false, reverse: false, geo: null, body: null };
+    const st = { pick: null, str: "TEXT", font: "sans", size: 8, depth: 1, mode: "emboss", angle: 0, along: false, mirror: false, reverse: false, geo: null, body: null, snap: app.snapOn, dragging: false, lastPrev: 0 };
     // wrapping a Beginner text shape onto another shape: start from its text, and replace it on OK
     if (pre) { for (const k of ["str", "font", "size", "depth", "mode"]) if (pre[k] !== undefined) st[k] = pre[k]; st.removeAfter = pre.removeId || null; }
     if (editing) {
@@ -380,24 +409,33 @@ export function initAdvanced(app) {
         if (axW.z < -0.35) { st.geo.ax = st.geo.ax.map((q) => -q); st.angle = (((st.angle + 180) % 360) + 360) % 360; }
       }
     }
-    function geoOf(m) { const g = {}; for (const k of ["kind", "p", "n", "x", "o", "ax", "r", "ext", "c", "up"]) if (m[k] !== undefined) g[k] = m[k]; return g; }
+    function geoOf(m) { const g = {}; for (const k of ["kind", "p", "n", "x", "o", "ax", "r", "ext", "c", "up", "fc"]) if (m[k] !== undefined) g[k] = m[k]; return g; }
     let hover = null;
     const r6 = (v) => v.toArray().map((q) => (Math.abs(q) < 1e-9 ? 0 : +q.toFixed(6)));
     // where the text goes, in the body's own coordinates
-    function geoFromPick(f) {
+    function geoFromPick(f, snapOn = false) {
       const inv = f.base.m.clone().invert();
       const pl = f.point.clone().applyMatrix4(inv);
+      const tolMM = vp.tol(10) * vp.pixelSize(f.point);
       const info = f.info;
       const wn = f.normal.clone().normalize();
       const toLocalDir = (v) => v.clone().transformDirection(inv).normalize();
       // upright text: along world X on floors and ceilings, otherwise level across the face
       const wx = Math.abs(wn.z) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1).cross(wn).normalize();
-      if (info.t === "PLANE" && info.n) return { kind: "plane", p: r6(pl), n: info.n.slice(), x: r6(toLocalDir(wx)) };
+      if (info.t === "PLANE" && info.n) {
+        // snapping: the face's center lines when close, otherwise the grid measured from the face center
+        const xl = toLocalDir(wx), nl = new THREE.Vector3(...info.n).normalize(), upl = new THREE.Vector3().crossVectors(nl, xl).normalize();
+        const c = info.c ? new THREE.Vector3(...info.c) : null;
+        const q = c ? snapOnFace(pl, c, xl, upl, tolMM, snapOn).p : pl;
+        return { kind: "plane", p: r6(q), n: info.n.slice(), x: r6(xl), ...(c ? { fc: r6(c) } : {}) };
+      }
       if (info.t === "CYLINDRE" && info.ax) {
         // a round face's axis can point either way; turn it so letters stand upright as you see them
         const axW = new THREE.Vector3(...info.ax).transformDirection(f.base.m);
         const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(vp.camera.quaternion);
         const flip = Math.abs(axW.z) > 0.35 ? axW.z < 0 : axW.dot(camUp) < 0;
+        const ax = new THREE.Vector3(...info.ax).normalize(), o = new THREE.Vector3(...info.o);
+        if (snapOn) { const h = pl.clone().sub(o).dot(ax), g = gridMM(); pl.addScaledVector(ax, Math.round(h / g) * g - h); }
         return { kind: "cyl", p: r6(pl), o: info.o.slice(), ax: flip ? info.ax.map((q) => -q) : info.ax.slice(), r: info.r, ext: info.ext !== false };
       }
       if (info.t === "SPHERE" && info.o) return { kind: "sphere", p: r6(pl), c: info.o.slice(), r: info.r, up: r6(toLocalDir(new THREE.Vector3(0, 0, 1))) };
@@ -412,14 +450,14 @@ export function initAdvanced(app) {
         const b = findBody(doc, st.body);
         if (!b) return;
         const props = { ...st.geo, str: st.str, font: st.font, size: st.size, depth: st.depth, mode: st.mode, angle: st.angle, along: st.along, mirror: st.mirror, reverse: st.reverse };
-        if (editing) { const m = b.node.mods.find((x) => x.id === editing.mod); for (const k of ["kind", "p", "n", "x", "o", "ax", "r", "ext", "c", "up"]) delete m[k]; Object.assign(m, props); return; }
+        if (editing) { const m = b.node.mods.find((x) => x.id === editing.mod); for (const k of ["kind", "p", "n", "x", "o", "ax", "r", "ext", "c", "up", "fc"]) delete m[k]; Object.assign(m, props); return; }
         b.node.mods = b.node.mods || [];
         b.node.mods.push({ id: uid("f"), seq: nextSeq(doc), t: "emboss", ...props });
         if (st.removeAfter) doc.bodies = doc.bodies.filter((x) => x.id !== st.removeAfter);
       },
       ok() { commit(def, st.mode === "deboss" ? "Deboss text" : "Emboss text"); },
       onDelete: editing ? () => deleteFeature(editing) : null,
-      hint: () => st.geo ? "Click elsewhere on the face to move the text. Building round faces takes a moment." : "Click where the text goes: a flat face, a round face or a sphere.",
+      hint: () => st.geo ? "Drag the text across the body to move it (or click a spot). Arrow keys nudge it. Hold Alt (Option) while dragging to move freely." : "Click where the text goes: a flat face, a round face or a sphere.",
       build(body) {
         body.append(pickbox(!st.geo, st.geo ? el("span", {}, el("b", {}, findBody(store.doc, st.body)?.name || "Body"), " · " + KIND[st.geo.kind]) : "Click a face", null));
         const txt = el("input", { class: "num", id: "em-text", value: st.str, style: { fontFamily: "var(--f-ui)" }, "aria-label": "Text" });
@@ -440,7 +478,17 @@ export function initAdvanced(app) {
           el("button", { id: "em-reverse", "aria-pressed": st.reverse, title: "Reverse the order of the letters", onclick: () => { st.reverse = !st.reverse; refresh(); } }, "Reverse order"),
           el("button", { id: "em-rot180", title: "Turn the text upside down (adds 180° to the angle)", onclick: () => { st.angle = ((st.angle + 180) % 360 + 360) % 360; refresh(); } }, "↻ 180°"));
         body.append(row("Flip", flip, "em-flip"));
-        body.append(el("div", { class: "hint", style: { padding: 0 } }, "On round faces each letter wraps around the curve. For 3D printing, keep letters at least 5 mm tall and 0.6 mm deep."));
+        // where it sits: offsets from the face center (flat faces), and snapping
+        if (st.geo && st.geo.kind === "plane" && st.geo.fc) {
+          const [u, v] = uvOf();
+          const p3 = el("div", { class: "row3" });
+          p3.append(el("label", {}, "Across", app.numField({ value: +u.toFixed(3), id: "em-u", step: 1, onCommit: (val) => { setUV(val, null); refresh(); } })));
+          p3.append(el("label", {}, "Up", app.numField({ value: +v.toFixed(3), id: "em-v", step: 1, onCommit: (val) => { setUV(null, val); refresh(); } })));
+          p3.append(el("label", {}, "\u00a0", el("button", { class: "btn", id: "em-center", title: "Put the text in the middle of the face", onclick: () => { setUV(0, 0); refresh(); } }, "Center")));
+          body.append(el("div", { class: "subhead" }, "Position (from the face center)"), p3);
+        }
+        body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "em-snap", checked: st.snap, onchange: (e) => { st.snap = e.target.checked; } }), "Snap to the face center and the grid (" + withUnit(gridMM(), 3) + ")"));
+        body.append(el("div", { class: "hint", style: { padding: 0 } }, "Drag the text to move it. Snap off (or holding Alt / Option while you drag) moves it freely. Arrow keys nudge it (Shift ×10, Alt ×0.1). On round faces each letter wraps around the curve. For 3D printing, keep letters at least 5 mm tall and 0.6 mm deep."));
       },
       start() { refresh(); },
       handler: {
@@ -454,7 +502,144 @@ export function initAdvanced(app) {
           const f = pickBaseFace(e, (b) => !b.hole && !b.locked && b.id !== st.removeAfter && (!editing || b.id === st.body));
           if (!f || !f.info) return true;
           st.body = f.body;
+          st.geo = geoFromPick(f, st.snap !== !!e.altKey);
+          st.dragging = true; st.lastPrev = performance.now();
+          refresh();
+          return true;
+        },
+        // drag the text across the body's faces; the letters rebuild a few times a second and when you let go
+        move(e) {
+          if (!st.dragging) return;
+          const f = pickBaseFace(e, (b) => b.id === st.body);
+          if (!f || !f.info) return;
+          st.geo = geoFromPick(f, st.snap !== !!e.altKey);
+          draw();
+          const now = performance.now();
+          if (now - st.lastPrev > 350) { st.lastPrev = now; schedulePreview(def); }
+        },
+        up() { if (!st.dragging) return; st.dragging = false; refresh(); },
+      },
+      arrowKey(e) {
+        if (!st.geo || !st.body) return false;
+        const k = (e.shiftKey ? 10 : e.altKey ? 0.1 : 1) * (st.snap ? gridMM() : 1);
+        const dx = e.key === "ArrowLeft" ? -k : e.key === "ArrowRight" ? k : 0, dy = e.key === "ArrowUp" ? k : e.key === "ArrowDown" ? -k : 0;
+        const g = st.geo, P = new THREE.Vector3(...g.p);
+        if (g.kind === "plane") { const [x, up] = axesOf(); P.addScaledVector(x, dx).addScaledVector(up, dy); }
+        else if (g.kind === "cyl") { const ax = new THREE.Vector3(...g.ax).normalize(), o = new THREE.Vector3(...g.o); P.addScaledVector(ax, dy); if (dx) P.sub(o).applyAxisAngle(ax, -dx / Math.max(1e-6, g.r) * (g.ext === false ? -1 : 1)).add(o); }
+        else return false;
+        st.geo = { ...g, p: r6(P) };
+        refresh();
+        return true;
+      },
+    };
+    // a flat face's directions (body coordinates): across (the text's x) and up
+    function axesOf() { const g = st.geo, x = new THREE.Vector3(...g.x).normalize(), n = new THREE.Vector3(...g.n).normalize(); return [x, new THREE.Vector3().crossVectors(n, x).normalize(), n]; }
+    function uvOf() { const g = st.geo, [x, up] = axesOf(), d = new THREE.Vector3(...g.p).sub(new THREE.Vector3(...g.fc)); return [d.dot(x), d.dot(up)]; }
+    function setUV(u, v) {
+      const g = st.geo, [x, up] = axesOf(), [u0, v0] = uvOf();
+      const P = new THREE.Vector3(...g.p).addScaledVector(x, (u ?? u0) - u0).addScaledVector(up, (v ?? v0) - v0);
+      st.geo = { ...g, p: r6(P) };
+    }
+    function draw() {
+      clearOv();
+      if (hover) drawFace(hover.base, hover.face, 0xe8a317);
+      if (st.geo && st.body) {
+        const base = baseOf(st.body);
+        if (base) {
+          const P = new THREE.Vector3(...st.geo.p).applyMatrix4(base.m);
+          drawDot(P, 0x1f4fa8, 10);
+          if (st.geo.kind === "plane") {
+            const [x, up] = axesOf().map((v) => v.clone().transformDirection(base.m));
+            const [w, h] = textSize(st.str, st.size, st.font);
+            drawTextGhost(P, x, up, w, h, st.angle || 0);
+            if (st.geo.fc) drawDot(new THREE.Vector3(...st.geo.fc).applyMatrix4(base.m), 0x7fa6e0, 7);
+          }
+        }
+      }
+      vp.request();
+    }
+    function refresh(rerender = true) { if (rerender) def.render(); draw(); schedulePreview(def); }
+    openCmd(def);
+  }
+  // ------------------------------------------------------------------ Pattern on face
+  // Raise or cut a pattern (hexagons, diamond plate, screen mesh, ...) on one flat face. It is a
+  // feature like a hole or emboss text: listed in the timeline, editable, rebuilt when the body changes.
+  function facePatternCmd(editing = null) {
+    const lastKind = (() => { try { return localStorage.getItem("jumpstart3d.facepat.kind") || "hex"; } catch (e) { return "hex"; } })();
+    const K0 = FACEPAT[lastKind] ? lastKind : "hex";
+    const st = { kind: K0, size: FACEPAT[K0].size, gap: FACEPAT[K0].g, depth: 1, mode: "raise", lines: false, edge: "whole", border: 2, angle: 0, ox: 0, oy: 0, body: null, geo: null, face: -1 };
+    if (editing) {
+      const b = findBody(store.doc, editing.body);
+      const m = b.node.mods.find((x) => x.id === editing.mod);
+      Object.assign(st, { kind: m.kind, size: m.size, gap: m.gap, depth: m.depth, mode: m.mode, lines: !!m.lines, edge: m.edge || "whole", border: m.border ?? 2, angle: m.angle || 0, ox: m.ox || 0, oy: m.oy || 0, body: b.id, geo: { p: m.p, n: m.n, x: m.x } });
+    }
+    let hover = null;
+    const r6 = (v) => v.toArray().map((q) => (Math.abs(q) < 1e-9 ? 0 : +q.toFixed(6)));
+    function geoFromPick(f) {
+      const inv = f.base.m.clone().invert();
+      const pl = f.point.clone().applyMatrix4(inv);
+      const wn = f.normal.clone().normalize();
+      // pattern "across" direction: world X on floors and ceilings, otherwise level across the face
+      const wx = Math.abs(wn.z) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1).cross(wn).normalize();
+      return { p: r6(pl), n: f.info.n.slice(), x: r6(wx.clone().transformDirection(inv).normalize()) };
+    }
+    const flat = (f) => f && f.info && f.info.t === "PLANE" && f.info.n;
+    const def = {
+      title: (editing ? "Edit " : "") + "Pattern on face",
+      valid: () => !!st.geo && st.size > 0 && st.depth > 0,
+      canOk: () => def.valid(),
+      apply(doc) {
+        const b = findBody(doc, st.body);
+        if (!b) return;
+        const props = { p: st.geo.p, n: st.geo.n, x: st.geo.x, kind: st.kind, size: st.size, gap: st.gap, depth: st.depth, mode: st.mode, lines: st.lines, edge: st.edge, border: st.border, angle: st.angle, ox: st.ox, oy: st.oy };
+        if (editing) { const m = b.node.mods.find((x) => x.id === editing.mod); Object.assign(m, props); return; }
+        b.node.mods = b.node.mods || [];
+        b.node.mods.push({ id: uid("f"), seq: nextSeq(doc), t: "facepat", ...props });
+      },
+      ok() { try { localStorage.setItem("jumpstart3d.facepat.kind", st.kind); } catch (e) {} commit(def, FACEPAT[st.kind].name + (st.mode === "cut" ? " cut" : " pattern")); },
+      onDelete: editing ? () => deleteFeature(editing) : null,
+      hint: () => st.geo ? "Change the pattern, its size, depth and direction. It stays editable: double-click it in the timeline later. Click another flat face to move it there." : "Click a flat face to put the pattern on.",
+      build(body) {
+        body.append(pickbox(!st.geo, st.geo ? el("span", {}, el("b", {}, findBody(store.doc, st.body)?.name || "Body"), " · flat face") : "Click a flat face", null));
+        // the patterns, with little pictures
+        const grid = el("div", { class: "fp-grid", id: "fp-kind" });
+        for (const [k, d] of Object.entries(FACEPAT)) {
+          grid.append(el("button", { class: "fp-tile", "aria-pressed": String(st.kind === k), "data-k": k, title: d.name, onclick: () => { if (st.kind === k) return; st.kind = k; st.size = d.size; st.gap = d.g; if (k === "slots") st.edge = "clip"; refresh(); } },
+            el("span", { html: patSVG(k) }), el("small", {}, d.name)));
+        }
+        body.append(grid);
+        body.append(row("Style", seg([["raise", "Raise"], ["cut", "Cut in"]], st.mode, (v) => { st.mode = v; refresh(); }, "fp-mode")));
+        body.append(row("Make", seg([[false, "The shapes"], [true, "Lines between"]], st.lines, (v) => { st.lines = v; refresh(); }, "fp-lines")));
+        const r3 = el("div", { class: "row3" });
+        r3.append(el("label", {}, "Pattern size", app.numField({ value: st.size, id: "fp-size", min: 0.5, step: 1, onCommit: (v) => { st.size = v; refresh(false); } })));
+        r3.append(el("label", {}, FACEPAT[st.kind].gap, app.numField({ value: st.gap, id: "fp-gap", min: 0, step: 0.2, onCommit: (v) => { st.gap = v; refresh(false); } })));
+        r3.append(el("label", {}, st.mode === "cut" ? "Depth" : "Height", app.numField({ value: st.depth, id: "fp-depth", min: 0.05, step: 0.2, onCommit: (v) => { st.depth = v; refresh(false); } })));
+        body.append(r3);
+        const dirs = el("div", { class: "seg", id: "fp-dirs" }, ...[0, 30, 45, 60, 90].map((a) => el("button", { "aria-pressed": String(st.angle === a), onclick: () => { st.angle = a; refresh(); } }, a + "°")));
+        body.append(row("Direction", el("div", { style: { display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" } }, dirs, app.numField({ value: st.angle, id: "fp-angle", step: 15, onCommit: (v) => { st.angle = v; refresh(); } })), "fp-angle"));
+        if (st.kind !== "slots") body.append(row("At the edges", seg([["whole", "Whole shapes"], ["clip", "Trim at edge"]], st.edge, (v) => { st.edge = v; refresh(); }, "fp-edge")));
+        const r3b = el("div", { class: "row3" });
+        if (st.edge !== "clip" && st.kind !== "slots") r3b.append(el("label", {}, "Border", app.numField({ value: st.border, id: "fp-border", min: 0, step: 0.5, onCommit: (v) => { st.border = v; refresh(false); } })));
+        r3b.append(el("label", {}, "Shift across", app.numField({ value: st.ox, id: "fp-ox", step: 0.5, onCommit: (v) => { st.ox = v; refresh(false); } })));
+        r3b.append(el("label", {}, "Shift up", app.numField({ value: st.oy, id: "fp-oy", step: 0.5, onCommit: (v) => { st.oy = v; refresh(false); } })));
+        body.append(r3b);
+        body.append(el("div", { class: "hint", style: { padding: 0 } }, "Pattern size is the distance from one shape to the next. The pattern is centered on the face and follows it when the body is resized. For 3D printing keep gaps and walls at least 0.8 mm and heights at least 0.4 mm."));
+      },
+      start() { refresh(); },
+      handler: {
+        hover(e) {
+          const f = pickBaseFace(e, (b) => !b.hole && !b.locked && (!editing || b.id === st.body));
+          hover = flat(f) ? f : null;
+          draw();
+          vp.canvas.style.cursor = hover ? "crosshair" : f ? "not-allowed" : "default";
+        },
+        down(e) {
+          const f = pickBaseFace(e, (b) => !b.hole && !b.locked && (!editing || b.id === st.body));
+          if (!f) return true;
+          if (!flat(f)) { app.toast("Patterns go on flat faces. Click a flat face."); return true; }
+          st.body = f.body; st.face = f.face;
           st.geo = geoFromPick(f);
+          st.ox = 0; st.oy = 0;
           refresh();
           return true;
         },
@@ -462,18 +647,30 @@ export function initAdvanced(app) {
     };
     function draw() {
       clearOv();
-      if (hover) drawFace(hover.base, hover.face, 0xe8a317);
+      if (hover) drawFace(hover.base, hover.face, 0xe8a317, 0.35);
       if (st.geo && st.body) {
         const base = baseOf(st.body);
-        if (base) drawDot(new THREE.Vector3(...st.geo.p).applyMatrix4(base.m), 0x1f4fa8, 10);
+        if (base && st.face >= 0 && base.data.faceGroups[st.face]) drawFace(base, st.face, 0x1f4fa8, 0.18);
       }
       vp.request();
     }
     function refresh(rerender = true) { if (rerender) def.render(); draw(); schedulePreview(def); }
     openCmd(def);
   }
+  // a small picture of a pattern (SVG), from the same shapes the engine uses
+  const patSVGCache = new Map();
+  function patSVG(kind) {
+    if (patSVGCache.has(kind)) return patSVGCache.get(kind);
+    const d = FACEPAT[kind], W = 40, s = kind === "knurl" ? 9 : kind === "mesh" ? 8 : 12;
+    const cells = facePatCells({ kind, size: s, gap: (d.g / d.size) * s }, [-W / 2, -W / 2, W / 2, W / 2]);
+    let out = `<svg viewBox="${-W / 2} ${-W / 2} ${W} ${W}" width="40" height="40" aria-hidden="true"><rect x="${-W / 2}" y="${-W / 2}" width="${W}" height="${W}" rx="4" fill="#d9dee6"/><g fill="#1f4fa8">`;
+    for (const c of cells) out += c.r ? `<circle cx="${c.c[0].toFixed(2)}" cy="${(-c.c[1]).toFixed(2)}" r="${c.r.toFixed(2)}"/>` : `<polygon points="${c.pts.map(([x, y]) => x.toFixed(2) + "," + (-y).toFixed(2)).join(" ")}"/>`;
+    out += "</g></svg>";
+    patSVGCache.set(kind, out);
+    return out;
+  }
   function textFontSelect(value, onPick, id) {
-    const s = el("select", { class: "num", id, "aria-label": "Font" }, ...Object.entries(FONT_NAMES).map(([v, l]) => el("option", { value: v, selected: v === value }, l)));
+    const s = el("tool-choice", { class: "num", id, "aria-label": "Font" }, ...Object.entries(FONT_NAMES).map(([v, l]) => el("option", { value: v, selected: v === value }, l)));
     s.onchange = () => onPick(s.value);
     return s;
   }
@@ -571,7 +768,7 @@ export function initAdvanced(app) {
         body.append(row("Origin plane", seg([["XY", "XY · Top"], ["XZ", "XZ · Front"], ["YZ", "YZ · Right"]], null, (v) => makeSketch(ORIGIN_PLANES[v], null), "plane-seg")));
         const cps = (store.doc.planes || []);
         if (cps.length) {
-          const sel = el("select", { class: "num", id: "sk-cplane", "aria-label": "Construction plane" }, el("option", { value: "" }, "Pick a construction plane…"), ...cps.map((p) => el("option", { value: p.id }, p.name)));
+          const sel = el("tool-choice", { class: "num", id: "sk-cplane", "aria-label": "Construction plane" }, el("option", { value: "" }, "Pick a construction plane…"), ...cps.map((p) => el("option", { value: p.id }, p.name)));
           sel.onchange = () => { const p = cps.find((q) => q.id === sel.value); if (p) makeSketch(p.plane, null); };
           body.append(row("Or", sel, "sk-cplane"));
         }
@@ -937,7 +1134,7 @@ export function initAdvanced(app) {
         }
         if (!editing || editing.mod) {
           const ops = editing ? [["join", "Join"], ["cut", "Cut"], ["intersect", "Intersect"]] : [["auto", "Automatic"], ["new", "New body"], ["join", "Join"], ["cut", "Cut"], ["intersect", "Intersect"]];
-          const sel = el("select", { class: "num", id: "ex-op" }, ...ops.map(([v, l]) => el("option", { value: v, selected: v === st.op }, l)));
+          const sel = el("tool-choice", { class: "num", id: "ex-op" }, ...ops.map(([v, l]) => el("option", { value: v, selected: v === st.op }, l)));
           sel.onchange = () => { st.op = sel.value; refresh(); };
           body.append(row("Operation", sel, "ex-op"));
           if (st.op === "auto") body.append(el("div", { class: "hint", id: "ex-hint", style: { padding: 0 } }, opHint()));
@@ -1305,6 +1502,8 @@ export function initAdvanced(app) {
         });
         list.append(el("button", { class: "btn add-set", id: "ed-addset", title: "Add a selection set with its own size", onclick: () => { st.sets.push(newSet(cur().value)); st.active = st.sets.length - 1; refresh(); } }, "+ Add set"));
         body.append(list);
+        // every edge of one shape at once (handy in Beginner: round a whole box)
+        if (!editing) body.append(el("button", { class: "btn", id: "ed-all", title: "Pick every edge of the selected shape (or the shape of the edges already picked)", onclick: () => allEdges() }, isF() ? "Round all edges of the shape" : "Chamfer all edges of the shape"));
         const s = cur();
         if (isF()) body.append(row("Radius type", seg([["const", "Constant"], ["chord", "Chord length"], ["variable", "Variable"]], s.rt, (v) => { s.rt = v; refresh(); }, "ed-rtype")));
         const lab = !isF() ? "Distance" : s.rt === "chord" ? "Chord length" : s.rt === "variable" ? "Start radius" : "Radius";
@@ -1356,6 +1555,18 @@ export function initAdvanced(app) {
         },
       },
     };
+    function allEdges() {
+      const usable = (b) => b && !b.hole && !b.locked && !b.hidden;
+      const s = cur();
+      let id = st.lockedBody || (s.items[0] && s.items[0].body) || app.sel.find((x) => usable(findBody(store.doc, x)));
+      if (!id) { const all = store.doc.bodies.filter(usable); if (all.length === 1) id = all[0].id; }
+      const base = id && baseOf(id);
+      if (!base) { app.toast("Click a shape first (or one of its edges), then use this button."); return; }
+      for (const o of st.sets) if (o !== s) o.items = o.items.filter((x) => x.body !== id);
+      s.items = s.items.filter((x) => x.body !== id);
+      base.data.edgeGroups.forEach(([, c], ei) => { if (c > 0) s.items.push({ body: id, edge: ei, info: base.data.edgeInfo[ei], pts: edgeWorldPts(base, ei) }); });
+      refresh();
+    }
     // an edge (plus its tangent chain) or, away from edges, a whole face's edges
     function pickTarget(e) {
       const filter = (b) => !b.hole && !b.locked && (!st.lockedBody || b.id === st.lockedBody);
@@ -1536,7 +1747,7 @@ export function initAdvanced(app) {
         const met = sizes.filter((k) => !isInchKey(k)), inch = sizes.filter(isInchKey);
         const groups = [el("optgroup", { label: "Metric (ISO)" }, ...met.map(opt)), el("optgroup", { label: "Inch (UNC / UNF)" }, ...inch.map(opt))];
         if (getUnit() === "in") groups.reverse();
-        const ssel = el("select", { class: "num", id: "hole-size", "aria-label": "Screw size" }, el("option", { value: "" }, "Custom"), ...groups);
+        const ssel = el("tool-choice", { class: "num", id: "hole-size", "aria-label": "Screw size" }, el("option", { value: "" }, "Custom"), ...groups);
         ssel.onchange = () => { st.size = ssel.value; if (st.size) applySize(st.size); refresh(); };
         body.append(row(st.kind === "tapped" ? "Thread" : "Screw size", ssel, "hole-size"));
         const custom = (f) => (v) => { f(v); st.size = ""; const s2 = document.getElementById("hole-size"); if (s2) s2.value = ""; refresh(false); };
@@ -1728,7 +1939,7 @@ export function initAdvanced(app) {
         // any sketch, even a hidden one, can be the starting plane
         const sks = store.doc.sketches || [];
         if (sks.length) {
-          const sel = el("select", { class: "num", id: "pl-sketch" }, el("option", { value: "" }, "…or pick a sketch"), ...sks.map((k) => el("option", { value: k.id, selected: st.ref && st.ref.sketch === k.id }, k.name || "Sketch")));
+          const sel = el("tool-choice", { class: "num", id: "pl-sketch" }, el("option", { value: "" }, "…or pick a sketch"), ...sks.map((k) => el("option", { value: k.id, selected: st.ref && st.ref.sketch === k.id }, k.name || "Sketch")));
           sel.onchange = () => { const r = sel.value && sketchRef(sel.value); if (r) { st.ref = r; refresh(); } };
           body.append(row("Sketch", sel, "pl-sketch"));
         }
@@ -2577,7 +2788,7 @@ export function initAdvanced(app) {
     const list = (getUnit() === "in" ? THREAD_OFFSETS_IN : THREAD_OFFSETS).slice();
     const cur = value || 0;
     if (!list.some((v) => Math.abs(v - cur) < 1e-6)) { list.push(cur); list.sort((a, b) => b - a); }
-    const sel = el("select", { class: "num", id, "aria-label": "Thread print offset" }, ...list.map((v) => el("option", { value: v, selected: Math.abs(v - cur) < 1e-6 }, offsetLabel(v))));
+    const sel = el("tool-choice", { class: "num", id, "aria-label": "Thread print offset" }, ...list.map((v) => el("option", { value: v, selected: Math.abs(v - cur) < 1e-6 }, offsetLabel(v))));
     sel.onchange = () => onPick(+sel.value);
     return sel;
   }
@@ -2656,7 +2867,7 @@ export function initAdvanced(app) {
         const mk = (f) => STD.filter((s) => s[3] === f).map((s) => el("option", { value: s[0], selected: st.preset === s[0] }, s[0] + (f === "un" ? ` (Ø${fmt(s[1], 2)} mm)` : "")));
         const groups = [el("optgroup", { label: "Metric (ISO coarse)" }, ...mk("iso")), el("optgroup", { label: "Inch (UNC / UNF)" }, ...mk("un"))];
         if (getUnit() === "in") groups.reverse();
-        const sel = el("select", { class: "num", id: "th-size", "aria-label": "Thread size" }, el("option", { value: "" }, "Custom pitch"), ...groups);
+        const sel = el("tool-choice", { class: "num", id: "th-size", "aria-label": "Thread size" }, el("option", { value: "" }, "Custom pitch"), ...groups);
         sel.onchange = () => { const s = STD.find((x) => x[0] === sel.value || (x[3] === "iso" && String(x[1]) === sel.value)); st.preset = s ? s[0] : null; if (s) { st.pitch = s[2]; def.render(); refresh(false); } };
         body.append(row("Size", sel, "th-size"));
         body.append(pitchRow(st.pitch, (v) => { st.pitch = v; st.preset = null; refresh(); }, "th-pitch"));
@@ -2867,14 +3078,14 @@ export function initAdvanced(app) {
         grid.append(el("button", { class: "tx-item tx-import", id: "tx-import", title: "Use your own picture (PNG, JPG, SVG) as a texture", onclick: importImage }, el("span", { class: "tx-plus", html: ICON.import }), el("span", {}, "Import image…")));
         for (const t of items) {
           const img = el("img", { alt: "", width: 44, height: 44 });
-          const btn = el("button", { class: "tx-item", title: t.name, "aria-pressed": st.tex === t.key, "data-key": t.key, onclick: () => { const wasMine = st.tex.startsWith("img:"); st.tex = t.key; if (t.custom && !wasMine) { st.once = true; if (st.size < 15) st.size = 30; refresh(); return; } grid.querySelectorAll(".tx-item").forEach((x) => x.setAttribute("aria-pressed", x.dataset.key === t.key)); schedulePreview(def); } }, img, el("span", {}, t.name));
+          const btn = el("button", { class: "tx-item", title: t.name, "aria-pressed": st.tex === t.key, "data-key": t.key, onclick: () => { const wasMine = st.tex.startsWith("img:"); st.tex = t.key; if (t.custom && !wasMine) { st.once = true; if (st.size < 15) st.size = 30; refresh(); return; } if (t.size && !st.sizeSet && !editing && Math.abs(st.size - t.size) > 1e-9) { st.size = t.size; const nf = document.getElementById("tx-size"), rg = document.getElementById("tx-size-range"); if (nf && nf.setValue) nf.setValue(t.size); else if (nf) nf.value = t.size; if (rg) { if (+rg.max < t.size) rg.max = 100; rg.value = t.size; } } grid.querySelectorAll(".tx-item").forEach((x) => x.setAttribute("aria-pressed", x.dataset.key === t.key)); schedulePreview(def); } }, img, el("span", {}, t.name));
           grid.append(btn);
           thumbQueue.push([img, t.key]);
         }
         pumpThumbs();
         body.append(grid);
         const live = (k) => (v) => { st[k] = v; refreshSoon(); };
-        body.append(sliderRow("Tile size", "tx-size", st.size, 0.5, 20, 0.1, "mm", live("size")));
+        body.append(sliderRow("Tile size", "tx-size", st.size, 0.5, Math.max(20, st.size > 20 ? 100 : 20), 0.1, "mm", (v) => { st.sizeSet = true; live("size")(v); }));
         body.append(sliderRow("Depth", "tx-depth", st.depth, 0.05, 3, 0.05, "mm", live("depth")));
         body.append(row("Direction", seg([["raise", "Raise"], ["engrave", "Engrave"], ["both", "Both"]], st.dir, (v) => { st.dir = v; refresh(); }, "tx-dir")));
         body.append(sliderRow("Rotation", "tx-rot", st.rot, -180, 180, 1, "°", live("rot")));
@@ -3033,7 +3244,7 @@ export function initAdvanced(app) {
         body.append(row("Centerline", pickbox(st.pickRail, n ? el("span", {}, el("b", {}, n), ` curve${n > 1 ? "s" : ""}`) : "Optional: click to pick", n ? () => { st.rail = null; st.pickRail = false; refresh(); } : null, () => { st.pickRail = true; st.closed = false; def.render(); }), "loft-rail"));
         if (!editing || editing.mod) {
           const ops = editing ? [["join", "Join"], ["cut", "Cut"], ["intersect", "Intersect"]] : [["auto", "Automatic"], ["new", "New body"], ["join", "Join"], ["cut", "Cut"], ["intersect", "Intersect"]];
-          const sel = el("select", { class: "num", id: "loft-op" }, ...ops.map(([v, l]) => el("option", { value: v, selected: v === st.op }, l)));
+          const sel = el("tool-choice", { class: "num", id: "loft-op" }, ...ops.map(([v, l]) => el("option", { value: v, selected: v === st.op }, l)));
           sel.onchange = () => { st.op = sel.value; refresh(); };
           body.append(row("Operation", sel, "loft-op"));
         }
@@ -3192,7 +3403,7 @@ export function initAdvanced(app) {
         body.append(row("…or use", seg([["YZ", "YZ"], ["XZ", "XZ"], ["XY", "XY"]], ["YZ", "XZ", "XY"].includes(st.planeName) ? st.planeName : null, (v) => { const p = ORIGIN_PLANES[v]; st.plane = { o: p.o.slice(), n: p.n.slice() }; st.planeName = v; st.pickPlane = false; refresh(); }, "mir-origin")));
         const cps = store.doc.planes || [];
         if (cps.length) {
-          const sel = el("select", { class: "num", id: "mir-cplane" }, el("option", { value: "" }, "A construction plane…"), ...cps.map((p) => el("option", { value: p.id }, p.name)));
+          const sel = el("tool-choice", { class: "num", id: "mir-cplane" }, el("option", { value: "" }, "A construction plane…"), ...cps.map((p) => el("option", { value: p.id }, p.name)));
           sel.onchange = () => { const p = cps.find((q) => q.id === sel.value); if (p) { st.plane = { o: p.plane.o.slice(), n: p.plane.n.slice() }; st.planeName = p.name; st.pickPlane = false; refresh(); } };
           body.append(row("", sel, "mir-cplane"));
         }
@@ -3261,7 +3472,7 @@ export function initAdvanced(app) {
     body.append(row("Tool plane", seg([["YZ", "YZ"], ["XZ", "XZ"], ["XY", "XY"]], ["YZ", "XZ", "XY"].includes(st.planeName) ? st.planeName : null, (v) => { const p = ORIGIN_PLANES[v]; st.plane = { o: p.o.slice(), n: p.n.slice() }; st.planeName = v; st.toolBody = null; st.curves = null; refresh(); }, "sp-origin")));
     const cps = store.doc.planes || [];
     if (cps.length) {
-      const sel = el("select", { class: "num", id: "sp-cplane" }, el("option", { value: "" }, "A construction plane…"), ...cps.map((p) => el("option", { value: p.id }, p.name)));
+      const sel = el("tool-choice", { class: "num", id: "sp-cplane" }, el("option", { value: "" }, "A construction plane…"), ...cps.map((p) => el("option", { value: p.id }, p.name)));
       sel.onchange = () => { const p = cps.find((q) => q.id === sel.value); if (p) { st.plane = { o: p.plane.o.slice(), n: p.plane.n.slice() }; st.planeName = p.name; st.toolBody = null; st.curves = null; refresh(); } };
       body.append(row("", sel, "sp-cplane"));
     }
@@ -3339,7 +3550,7 @@ export function initAdvanced(app) {
         if (st.kind === "sketch") {
           const sks = store.doc.sketches || [];
           if (sks.length) {
-            const sel = el("select", { class: "num", id: "sp-sketch" }, el("option", { value: "" }, "…or a whole sketch"), ...sks.map((k) => el("option", { value: k.id }, k.name || "Sketch")));
+            const sel = el("tool-choice", { class: "num", id: "sp-sketch" }, el("option", { value: "" }, "…or a whole sketch"), ...sks.map((k) => el("option", { value: k.id }, k.name || "Sketch")));
             sel.onchange = () => { if (sel.value) useSketch(sel.value, null); };
             body.append(row("", sel, "sp-sketch"));
           }
@@ -3618,7 +3829,7 @@ export function initAdvanced(app) {
         body.append(el("div", { class: "hint", style: { padding: "4px 0 0" } }, `${W} × ${H} pixels, ${QUALITY[P.quality].samples} passes: usually ${QUALITY[P.quality].note}.`));
         body.append(row("Picture shape", seg([["view", "View"], ["16:9", "16:9"], ["4:3", "4:3"], ["1:1", "Square"]], P.shape, (v) => { P.shape = v; def.render(); updatePreview(); }, "rd-shape")));
         body.append(el("div", { class: "subhead" }, "Lighting"));
-        const lt = el("select", { class: "num", id: "rd-light" }, ...Object.entries(LIGHT_TYPES).map(([k, t]) => el("option", { value: k, selected: k === P.lightType }, t.label)));
+        const lt = el("tool-choice", { class: "num", id: "rd-light" }, ...Object.entries(LIGHT_TYPES).map(([k, t]) => el("option", { value: k, selected: k === P.lightType }, t.label)));
         lt.onchange = () => { P.lightType = lt.value; updatePreview(); };
         body.append(row("Light type", lt, "rd-light"));
         const colors = [...Object.entries(LIGHT_COLORS).map(([k, c]) => [k, c.label]), ["custom", "Custom"]];
@@ -3637,7 +3848,7 @@ export function initAdvanced(app) {
         body.append(sliderRow("Brightness", "rd-int", P.intensity, 0.2, 2.5, 0.05, "×", live("intensity")));
         body.append(sliderRow("Softness", "rd-soft", P.softness, 0, 3, 0.05, "×", live("softness")));
         body.append(el("div", { class: "subhead" }, "Background"));
-        const bg = el("select", { class: "num", id: "rd-bg" }, ...Object.entries(BACKGROUNDS).map(([k, b]) => el("option", { value: k, selected: k === P.background }, b.label)));
+        const bg = el("tool-choice", { class: "num", id: "rd-bg" }, ...Object.entries(BACKGROUNDS).map(([k, b]) => el("option", { value: k, selected: k === P.background }, b.label)));
         bg.onchange = () => { P.background = bg.value; def.render(); if (P.background === "image" && !P.bgImage) pickBg(); else updatePreview(); };
         body.append(row("Background", bg, "rd-bg"));
         if (P.background === "image") body.append(row("Picture", el("button", { class: "btn", id: "rd-bgpick", onclick: pickBg }, P.bgImage ? "Change: " + P.bgName : "Choose a picture…"), "rd-bgpick"));
@@ -3964,37 +4175,67 @@ export function initAdvanced(app) {
 
   // Shell, like Fusion 360: pick faces to remove (or none, for a closed hollow body), a
   // wall thickness, and whether the wall grows inside, outside or both ways.
-  function shellCmd(editing = null) {
-    const st = { faces: [], th: 2, body: null, dir: "in", chain: false, closed: false };
+  // Shell: Openings (pick faces to remove; the rest becomes a wall), or Hollow (the whole model is
+  // hollow inside with a closed wall, for one or more bodies). Shared with Beginner.
+  function shellCmd(editing = null, opts = {}) {
+    let hollowPref = false; try { hollowPref = localStorage.getItem("jumpstart3d.shell.type") === "hollow"; } catch (e) {}
+    const st = { faces: [], th: 2, body: null, bodies: [], dir: "in", chain: false, closed: opts.type ? opts.type === "hollow" : app.mode === "beginner" || hollowPref };
     if (editing) {
       const b = findBody(store.doc, editing.body);
       const m = b.node.mods.find((x) => x.id === editing.mod);
       Object.assign(st, { th: m.th, body: b.id, keepFaces: m.faces, dir: m.dir || "in", chain: !!m.chain, closed: !(m.faces || []).length });
     }
+    // Hollow starts with the selected shapes (or the only one there is)
+    const usable = (b) => b && !b.hole && !b.locked && !b.hidden;
+    const preset = () => {
+      if (editing) return;
+      let ids = app.sel.filter((id) => usable(findBody(store.doc, id)));
+      if (!ids.length) { const all = store.doc.bodies.filter(usable); if (all.length === 1) ids = [all[0].id]; }
+      st.bodies = ids;
+    };
+    if (st.closed) preset();
     let hover = null;
-    const pickable = (b) => !b.hole && !b.locked && (!st.body || b.id === st.body || (st.closed && !editing));
+    const pickable = (b) => !b.hole && !b.locked && (st.closed ? !editing || b.id === st.body : !st.body || b.id === st.body);
+    const targets = () => (editing ? [st.body] : st.closed ? st.bodies : st.body ? [st.body] : []);
     const def = {
       title: (editing ? "Edit " : "") + "Shell",
-      valid: () => st.th > 0 && !!st.body && (st.closed || editing || st.faces.length > 0),
+      valid: () => st.th > 0 && targets().length > 0 && (st.closed || editing || st.faces.length > 0),
       canOk: () => def.valid(),
       apply(doc) {
-        const b = findBody(doc, st.body);
-        if (!b) return;
-        const faces = st.closed ? [] : st.faces.length ? st.faces.map((f) => ({ c: f.c })) : st.keepFaces || [];
-        const props = { th: st.th, faces, dir: st.dir === "in" ? undefined : st.dir, chain: st.chain && !st.closed ? true : undefined };
-        if (editing) { const m = b.node.mods.find((x) => x.id === editing.mod); Object.assign(m, props); return; }
-        b.node.mods = b.node.mods || [];
-        b.node.mods.push({ id: uid("f"), seq: nextSeq(doc), t: "shell", ...props });
+        if (editing) {
+          const b = findBody(doc, st.body);
+          if (!b) return;
+          const faces = st.closed ? [] : st.faces.length ? st.faces.map((f) => ({ c: f.c })) : st.keepFaces || [];
+          const m = b.node.mods.find((x) => x.id === editing.mod);
+          Object.assign(m, { th: st.th, faces, dir: st.dir === "in" ? undefined : st.dir, chain: st.chain && !st.closed ? true : undefined });
+          return;
+        }
+        const seq = nextSeq(doc);
+        for (const id of targets()) {
+          const b = findBody(doc, id);
+          if (!b) continue;
+          const faces = st.closed ? [] : st.faces.map((f) => ({ c: f.c }));
+          b.node.mods = b.node.mods || [];
+          b.node.mods.push({ id: uid("f"), seq, t: "shell", th: st.th, faces, dir: st.dir === "in" ? undefined : st.dir, chain: st.chain && !st.closed ? true : undefined });
+        }
       },
-      ok() { commit(def, "Shell"); },
+      ok() { try { localStorage.setItem("jumpstart3d.shell.type", st.closed ? "hollow" : "open"); } catch (e) {} commit(def, st.closed ? "Hollow" : "Shell"); },
       onDelete: editing ? () => deleteFeature(editing) : null,
-      hint: () => st.closed ? "Click the body to hollow out. It stays closed, with a hollow inside." : "Click the faces to remove (openings). The rest of the body becomes a wall.",
+      hint: () => st.closed ? (st.bodies.length || editing ? "Set the wall thickness. Click shapes to add or remove them." : "Click the shape to make hollow (click more to hollow them too).") : "Click the faces to remove (openings). The rest of the body becomes a wall.",
       build(body) {
-        if (st.closed) body.append(pickbox(true, st.body ? el("b", {}, findBody(store.doc, st.body)?.name || "1 body") : "Select a body", st.body && !editing ? () => { st.body = null; refresh(); } : null));
-        else body.append(pickbox(true, st.faces.length ? el("span", {}, el("b", {}, st.faces.length), ` face${st.faces.length > 1 ? "s" : ""} to remove`) : editing && (st.keepFaces || []).length ? "Keeps the original faces" : "Select faces to remove", st.faces.length ? () => { st.faces = []; if (!editing) st.body = null; refresh(); } : null));
-        body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "sh-closed", checked: st.closed, onchange: (e) => { st.closed = e.target.checked; if (!editing) { st.faces = []; st.body = st.closed ? st.body : null; } refresh(); } }), "No openings (hollow inside)"));
+        body.append(row("Type", seg([["open", "Openings"], ["hollow", "Hollow"]], st.closed ? "hollow" : "open", (v) => {
+          st.closed = v === "hollow";
+          if (!editing) { st.faces = []; st.body = null; if (st.closed) preset(); }
+          refresh();
+        }, "sh-type")));
+        body.append(el("div", { class: "hint", style: { padding: 0 } }, st.closed ? "Hollow: the whole model becomes hollow inside, closed all round, with a wall as thick as you set." : "Openings: the faces you click are removed, like an open box or cup."));
+        if (st.closed) {
+          const n = targets().length;
+          body.append(pickbox(true, n ? (n === 1 ? el("b", {}, findBody(store.doc, targets()[0])?.name || "1 shape") : el("span", {}, el("b", {}, n), " shapes")) : "Click a shape", n && !editing ? () => { st.bodies = []; refresh(); } : null));
+        } else body.append(pickbox(true, st.faces.length ? el("span", {}, el("b", {}, st.faces.length), ` face${st.faces.length > 1 ? "s" : ""} to remove`) : editing && (st.keepFaces || []).length ? "Keeps the original faces" : "Select faces to remove", st.faces.length ? () => { st.faces = []; if (!editing) st.body = null; refresh(); } : null));
         if (!st.closed) body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "sh-chain", checked: st.chain, onchange: (e) => { st.chain = e.target.checked; refresh(false); } }), "Tangent chain (take smoothly joined faces too)"));
-        body.append(row("Thickness", app.numField({ value: st.th, id: "sh-th", min: 0.01, step: 0.5, live: true, onCommit: (v) => { st.th = v; refresh(false); } }), "sh-th"));
+        body.append(row(st.closed ? "Wall thickness" : "Thickness", app.numField({ value: st.th, id: "sh-th", min: 0.01, step: 0.5, live: true, onCommit: (v) => { st.th = v; refresh(false); } }), "sh-th"));
+        if (st.closed) body.append(row("Quick pick", seg([["1", "1 mm"], ["2", "2 mm"], ["3", "3 mm"], ["5", "5 mm"]], String(st.th), (v) => { st.th = +v; refresh(); }, "sh-thq")));
         body.append(row("Direction", seg([["in", "Inside"], ["out", "Outside"], ["both", "Both"]], st.dir, (v) => { st.dir = v; refresh(); }, "sh-dir")));
         body.append(el("div", { class: "hint", style: { padding: 0 } }, st.dir === "in" ? "The outside stays the same size; the wall grows inward." : st.dir === "out" ? "The inside keeps the body's shape; the wall grows outward." : "The wall is centered on the surface."));
       },
@@ -4011,7 +4252,10 @@ export function initAdvanced(app) {
         down(e) {
           const f = pickBaseFace(e, pickable);
           if (!f) return true;
-          if (st.closed) { if (!editing) st.body = f.body; refresh(); return true; }
+          if (st.closed) {
+            if (!editing) { const i = st.bodies.indexOf(f.body); if (i >= 0) st.bodies.splice(i, 1); else st.bodies.push(f.body); }
+            refresh(); return true;
+          }
           st.body = f.body;
           const i = st.faces.findIndex((x) => x.face === f.face);
           const c = f.info && f.info.c ? f.info.c : f.point.clone().applyMatrix4(f.base.m.clone().invert()).toArray();
@@ -4022,7 +4266,7 @@ export function initAdvanced(app) {
         },
       },
       cleanup() { scene.setHovered(null); scene.setSelected(app.sel); },
-      sceneSel: () => (st.closed && st.body ? [st.body] : app.sel),
+      sceneSel: () => (st.closed ? targets() : app.sel),
     };
     function draw() {
       clearOv();
@@ -4034,8 +4278,9 @@ export function initAdvanced(app) {
     function refresh(rerender = true) {
       if (rerender) def.render();
       draw();
-      scene.setSelected(st.closed && st.body ? [st.body] : []);
+      scene.setSelected(st.closed ? targets() : []);
       schedulePreview(def);
+      def.refreshOk && def.refreshOk();
     }
     openCmd(def);
   }
@@ -4257,7 +4502,7 @@ export function initAdvanced(app) {
         }
       },
       ok() { commit(def, st.copy ? "Copy" : "Move"); },
-      hint: () => st.ids.length ? (st.drag === "screen" ? "Drag the shape to move it in 3D, an arrow to move along an axis, or a ring to rotate (Shift: 1° steps; then arrow keys turn 1°). Or type exact values." : "Drag the shape to move it on the ground, an arrow to move along an axis, or the blue ring to turn it. Arrow keys turn it 1° (Shift: 15°). Choose Free in 3D to rotate around any axis.") : "Click the shapes to move.",
+      hint: () => st.ids.length ? (st.drag === "screen" ? "Drag the shape to move it in 3D, an arrow to move along an axis, or a ring to rotate (Shift: 1° steps). Arrow keys move it as it looks on screen (Ctrl+↑↓ up and down); , and . turn it 1°. Or type exact values." : "Drag the shape to move it on the ground, an arrow to move along an axis, or the blue ring to turn it. Arrow keys move it as it looks on screen (Ctrl+↑↓ up and down); , and . turn it 1° (Shift: 15°). Choose Free in 3D to rotate around any axis.") : "Click the shapes to move.",
       build(body) {
         body.append(pickbox(true, st.ids.length ? el("span", {}, el("b", {}, st.ids.length), ` bod${st.ids.length > 1 ? "ies" : "y"}`) : "Click bodies", st.ids.length ? () => { st.ids = []; changed(); } : null));
         body.append(row("Drag shape", seg([["ground", "Free on ground"], ["screen", "Free in 3D"]], st.drag, (v) => { st.drag = v; def.render(); }, "mv-drag")));
@@ -4318,19 +4563,28 @@ export function initAdvanced(app) {
     };
     const angInputs = [];
     let ringReadout = null, keyRing = null;
-    // arrow keys: turn 1° (Shift: 15°) around the ring last dragged (the blue Z ring at first)
+    // arrow keys move it the way it looks on screen (Ctrl/Cmd + Up/Down: lift); , and . turn it
     def.arrowKey = (e) => {
+      if (!st.ids.length || e.altKey) return false;
+      const d = app.arrowDelta(e, (app.gridStep() || 1) * (e.shiftKey ? 10 : 1));
+      st.d = st.d.map((v, i) => +(v + d.getComponent(i)).toFixed(6));
+      inputs.forEach((f, i) => f.setValue && f.setValue(st.d[i]));
+      changed(false);
+      return true;
+    };
+    // , and . : turn 1° (Shift: 15°) around the ring last dragged (the blue Z ring at first)
+    def.turnKey = (e) => {
       if (!st.ids.length || e.ctrlKey || e.metaKey || e.altKey) return false;
       const ringObj = keyRing || rings[2], axis = ringObj.userData.dir.clone();
-      const s = (e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 15 : 1);
+      const s = (e.code === "Period" ? 1 : -1) * (e.shiftKey ? 15 : 1);
       st.rot.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, (s * Math.PI) / 180));
       const ang = eulerDeg();
       angInputs.forEach((f, i) => f.setValue(ang[i]));
       const sc = vp.project(giz.position);
       tag.hidden = false;
-      tag.innerHTML = `<b>${s > 0 ? "+" : ""}${s}°</b><span>around ${ringObj.userData.axis.slice(4).toUpperCase()} · arrow keys</span>`;
+      tag.innerHTML = `<b>${s > 0 ? "+" : ""}${s}°</b><span>around ${ringObj.userData.axis.slice(4).toUpperCase()} · , and . keys</span>`;
       tag.style.transform = `translate(${Math.round(sc[0] + 40)}px, ${Math.round(sc[1] - 40)}px)`;
-      clearTimeout(def.arrowKey.t); def.arrowKey.t = setTimeout(() => { if (!drag) tag.hidden = true; }, 1400);
+      clearTimeout(def.turnKey.t); def.turnKey.t = setTimeout(() => { if (!drag) tag.hidden = true; }, 1400);
       changed(false);
       return true;
     };
@@ -4617,6 +4871,124 @@ export function initAdvanced(app) {
     }
     const chosenFeats = () => { const b = findBody(store.doc, st.fbody); return b ? featsOf(b).filter((m) => st.feats.includes(m.id)) : []; };
 
+    // ---------------- a feature's shape in the world, so it can be clicked on the model (like
+    // Fusion 360: click a face of the cut or boss to pick that feature) and outlined when picked
+    function featShape(b, m) {
+      const B = M4(b.m);
+      if (m.t === "hole") {
+        const r = (m.dia || 1) / 2;
+        const rmax = Math.max(r, m.kind === "cbore" ? (m.cbDia || 0) / 2 : 0, m.kind === "csink" ? (m.csDia || 0) / 2 : 0);
+        const through = m.through || !(m.depth > 0);
+        return { kind: "hole", B, spots: m.at && m.at.length ? m.at : [{ p: m.p, n: m.n }], r, rmax, depth: through ? null : m.depth + (m.tip ? r / Math.tan((59 * Math.PI) / 180) : 0) };
+      }
+      if (m.t === "emboss") return { kind: "emboss", B, p: m.p, n: m.n || [0, 0, 1], ext: Math.max(m.size || 5, ((m.size || 5) * String(m.str || "").length * 0.62) / 2 + 1), depth: m.depth || 1 };
+      const sk = findSketch(store.doc, m.tool.sketch);
+      if (!sk) return null;
+      const regs = regionsFor(sk), rs = [];
+      for (const ref of m.tool.profiles || []) {
+        let i = regs.findIndex((r) => r.key === ref.key && pointIn(r, ref.pt));
+        if (i < 0) i = regs.findIndex((r) => pointIn(r, ref.pt));
+        if (i >= 0 && !rs.includes(regs[i])) rs.push(regs[i]);
+      }
+      const W = B.clone().multiply(new THREE.Matrix4().fromArray(m.m || IDENTITY)).multiply(planeMatrix(sk.plane));
+      const t = m.tool;
+      let z0 = 0, z1 = 0;
+      if (t.t === "extrude") {
+        const d = t.dist || 0;
+        if (t.mode === "sym") { z0 = -Math.abs(d) / 2; z1 = -z0; }
+        else if (t.mode === "two") { z0 = -Math.abs(t.dist2 || 0); z1 = Math.abs(d); }
+        else { z0 = Math.min(0, d); z1 = Math.max(0, d); }
+      }
+      return { kind: t.t, W, Wi: W.clone().invert(), regs: rs, z0, z1 };
+    }
+    // distance from a 2D point to a profile's outline
+    const outlineDist = (r, q) => {
+      let best = Infinity;
+      for (const poly of [r.poly, ...(r.holePolys || [])]) for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[j], c = poly[i], dx = c[0] - a[0], dy = c[1] - a[1], l2 = dx * dx + dy * dy || 1e-12;
+        const f = Math.max(0, Math.min(1, ((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / l2));
+        best = Math.min(best, Math.hypot(a[0] + f * dx - q[0], a[1] + f * dy - q[1]));
+      }
+      return best;
+    };
+    // how far a clicked point is from lying on the feature's surface (Infinity: not on it)
+    function featScore(fs, P, tol) {
+      if (!fs) return Infinity;
+      if (fs.kind === "hole") {
+        const q = P.clone().applyMatrix4(fs.B.clone().invert());
+        let best = Infinity;
+        for (const s of fs.spots) {
+          const n = new THREE.Vector3(...s.n).normalize(), v = q.clone().sub(new THREE.Vector3(...s.p));
+          const along = v.dot(n), rad = v.clone().addScaledVector(n, -along).length();
+          if (along > tol || (fs.depth != null && along < -fs.depth - tol)) continue;
+          if (rad < fs.r - tol || rad > fs.rmax + tol) continue;
+          best = Math.min(best, fs.rmax > fs.r + tol ? 0 : Math.abs(rad - fs.r));
+        }
+        return best;
+      }
+      if (fs.kind === "emboss") {
+        const q = P.clone().applyMatrix4(fs.B.clone().invert());
+        const n = new THREE.Vector3(...fs.n).normalize(), v = q.clone().sub(new THREE.Vector3(...fs.p));
+        const h = v.dot(n), inPlane = v.clone().addScaledVector(n, -h).length();
+        return Math.abs(h) <= fs.depth + tol && inPlane <= fs.ext ? tol * 0.5 : Infinity;
+      }
+      if (fs.kind !== "extrude" || !fs.regs.length) return Infinity;
+      const q = P.clone().applyMatrix4(fs.Wi);
+      if (q.z < fs.z0 - tol || q.z > fs.z1 + tol) return Infinity;
+      let best = Infinity;
+      for (const r of fs.regs) {
+        const d = outlineDist(r, [q.x, q.y]), inside = pointIn(r, [q.x, q.y]);
+        if (!inside && d > tol) continue;
+        // on a side wall, or on the end cap (top of a boss, floor of a cut)
+        best = Math.min(best, d, inside ? Math.min(Math.abs(q.z - fs.z0), Math.abs(q.z - fs.z1)) : Infinity);
+      }
+      return best;
+    }
+    // the feature of body b under a clicked point, or null
+    function featAt(b, P) {
+      const tol = Math.max(0.15, vp.pixelSize(P) * 4);
+      let best = null, bs = Infinity;
+      featsOf(b).forEach((m) => { const s = featScore(featShape(b, m), P, tol); if (s <= tol && s <= bs) { bs = s; best = m; } });
+      return best;
+    }
+    // outline of a feature: its profiles at both ends with a few side lines, or its hole circles
+    function featLines(b, m) {
+      const fs = featShape(b, m), seg = [];
+      if (!fs) return seg;
+      const push = (a, c) => seg.push(a.x, a.y, a.z, c.x, c.y, c.z);
+      if (fs.kind === "hole" || fs.kind === "emboss") {
+        const list = fs.kind === "hole" ? fs.spots.map((s) => ({ p: s.p, n: s.n, r: fs.rmax, d: fs.depth == null ? Math.max(4, fs.r * 3) : fs.depth })) : [{ p: fs.p, n: fs.n, r: fs.ext, d: 0 }];
+        for (const s of list) {
+          const n = new THREE.Vector3(...s.n).normalize(), u = new THREE.Vector3(1, 0, 0);
+          if (Math.abs(u.dot(n)) > 0.9) u.set(0, 1, 0);
+          u.projectOnPlane(n).normalize();
+          const w = n.clone().cross(u), c0 = new THREE.Vector3(...s.p);
+          const ring = (off) => { const pts = []; for (let k = 0; k <= 40; k++) { const a = (k / 40) * Math.PI * 2; pts.push(c0.clone().addScaledVector(u, s.r * Math.cos(a)).addScaledVector(w, s.r * Math.sin(a)).addScaledVector(n, -off).applyMatrix4(fs.B)); } for (let k = 1; k < pts.length; k++) push(pts[k - 1], pts[k]); return pts; };
+          const top = ring(0);
+          if (s.d) { const bot = ring(s.d); for (let k = 0; k < 40; k += 10) push(top[k], bot[k]); }
+        }
+        return seg;
+      }
+      const zs = fs.kind === "extrude" ? [fs.z0, fs.z1] : [0];
+      for (const r of fs.regs) for (const poly of [r.poly, ...(r.holePolys || [])]) {
+        const at = (p, z) => new THREE.Vector3(p[0], p[1], z).applyMatrix4(fs.W);
+        for (const z of zs) for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) push(at(poly[j], z), at(poly[i], z));
+        if (zs.length > 1 && fs.z1 - fs.z0 > 1e-6) { const stp = Math.max(1, Math.floor(poly.length / 8)); for (let i = 0; i < poly.length; i += stp) push(at(poly[i], fs.z0), at(poly[i], fs.z1)); }
+      }
+      return seg;
+    }
+    let hoverFeat = null;
+    // the picked features are marked in the timeline as well
+    function markTimeline(off = false) {
+      const on = new Set(off || st.what !== "features" ? [] : st.feats);
+      for (const x of tl.querySelectorAll(".tl-item")) x.classList.toggle("pt-on", on.has(x.getAttribute("data-mod")));
+    }
+    function toggleFeat(bodyId, modId) {
+      if (st.fbody !== bodyId) { st.fbody = bodyId; st.feats = []; }
+      st.feats = st.feats.includes(modId) ? st.feats.filter((x) => x !== modId) : [...st.feats, modId];
+      changed();
+    }
+
     // ---------------- the path: sampled into a world polyline with arc-length
     function pathData() {
       if (!st.path) return null;
@@ -4809,7 +5181,7 @@ export function initAdvanced(app) {
       },
       ok() { commit(def, "Pattern"); },
       hint: () => st.type === "path" && (st.pickPath || !st.path) ? "Click a sketch line, arc, circle or polygon for the path. Connected curves are picked together."
-        : st.what === "features" ? (st.fbody ? "Tick the features to copy. Click another body to list its features." : "Click the body that has the features (cuts, bosses, holes, text).")
+        : st.what === "features" ? (st.fbody ? "Click a cut, boss, hole or text on the model, or in the timeline, to pick it (click again to unpick). You can also tick features in the list." : "Click a cut, boss, hole or text on the model, or in the timeline, to pick it.")
         : st.ids.length ? "Set the count and spacing. The copies preview in place." : "Click the shapes to pattern.",
       build(body) {
         body.append(row("Objects", seg([["bodies", "Bodies"], ["features", "Features"]], st.what, (v) => {
@@ -4823,7 +5195,7 @@ export function initAdvanced(app) {
           const b = findBody(store.doc, st.fbody), list = featsOf(b);
           body.append(pickbox(!st.pickPath, b ? el("span", {}, el("b", {}, b.name), ` · ${st.feats.length} of ${list.length} feature${list.length === 1 ? "" : "s"}`) : "Click a body", null, () => { st.pickPath = false; def.render(); }));
           if (b && !list.length) body.append(el("div", { class: "hint", style: { padding: 0 } }, "This body has no features that can be copied. Cuts and bosses made by extruding a sketch, holes and embossed text can be patterned."));
-          if (list.length) body.append(el("div", { class: "pt-feats", id: "pt-feats" }, ...list.map((m) => el("label", { class: "check" },
+          if (list.length) body.append(el("div", { class: "pt-feats", id: "pt-feats" }, ...list.map((m) => el("label", { class: "check" + (st.feats.includes(m.id) ? " on" : ""), onmouseenter: () => { hoverFeat = { key: b.id + ":" + m.id, body: b.id, mod: m.id }; draw(); }, onmouseleave: () => { hoverFeat = null; draw(); } },
             el("input", { type: "checkbox", "data-mod": m.id, checked: st.feats.includes(m.id), onchange: (e) => { st.feats = e.target.checked ? [...st.feats, m.id] : st.feats.filter((x) => x !== m.id); changed(); } }), featLabel(m)))));
         }
         const types = seg([["rect", "Rectangular"], ["circ", "Circular"], ["path", "Path"]], st.type, (v) => { st.type = v; if (v === "path" && !st.path) st.pickPath = true; changed(); }, "pt-type");
@@ -4861,12 +5233,31 @@ export function initAdvanced(app) {
         body.append(el("div", { class: "hint", id: "pt-total", style: { padding: 0 } }, `${total} instance${total === 1 ? "" : "s"} in total.`));
         if (st.what === "bodies") body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "pt-join", checked: st.join, onchange: (e) => { st.join = e.target.checked; changed(false); } }), "Join copies into one body"));
       },
-      start() { recenter(); scene.setSelected(st.ids); draw(); schedulePreview(def); },
-      cleanup() { scene.setSelected([]); clearOv(); },
+      start() { recenter(); scene.setSelected(st.what === "features" ? [] : st.ids); draw(); schedulePreview(def); },
+      afterTimeline: () => markTimeline(),
+      // Features: clicking a feature in the timeline picks it too (as in Fusion 360)
+      timelinePick(it) {
+        const b = it.body && findBody(store.doc, it.body), m = b && it.mod && featsOf(b).find((x) => x.id === it.mod);
+        if (!m) { app.toast("That timeline item can't be patterned as a feature. Cuts, bosses, holes and text can."); return; }
+        if (st.what !== "features") st.what = "features";
+        toggleFeat(b.id, m.id);
+      },
+      cleanup() { scene.setSelected([]); clearOv(); markTimeline(true); },
       handler: {
         hover(e) {
           if (st.type === "path" && st.pickPath) { const h = pickSketchCurve(e); vp.canvas.style.cursor = h ? "pointer" : "default"; scene.setHovered(null); return; }
-          const f = scene.pickFace(e); scene.setHovered(f ? f.body : null); vp.canvas.style.cursor = f ? "pointer" : "default";
+          const f = scene.pickFace(e);
+          if (st.what === "features") {
+            // the feature under the pointer is outlined (not the whole body)
+            const b = f && findBody(store.doc, f.body);
+            const m = b ? featAt(b, f.point) : null;
+            const k = m ? b.id + ":" + m.id : null;
+            if (k !== (hoverFeat && hoverFeat.key)) { hoverFeat = m ? { key: k, body: b.id, mod: m.id } : null; draw(); }
+            scene.setHovered(null);
+            vp.canvas.style.cursor = f ? "pointer" : "default";
+            return;
+          }
+          scene.setHovered(f ? f.body : null); vp.canvas.style.cursor = f ? "pointer" : "default";
         },
         down(e) {
           // the path: a sketch curve and the curves joined to it
@@ -4882,7 +5273,14 @@ export function initAdvanced(app) {
           }
           const f = scene.pickFace(e);
           if (!f || !findBody(store.doc, f.body)) return true; // copies in the preview aren't pickable
-          if (st.what === "features") { if (st.fbody !== f.body) { st.fbody = f.body; st.feats = []; changed(); } return true; }
+          if (st.what === "features") {
+            // a click on a face of a cut, boss, hole or text picks (or unpicks) that feature
+            const b = findBody(store.doc, f.body), m = featAt(b, f.point);
+            if (m) { toggleFeat(b.id, m.id); return true; }
+            if (st.fbody !== f.body) { st.fbody = f.body; st.feats = []; changed(); }
+            else app.toast(featsOf(b).length ? "That face isn't part of a feature that can be patterned. Click a face of a cut, boss, hole or text, or tick it in the list." : "This body has no features that can be patterned.");
+            return true;
+          }
           const i = st.ids.indexOf(f.body);
           if (i >= 0) st.ids.splice(i, 1); else st.ids.push(f.body);
           changed();
@@ -4893,6 +5291,15 @@ export function initAdvanced(app) {
     // the picked path, drawn bold, with a dot where each copy goes
     function draw() {
       clearOv();
+      if (st.what === "features") {
+        // picked features in blue, the one under the pointer in orange
+        const b = findBody(store.doc, st.fbody);
+        if (b) for (const m of chosenFeats()) { const sg = featLines(b, m); if (sg.length) { const o = thickLines(sg, 0x2f66c8, 2.6, false); o.renderOrder = 15; ov.add(o); } }
+        const hb = hoverFeat && findBody(store.doc, hoverFeat.body), hm = hb && featsOf(hb).find((x) => x.id === hoverFeat.mod);
+        if (hm) { const sg = featLines(hb, hm); if (sg.length) { const o = thickLines(sg, 0xe8a317, 2.6, false); o.renderOrder = 16; ov.add(o); } }
+        vp.request();
+      }
+      markTimeline();
       if (st.type !== "path") return;
       const pd = pathData();
       if (!pd) return;
@@ -4911,7 +5318,7 @@ export function initAdvanced(app) {
       if (rerender) def.render();
       const t = document.getElementById("pt-total");
       if (t) { const n = transforms().length + 1; t.textContent = `${n} instance${n === 1 ? "" : "s"} in total.`; }
-      scene.setSelected(st.what === "features" ? (st.fbody ? [st.fbody] : []) : st.ids);
+      scene.setSelected(st.what === "features" ? [] : st.ids);
       draw();
       schedulePreview(def);
       def.refreshOk();
@@ -4981,6 +5388,137 @@ export function initAdvanced(app) {
     };
     openCmd(def);
   }
+
+  // ------------------------------------------------------------------ 3D text on a surface
+  // A text body that lies on any face (or the ground) and reads upright. Point to place it, then
+  // drag it anywhere: it follows the faces, snapping to face centers and the grid (Snap off or Alt
+  // moves it freely). Arrow keys nudge it; Angle spins it on the face.
+  function textCmd(editingId = null) {
+    const existing = editingId ? findBody(store.doc, editingId) : null;
+    const p0 = existing ? existing.node.p : {};
+    const st = { id: existing ? existing.id : uid("b"), str: p0.text || "TEXT", font: p0.font || "sans", size: p0.size || 10, h: p0.h || 2, angle: 0, sink: 0,
+      snap: app.snapOn, placed: !!existing, dragging: false, at: null };
+    // where it sits: a point on a surface, the surface's normal, the text's "across" direction, and the face center
+    if (existing) {
+      const m = M4(existing.m), x = new THREE.Vector3(), y = new THREE.Vector3(), z = new THREE.Vector3();
+      m.extractBasis(x, y, z);
+      st.at = { p: new THREE.Vector3().setFromMatrixPosition(m), n: z.normalize(), x: x.normalize(), c: null, ground: false };
+    } else { const t = vp.view.target; st.at = { p: new THREE.Vector3(round(t.x, 5), round(t.y, 5), 0), n: new THREE.Vector3(0, 0, 1), x: new THREE.Vector3(1, 0, 0), c: new THREE.Vector3(0, 0, 0), ground: true }; }
+    const upOf = (a) => new THREE.Vector3().crossVectors(a.n, a.x).normalize();
+    function matrix() {
+      const a = st.at, z = a.n.clone().normalize();
+      const x = a.x.clone().applyAxisAngle(z, ((st.angle || 0) * Math.PI) / 180), y = new THREE.Vector3().crossVectors(z, x);
+      const m = new THREE.Matrix4().makeBasis(x, y, z);
+      m.setPosition(a.p.clone().addScaledVector(z, -(st.sink || 0)));
+      return arr(m);
+    }
+    // the surface under the pointer, as a place for the text
+    function pick(e) {
+      const snapOn = st.snap !== !!e.altKey;
+      const f = pickBaseFace(e, (b) => b.id !== st.id && !b.hole && b.visible !== false);
+      if (f && f.info) {
+        const n = f.normal.clone().normalize();
+        const x = Math.abs(n.z) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1).cross(n).normalize();
+        let p = f.point.clone(), c = null;
+        if (f.info.t === "PLANE" && f.info.c) {
+          c = new THREE.Vector3(...f.info.c).applyMatrix4(f.base.m);
+          p = snapOnFace(p, c, x, new THREE.Vector3().crossVectors(n, x).normalize(), vp.tol(10) * vp.pixelSize(f.point), snapOn).p;
+        }
+        return { p, n, x, c, ground: false, name: f.base.body.name };
+      }
+      const g = vp.rayPlane(e, new THREE.Plane(new THREE.Vector3(0, 0, 1), 0));
+      if (!g) return null;
+      const c = new THREE.Vector3(0, 0, 0);
+      const p = snapOnFace(g, c, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), vp.tol(10) * vp.pixelSize(g), snapOn).p;
+      return { p, n: new THREE.Vector3(0, 0, 1), x: new THREE.Vector3(1, 0, 0), c, ground: true, name: "Workplane" };
+    }
+    const uv = () => { const a = st.at; if (!a.c) return null; const d = a.p.clone().sub(a.c); return [d.dot(a.x), d.dot(upOf(a))]; };
+    function setUV(u, v) {
+      const a = st.at, cur = uv(); if (!cur) return;
+      a.p.addScaledVector(a.x, (u ?? cur[0]) - cur[0]).addScaledVector(upOf(a), (v ?? cur[1]) - cur[1]);
+    }
+    const def = {
+      title: (existing ? "Edit " : "") + "3D text",
+      valid: () => !!st.str.trim() && st.size > 0 && st.h > 0,
+      canOk: () => def.valid() && st.placed,
+      apply(doc) {
+        let b = findBody(doc, st.id);
+        if (!b) { b = makePrimBody(doc, "text", matrix(), { color: BODY_COLORS[doc.bodies.length % BODY_COLORS.length] }); b.id = st.id; doc.bodies.push(b); }
+        b.node.p = { ...(b.node.p || {}), text: st.str, size: st.size, h: st.h, font: st.font };
+        b.m = matrix();
+      },
+      ok() { commit(def, existing ? "Edit 3D text" : "Add 3D text"); },
+      onDelete: existing ? () => { closeCmd(false); deleteBodies([existing.id]); } : null,
+      hint: () => st.placed ? "Drag to move the text over any face or the workplane. Arrow keys nudge it; hold Alt (Option) while dragging to move freely." : "Point at a face or the workplane and click to place the text.",
+      build(body) {
+        body.append(pickbox(!st.placed, st.placed ? el("span", {}, "On ", el("b", {}, st.at.name || (st.at.ground ? "Workplane" : "a face"))) : "Click a face or the workplane", null));
+        const txt = el("input", { class: "num", id: "tx-text", value: st.str, style: { fontFamily: "var(--f-ui)" }, "aria-label": "Text" });
+        txt.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") { st.str = txt.value; txt.blur(); schedulePreview(def); } });
+        txt.addEventListener("input", () => { st.str = txt.value; clearTimeout(st.tt); st.tt = setTimeout(() => { schedulePreview(def); draw(); }, 300); });
+        body.append(row("Text", txt, "tx-text"));
+        body.append(row("Font", textFontSelect(st.font, (v) => { st.font = v; schedulePreview(def); draw(); }, "tx-font"), "tx-font"));
+        const r3 = el("div", { class: "row3" });
+        r3.append(el("label", {}, "Letter height", app.numField({ value: st.size, id: "tx-size", min: 0.5, step: 1, onCommit: (v) => { st.size = v; schedulePreview(def); draw(); } })));
+        r3.append(el("label", {}, "Thickness", app.numField({ value: st.h, id: "tx-h", min: 0.1, step: 0.5, onCommit: (v) => { st.h = v; schedulePreview(def); } })));
+        r3.append(el("label", {}, "Angle °", app.numField({ value: st.angle, id: "tx-angle", step: 15, onCommit: (v) => { st.angle = v; schedulePreview(def); draw(); } })));
+        body.append(r3);
+        const turn = (d) => { st.angle = (((st.angle + d) % 360) + 360) % 360; def.render(); schedulePreview(def); draw(); };
+        body.append(row("Turn", el("div", { class: "seg", id: "tx-turn" },
+          el("button", { onclick: () => turn(-90), title: "Turn 90° to the left" }, "↺ 90°"), el("button", { onclick: () => turn(-15) }, "−15°"),
+          el("button", { onclick: () => turn(15) }, "+15°"), el("button", { onclick: () => turn(90), title: "Turn 90° to the right" }, "↻ 90°")), "tx-turn"));
+        body.append(row("Sink into the face", app.numField({ value: st.sink, id: "tx-sink", min: 0, step: 0.1, onCommit: (v) => { st.sink = v; schedulePreview(def); } }), "tx-sink"));
+        const c = uv();
+        if (st.placed && c) {
+          const p3 = el("div", { class: "row3" });
+          p3.append(el("label", {}, "Across", app.numField({ value: +c[0].toFixed(3), id: "tx-u", step: 1, onCommit: (v) => { setUV(v, null); after(); } })));
+          p3.append(el("label", {}, "Up", app.numField({ value: +c[1].toFixed(3), id: "tx-v", step: 1, onCommit: (v) => { setUV(null, v); after(); } })));
+          p3.append(el("label", {}, " ", el("button", { class: "btn", id: "tx-center", title: st.at.ground ? "Put the text on the origin" : "Put the text in the middle of the face", onclick: () => { setUV(0, 0); after(); } }, "Center")));
+          body.append(el("div", { class: "subhead" }, st.at.ground ? "Position (from the origin)" : "Position (from the face center)"), p3);
+        }
+        body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "tx-snap", checked: st.snap, onchange: (e) => { st.snap = e.target.checked; } }), "Snap to face centers and the grid (" + withUnit(gridMM(), 3) + ")"));
+        body.append(el("div", { class: "hint", style: { padding: 0 } }, "The text is its own body: use Combine (Join) to make it one part with the shape, or try Decorate › Emboss text. A small Sink (0.2 mm) helps it join cleanly."));
+      },
+      start() { schedulePreview(def); draw(); },
+      handler: {
+        hover(e) {
+          if (st.placed || st.dragging) return;
+          const a = pick(e); if (!a) return;
+          st.at = a; schedulePreview(def); draw();
+        },
+        down(e) {
+          const a = pick(e); if (!a) return true;
+          st.at = a; st.placed = true; st.dragging = true;
+          schedulePreview(def); draw();
+          return true;
+        },
+        move(e) {
+          if (!st.dragging) return;
+          const a = pick(e); if (!a) return;
+          st.at = a; schedulePreview(def); draw();
+        },
+        up() { if (!st.dragging) return; st.dragging = false; def.render(); draw(); },
+      },
+      arrowKey(e) {
+        if (!st.placed) return false;
+        const k = (e.shiftKey ? 10 : e.altKey ? 0.1 : 1) * (st.snap ? gridMM() : 1);
+        const dx = e.key === "ArrowLeft" ? -k : e.key === "ArrowRight" ? k : 0, dy = e.key === "ArrowUp" ? k : e.key === "ArrowDown" ? -k : 0;
+        st.at.p.addScaledVector(st.at.x, dx).addScaledVector(upOf(st.at), dy);
+        after();
+        return true;
+      },
+    };
+    function after() { def.render(); schedulePreview(def); draw(); }
+    function draw() {
+      clearOv();
+      if (!st.at) return;
+      const [w, h] = textSize(st.str, st.size, st.font);
+      const lift = st.at.n.clone().multiplyScalar(st.h + 0.05);
+      drawTextGhost(st.at.p.clone().add(lift), st.at.x, upOf(st.at), w, h, st.angle || 0, st.placed ? 0x1f4fa8 : 0xe8a317);
+      if (st.at.c && st.placed) drawDot(st.at.c, 0x7fa6e0, 7);
+      vp.request();
+    }
+    openCmd(def);
+  }
   function placeOn(e, ignore) {
     const g = app.gridStep();
     const hit = scene.pickFace(e, (b) => b.id !== ignore && !b.hole);
@@ -4995,7 +5533,8 @@ export function initAdvanced(app) {
   // ------------------------------------------------------------------ edit / delete features
   function editBody(b) {
     if (b.locked) { app.toast("This body is locked. Unlock it to edit (Ctrl+L)."); return; }
-    if (b.node.t === "prim") primCmd(b.node.kind, b.id);
+    if (b.node.t === "prim" && b.node.kind === "text") textCmd(b.id);
+    else if (b.node.t === "prim") primCmd(b.node.kind, b.id);
     else if (b.node.t === "extrude" || b.node.t === "revolve" || b.node.t === "sweep") extrudeCmd(b.node.t, { body: b.id });
     else if (b.node.t === "pipe") pipeCmd({ body: b.id });
     else if (b.node.t === "coil") coilCmd({ body: b.id });
@@ -5029,6 +5568,7 @@ export function initAdvanced(app) {
     else if (m.t === "thread") threadCmd({ body: b.id, mod: m.id });
     else if (m.t === "scale") scaleCmd({ body: b.id, mod: m.id });
     else if (m.t === "emboss") embossCmd({ body: b.id, mod: m.id });
+    else if (m.t === "facepat") facePatternCmd({ body: b.id, mod: m.id });
     else if (m.t === "halfspace" || m.t === "sketchsplit" || m.t === "splitface") app.toast(m.t !== "splitface" ? "A split can't be edited. Undo it, or delete it from the timeline and split again." : "A face split can't be edited. Delete it from the timeline and split again.");
     else if (m.t === "bool" && m.src === "combine") combineCmd({ body: b.id, mod: m.id });
     else if (m.t === "bool" && m.tool.t === "pipe") pipeCmd({ body: b.id, mod: m.id });
@@ -5169,6 +5709,15 @@ export function initAdvanced(app) {
       group("Bricks", "", [
         { id: "sim-bricks", label: "Jump Brick Builder", title: "Rebuild the selected objects (or all) out of stud-and-tube building bricks you can print, press together and take apart", icon: "bricks", fn: () => app.bricks.open() },
       ]);
+      group("CAM", "", [
+        { id: "sim-cam", label: "CAM Studio", title: "Plan and simulate cutting the design on a CNC router, mill or laser, then save or send the G-code (your design is not changed)", icon: "cam", fn: () => app.cam.open() },
+      ]);
+      group("Voxels", "", [
+        { id: "sim-voxel", label: "Voxel Studio", title: "Turn the selected objects (or all) into cubes you can paint face by face, then export STL or 3MF or add them to the design (your design is not changed until you add it)", icon: "voxel", fn: () => app.voxel.open() },
+      ]);
+      group("Cosplay", "", [
+        { id: "sim-cosforge", label: "CosForge", title: "Design cosplay costumes: a mannequin from your measurements, themed parts to shape, sculpt and fit, then cut into printable pieces with joints (opens in its own window)", icon: "cosforge", fn: () => app.cosforge.open() },
+      ]);
       group("Flexi", "", [
         { id: "sim-flexigen", label: "FlexiGen", title: "Turn one object into a print-in-place articulated flexi model (your design is not changed)", icon: "flexigen", fn: () => flexiGenCmd() },
       ]);
@@ -5206,6 +5755,7 @@ export function initAdvanced(app) {
         { id: "ad-pyramid", label: "Pyramid", icon: "pyramid", fn: () => primCmd("pyramid") },
         { id: "ad-tube", label: "Tube", icon: "tube", fn: () => primCmd("tube") },
         { id: "ad-capsule", label: "Capsule", icon: "capsule", fn: () => primCmd("capsule") },
+        { id: "ad-text3d", label: "3D text", title: "Text that sits on any face or the workplane: drag it into place", icon: "text", fn: () => textCmd() },
       ] },
     ]);
     group("Construct", "", [
@@ -5242,8 +5792,9 @@ export function initAdvanced(app) {
         { id: "ad-scale", label: "Scale", title: "Scale a body by typed factors (or drag its white handles)", icon: "scale", fn: () => scaleCmd() },
         { id: "ad-align", label: "Align", title: "Align (A)", icon: "align", fn: () => alignCmd() },
       ] },
-      { id: "ad-decorate", label: "Decorate", title: "Surface styling: texture, emboss text and appearance", icon: "texture", dropdown: [
+      { id: "ad-decorate", label: "Decorate", title: "Surface styling: texture, patterns on faces, emboss text and appearance", icon: "texture", dropdown: [
         { id: "ad-texture", label: "Texture", title: "Surface texture (T)", icon: "texture", fn: () => textureCmd() },
+        { id: "ad-facepat", label: "Pattern on face", title: "Raise or cut a hexagon, diamond plate, screen mesh or other pattern on a flat face", icon: "facePattern", fn: () => facePatternCmd() },
         { id: "ad-emboss", label: "Emboss text", title: "Raise or cut text on a flat or curved face", icon: "emboss", fn: () => embossCmd() },
         { id: "ad-appearance", label: "Appearance", title: "Colors and materials for bodies or faces (display only)", icon: "appearance", fn: () => appearanceCmd() },
       ] },
@@ -5403,7 +5954,7 @@ export function initAdvanced(app) {
   }
 
   // ------------------------------------------------------------------ timeline
-  const TL_ICON = { sketch: "sketch", prim: "prim", extrude: "extrude", revolve: "revolve", fillet: "fillet", chamfer: "chamfer", hole: "hole", shell: "shell", offset: "offset", combine: "combineIcon", bool: "extrude", thread: "thread", scale: "scale", texture: "texture", sweep: "sweep", pipe: "pipe", coil: "coil", loft: "loft", mirror: "mirror", halfspace: "splitBody", sketchsplit: "splitBody", splitface: "splitFace", emboss: "emboss", plane: "planeOffset", joint: "joint" };
+  const TL_ICON = { sketch: "sketch", prim: "prim", extrude: "extrude", revolve: "revolve", fillet: "fillet", chamfer: "chamfer", hole: "hole", shell: "shell", offset: "offset", combine: "combineIcon", bool: "extrude", thread: "thread", scale: "scale", texture: "texture", sweep: "sweep", pipe: "pipe", coil: "coil", loft: "loft", mirror: "mirror", halfspace: "splitBody", sketchsplit: "splitBody", splitface: "splitFace", emboss: "emboss", facepat: "facePattern", plane: "planeOffset", joint: "joint" };
   let lastTl = null, lastTlT = 0;
   function renderTimeline() {
     tl.innerHTML = "";
@@ -5413,8 +5964,9 @@ export function initAdvanced(app) {
     if (!items.length) tl.append(el("span", { class: "empty" }, "Features appear here as you build. Double-click one to edit it."));
     for (const it of items) {
       const err = it.body && scene.errors.has(it.body);
-      const b = el("button", { class: "tl-item" + (err ? " err" : ""), title: `${it.label}${err ? " — " + scene.errors.get(it.body) : ""}\nDouble-click (or tap twice) to edit`, "aria-label": it.label, html: ICON[TL_ICON[it.kind]] || ICON.prim });
+      const b = el("button", { class: "tl-item" + (err ? " err" : ""), "data-mod": it.mod || "", title: `${it.label}${err ? " — " + scene.errors.get(it.body) : ""}\nDouble-click (or tap twice) to edit`, "aria-label": it.label, html: ICON[TL_ICON[it.kind]] || ICON.prim });
       b.onclick = () => {
+        if (app.command && app.command.timelinePick && it.mod) { app.command.timelinePick(it); return; }
         const key = it.mod || it.body || it.sketch;
         if (lastTl === key && performance.now() - lastTlT < 2500 && vp.touchMode) { lastTl = null; editItem(it); return; }
         lastTl = key; lastTlT = performance.now();
@@ -5425,6 +5977,7 @@ export function initAdvanced(app) {
       tl.append(b);
     }
     tl.scrollLeft = tl.scrollWidth;
+    if (app.command && app.command.afterTimeline) app.command.afterTimeline();
   }
 
   // ------------------------------------------------------------------ sketch palette
@@ -5483,7 +6036,13 @@ export function initAdvanced(app) {
         const f = (label, value, key, opts = {}) => el("label", {}, label, app.numField({ value, id: "pal-" + key, ...opts, onCommit: (v) => sketcher.setEntProps(id, { [key]: v }) }));
         body.append(el("div", { class: "row3" }, f("Size", ent.size || 10, "size", { min: 0.1 }), f("Angle °", ent.angle || 0, "angle"), el("span")));
         body.append(el("div", { class: "row3" }, f("X", p.x, "x"), f("Y", p.y, "y"), el("span")));
-        body.append(el("div", { class: "hint", style: { padding: 0 } }, "Size is the height of capital letters. Drag the text to move it."));
+        const onFace = !!sk.faceCenter;
+        body.append(row(onFace ? "Center on face" : "Center on origin", el("div", { class: "seg", id: "pal-tcenter" },
+          el("button", { id: "pal-tc-both", onclick: () => sketcher.centerText(id, "both"), title: "Put the middle of the text on the " + (onFace ? "face center" : "origin") }, "Both"),
+          el("button", { id: "pal-tc-h", onclick: () => sketcher.centerText(id, "h") }, "↔ Across"),
+          el("button", { id: "pal-tc-v", onclick: () => sketcher.centerText(id, "v") }, "↕ Up")), "pal-tcenter"));
+        body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "pal-tsnap", checked: app.snapOn, onchange: (e) => app.setSnap(e.target.checked) }), "Snap while dragging (" + (onFace ? "face center, " : "") + "points, shape centers, grid)"));
+        body.append(el("div", { class: "hint", style: { padding: 0 } }, "Size is the height of capital letters. Drag the text to move it: its middle snaps into place. Hold Alt (Option) while dragging, or turn Snap off, to move it freely. Arrow keys nudge it (Shift ×10, Alt ×0.1)."));
       } else {
         const c = resolveSketch(sk).find((x) => x.id === id);
         const ent = sk.ents.find((x) => x.id === id);
@@ -5528,6 +6087,13 @@ export function initAdvanced(app) {
     const k = e.key.toLowerCase();
     if (mod && k === "a") { app.select(store.doc.bodies.map((b) => b.id)); return true; }
     if (mod && k === "l") { toggleLock(); return true; }
+    if (/^Arrow/.test(e.key) && !e.altKey && app.sel.length) {
+      const ids = app.sel.filter((id) => !app.isLocked(id) && findBody(store.doc, id));
+      if (!ids.length) return true;
+      const d = app.arrowDelta(e, (app.gridStep() || 1) * (e.shiftKey ? 10 : 1));
+      transformBodies(ids, new THREE.Matrix4().makeTranslation(d.x, d.y, d.z), "Nudge");
+      return true;
+    }
     if (e.key === "Delete" || e.key === "Backspace") { deleteSelected(); return true; }
     if ((e.ctrlKey || e.metaKey) && k === "c") { copySel(); return true; }
     if ((e.ctrlKey || e.metaKey) && k === "v") { pasteClip(); return true; }
@@ -5660,7 +6226,12 @@ export function initAdvanced(app) {
     scale: () => scaleCmd(),
     measure: () => measureCmd(),
     emboss: (pre) => embossCmd(null, pre || null),
+    facePattern: (opts) => facePatternCmd(opts || null),
+    text3d: (id) => textCmd(id || null),
     hole: () => holeCmd(),
+    shell: (opts) => shellCmd(null, opts || {}),
+    fillet: () => edgeCmd("fillet"),
+    editFeature: (body, mod) => editItem({ body, mod }),
     appearance: () => appearanceCmd(),
     extrude: (opts) => extrudeCmd("extrude", null, opts || {}),
     sketchUI(kind) {

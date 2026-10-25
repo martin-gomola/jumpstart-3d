@@ -87,3 +87,25 @@ checks before accepting the change.
 - License: AGPL-3.0. This is interaction inspiration only. Our drawer state,
   validation, rendering, keyboard controls and native-plan compilation were authored
   independently. No reference code, assets or runtime dependencies are included.
+
+## Editor 2.7.4 archive update
+
+- Source: user-supplied `JumpStart-3D-v2.7.4-full-source`, `app/src/`.
+  This is an archive version, not an asserted author Git tag or commit.
+- The 73-file source manifest is retained in
+  `test/fixtures/upstream-v274.json`. Its canonical JSON manifest SHA-256 is
+  `8613a90f098b892b0abb6904fdd30cc7bad0f91bda5aeb8cc7473bb8bc224f78`.
+- File-level adaptation uses the initial author baseline above to distinguish
+  source changes from local fixes. No upstream repository history is merged.
+- Added Architect, CAM Studio, CosForge, Voxel Studio, face patterns, tutorials,
+  sketch styles and beginner shell/fillet controls. Retained local geometry,
+  roles, parameter, persistence, export and MCP behavior.
+- CAM's worker is compiled from `src/camworker.js` during our build. The archive's
+  prebuilt worker text is not shipped. Third-party runtime implementations and
+  licenses remain pinned; the archive's OCCT binary matches our compressed one.
+- The author-hosted update checker is excluded. Imported choice controls use
+  the shared keyboard-accessible `tool-choice`; tool chrome uses shared tokens,
+  host theme colours and mobile-first workspace structure. Material/mesh colours
+  remain model data rather than interface branding.
+- MCP mutations require leaving the new manual workspaces. These manual tools
+  do not extend the typed MCP modeling API automatically.

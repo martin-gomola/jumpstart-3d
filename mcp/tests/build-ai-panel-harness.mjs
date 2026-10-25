@@ -30,14 +30,19 @@ const entry = `
   const view = document.body.dataset.view;
   if (view === 'connection') document.getElementById('ai-connection-tab').click();
   if (['part','settings'].includes(view)) document.querySelector('[data-workspace-view="' + view + '"]').click();
-  if (view === 'layout') {
+  if (['layout', 'open-walls'].includes(view)) {
     document.querySelector('.drawer-example').click();
     [...document.querySelectorAll('button')].find(button => button.textContent === 'Add bin').click();
+  }
+  if (view === 'open-walls') {
+    document.querySelector('.drawer-wall-options summary').click();
+    document.querySelector('[aria-label="Open right side"]').click();
+    if (matchMedia('(min-width: 64rem)').matches) document.querySelector('[aria-label="Open back side"]').focus();
   }
   document.body.dataset.uiReady = "true";
 `;
 const bundle = await build({ stdin: { contents: entry, resolveDir: root }, bundle: true, format: "iife", write: false, logLevel: "silent" });
-for (const view of ["drawer", "layout", "part", "settings", "connection"]) {
+for (const view of ["drawer", "layout", "part", "settings", "connection", "open-walls"]) {
   await writeFile(`${output}/harness/${view}.html`, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gridfinity ${view} UI gate</title><style>${styles}\n${AI_STATUS_CSS}\n${panelStyles}</style></head><body data-view="${view}"><header class="topbar"><div class="modeswitch">${trigger}</div></header>${panel}<script>${bundle.outputFiles[0].text}</script></body></html>`);
 }
 

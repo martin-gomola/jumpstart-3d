@@ -157,7 +157,7 @@
   },
   "templateSettingsWidth": {
     "$type": "dimension",
-    "$value": "24rem"
+    "$value": "28rem"
   },
   "templatePreviewHeight": {
     "$type": "dimension",
@@ -194,5 +194,337 @@
   "workspaceRadius": {
     "$type": "dimension",
     "$value": "0.75rem"
+  },
+  "navigationIcon": {
+    "$type": "dimension",
+    "$value": "1.125rem"
+  },
+  "templateSettingsShare": {
+    "$type": "dimension",
+    "$value": "40%"
+  },
+  "toolSize292": {
+    "$type": "dimension",
+    "$value": "18.25rem"
+  },
+  "toolSize12": {
+    "$type": "dimension",
+    "$value": "0.75rem"
+  },
+  "toolSize12_5": {
+    "$type": "dimension",
+    "$value": "0.78125rem"
+  },
+  "toolSize6": {
+    "$type": "dimension",
+    "$value": "0.375rem"
+  },
+  "toolSize9": {
+    "$type": "dimension",
+    "$value": "0.5625rem"
+  },
+  "toolSize8": {
+    "$type": "dimension",
+    "$value": "0.5rem"
+  },
+  "toolSize70": {
+    "$type": "dimension",
+    "$value": "4.375rem"
+  },
+  "toolSize4": {
+    "$type": "dimension",
+    "$value": "0.25rem"
+  },
+  "toolSize3": {
+    "$type": "dimension",
+    "$value": "0.1875rem"
+  },
+  "toolSize5": {
+    "$type": "dimension",
+    "$value": "0.3125rem"
+  },
+  "toolSize1": {
+    "$type": "dimension",
+    "$value": "0.0625rem"
+  },
+  "toolSize34": {
+    "$type": "dimension",
+    "$value": "2.125rem"
+  },
+  "toolSize20": {
+    "$type": "dimension",
+    "$value": "1.25rem"
+  },
+  "toolSize44": {
+    "$type": "dimension",
+    "$value": "2.75rem"
+  },
+  "toolSize28": {
+    "$type": "dimension",
+    "$value": "1.75rem"
+  },
+  "toolSize2": {
+    "$type": "dimension",
+    "$value": "0.125rem"
+  },
+  "toolSize10": {
+    "$type": "dimension",
+    "$value": "0.625rem"
+  },
+  "toolSize7": {
+    "$type": "dimension",
+    "$value": "0.4375rem"
+  },
+  "toolSize19": {
+    "$type": "dimension",
+    "$value": "1.1875rem"
+  },
+  "toolSize10_5": {
+    "$type": "dimension",
+    "$value": "0.65625rem"
+  },
+  "toolSize999": {
+    "$type": "dimension",
+    "$value": "62.4375rem"
+  },
+  "toolSize11": {
+    "$type": "dimension",
+    "$value": "0.6875rem"
+  },
+  "toolSize30": {
+    "$type": "dimension",
+    "$value": "1.875rem"
+  },
+  "toolSize22": {
+    "$type": "dimension",
+    "$value": "1.375rem"
+  },
+  "toolSize340": {
+    "$type": "dimension",
+    "$value": "21.25rem"
+  },
+  "toolSize14": {
+    "$type": "dimension",
+    "$value": "0.875rem"
+  },
+  "toolSize40": {
+    "$type": "dimension",
+    "$value": "2.5rem"
+  },
+  "toolSize236": {
+    "$type": "dimension",
+    "$value": "14.75rem"
+  },
+  "toolSize11_5": {
+    "$type": "dimension",
+    "$value": "0.71875rem"
+  },
+  "toolSize46": {
+    "$type": "dimension",
+    "$value": "2.875rem"
+  },
+  "toolSize16": {
+    "$type": "dimension",
+    "$value": "1rem"
+  },
+  "toolSize116": {
+    "$type": "dimension",
+    "$value": "7.25rem"
+  },
+  "toolSize60": {
+    "$type": "dimension",
+    "$value": "3.75rem"
+  },
+  "toolSize66": {
+    "$type": "dimension",
+    "$value": "4.125rem"
+  },
+  "toolSize26": {
+    "$type": "dimension",
+    "$value": "1.625rem"
+  },
+  "toolSize120": {
+    "$type": "dimension",
+    "$value": "7.5rem"
+  },
+  "toolSize96": {
+    "$type": "dimension",
+    "$value": "6rem"
+  },
+  "toolSize9_5": {
+    "$type": "dimension",
+    "$value": "0.59375rem"
+  },
+  "toolSize78": {
+    "$type": "dimension",
+    "$value": "4.875rem"
+  },
+  "toolSize13": {
+    "$type": "dimension",
+    "$value": "0.8125rem"
+  },
+  "toolSize1100": {
+    "$type": "dimension",
+    "$value": "68.75rem"
+  },
+  "toolSize190": {
+    "$type": "dimension",
+    "$value": "11.875rem"
+  },
+  "toolSize300": {
+    "$type": "dimension",
+    "$value": "18.75rem"
+  },
+  "toolSize820": {
+    "$type": "dimension",
+    "$value": "51.25rem"
+  },
+  "toolSize18": {
+    "$type": "dimension",
+    "$value": "1.125rem"
+  },
+  "toolSize110": {
+    "$type": "dimension",
+    "$value": "6.875rem"
+  },
+  "toolSize32": {
+    "$type": "dimension",
+    "$value": "2rem"
+  },
+  "toolSize420": {
+    "$type": "dimension",
+    "$value": "26.25rem"
+  },
+  "toolSize250": {
+    "$type": "dimension",
+    "$value": "15.625rem"
+  },
+  "toolSize520": {
+    "$type": "dimension",
+    "$value": "32.5rem"
+  },
+  "toolSize900": {
+    "$type": "dimension",
+    "$value": "56.25rem"
+  },
+  "toolSize200": {
+    "$type": "dimension",
+    "$value": "12.5rem"
+  },
+  "toolSize150": {
+    "$type": "dimension",
+    "$value": "9.375rem"
+  },
+  "toolSize280": {
+    "$type": "dimension",
+    "$value": "17.5rem"
+  },
+  "toolSize330": {
+    "$type": "dimension",
+    "$value": "20.625rem"
+  },
+  "toolSize15": {
+    "$type": "dimension",
+    "$value": "0.9375rem"
+  },
+  "toolSize140": {
+    "$type": "dimension",
+    "$value": "8.75rem"
+  },
+  "toolSize560": {
+    "$type": "dimension",
+    "$value": "35rem"
+  },
+  "toolSize800": {
+    "$type": "dimension",
+    "$value": "50rem"
+  },
+  "toolSize17": {
+    "$type": "dimension",
+    "$value": "1.0625rem"
+  },
+  "toolSize700": {
+    "$type": "dimension",
+    "$value": "43.75rem"
+  },
+  "toolDiagramColor0": {
+    "$type": "color",
+    "$value": "#2a5b86"
+  },
+  "toolDiagramColor1": {
+    "$type": "color",
+    "$value": "#3a3833"
+  },
+  "toolDiagramColor2": {
+    "$type": "color",
+    "$value": "#4a4740"
+  },
+  "toolDiagramColor3": {
+    "$type": "color",
+    "$value": "#645f55"
+  },
+  "toolDiagramColor4": {
+    "$type": "color",
+    "$value": "#6b4a2b"
+  },
+  "toolDiagramColor5": {
+    "$type": "color",
+    "$value": "#8a8378"
+  },
+  "toolDiagramColor6": {
+    "$type": "color",
+    "$value": "#9a9284"
+  },
+  "toolDiagramColor7": {
+    "$type": "color",
+    "$value": "#b6ad9e"
+  },
+  "toolDiagramColor8": {
+    "$type": "color",
+    "$value": "#bfe3f6"
+  },
+  "toolDiagramColor9": {
+    "$type": "color",
+    "$value": "#d9d2c5"
+  },
+  "toolDiagramColor10": {
+    "$type": "color",
+    "$value": "#e0c39f"
+  },
+  "toolDiagramColor11": {
+    "$type": "color",
+    "$value": "#e5322d"
+  },
+  "toolDiagramColor12": {
+    "$type": "color",
+    "$value": "#f1ece2"
+  },
+  "toolDiagramColor13": {
+    "$type": "color",
+    "$value": "#f39b1f"
+  },
+  "toolDiagramColor14": {
+    "$type": "color",
+    "$value": "#f6c9c5"
+  },
+  "toolDiagramColor15": {
+    "$type": "color",
+    "$value": "#fde8e7"
+  },
+  "toolTarget": {
+    "$type": "dimension",
+    "$value": "2.75rem"
+  },
+  "toolTypeahead": {
+    "$type": "duration",
+    "$value": "700ms"
+  },
+  "toolImmediate": {
+    "$type": "duration",
+    "$value": "0ms"
+  },
+  "toolDesktopBreakpoint": {
+    "$type": "dimension",
+    "$value": "56.25rem"
   }
 }

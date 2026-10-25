@@ -124,7 +124,16 @@ button { cursor: pointer; }
 .menu small { color: var(--ink-3); margin-left: auto; font-size: 11px; }
 .menu .menu-head { padding: 6px 10px 2px; font: 600 11px/1.2 var(--f-label); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .menu .menu-note { padding: 4px 10px 6px; font-size: 11.5px; line-height: 1.4; color: var(--ink-3); max-width: 250px; }
-#menu-theme { min-width: 270px; }
+#menu-theme { min-width: 270px; max-height: calc(100vh - 70px); overflow-y: auto; }
+.sk-widths { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 4px 10px 6px; }
+.sk-widths button { display: grid; place-items: center; gap: 3px; padding: 6px 2px 4px !important; font-size: 10.5px; text-align: center; border: 1px solid var(--line-2) !important; border-radius: 6px; }
+.sk-widths button i { display: block; width: 26px; background: currentColor; border-radius: 2px; }
+.sk-widths button[aria-checked="true"], .sk-colors button[aria-checked="true"] { border-color: var(--accent) !important; box-shadow: 0 0 0 1px var(--accent); color: var(--accent); }
+.sk-widths button[aria-checked="true"]::after, .sk-colors button[aria-checked="true"]::after { content: none !important; }
+.sk-colors { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 10px 6px; }
+.sk-colors button { width: 26px; height: 26px; padding: 0 !important; border-radius: 50%; border: 1px solid var(--line-2) !important; display: grid; place-items: center; }
+.sk-colors button span { width: 16px; height: 16px; border-radius: 50%; display: block; border: 1px solid rgba(0,0,0,.25); }
+.sk-colors button.sk-theme span { background: conic-gradient(#22303f 0 50%, #ffe600 50% 100%); }
 .exhead { font: 600 10.5px/1 var(--f-label); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding: 6px 10px 4px; }
 .menu .exopt { padding: 6px 10px; }
 .menu .exopt::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--ink-3); flex: none; align-self: center; box-sizing: border-box; }
@@ -479,6 +488,8 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .tl-item { flex: none; display: grid; place-items: center; width: 30px; height: 28px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--panel-2); color: var(--ink-2); padding: 0; position: relative; }
 .tl-item:hover { border-color: var(--hover-line); color: var(--accent); background: var(--accent-soft); }
 .tl-item.err { border-color: var(--err-line); color: var(--danger); }
+.tl-item.pt-on { border-color: #2f66c8; color: #fff; background: #2f66c8; box-shadow: 0 0 0 1px #2f66c8; }
+.pt-feats label.check.on { color: var(--accent); font-weight: 600; }
 .tl-item svg { width: 18px; height: 18px; }
 .tl-item .tip { display: none; }
 .timeline .empty { padding: 4px; }
@@ -623,6 +634,9 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .about .ab-hver { font: 600 12px/1 var(--f-label); color: var(--ink-3); margin-left: 6px; letter-spacing: .04em; }
 .about .ab-ver { font: 500 13px/1 var(--f-mono, monospace); color: var(--ink-3); }
 .about .ab-update .btn { text-decoration: none; }
+.about .ab-update.ab-top { justify-content: flex-start; margin: 4px 0 4px 56px; }
+.about .ab-upmsg { margin: 8px 0 0; text-align: center; color: var(--ink-2); font-size: 13px; }
+.about .ab-upmsg a { color: var(--accent); font-weight: 600; }
 .about .ab-credit { margin: 22px 0 2px; padding-top: 12px; border-top: 1px solid var(--line-2); text-align: center; font: 600 15px/1 var(--f-label); letter-spacing: .1em; color: var(--ink); }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; background: var(--loading-bg); z-index: 30; }
 .loading .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 26px; width: min(360px, 86%); box-shadow: 0 10px 34px rgba(20,30,45,.14); }
@@ -852,32 +866,11 @@ body.s3d-on .tut-panel { z-index: 96; }
 .lathe-done-back { background: transparent; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
 .lathe-done-back .s3d-modal { pointer-events: auto; width: min(370px, 100%); max-height: 100%; overflow: auto; }
 
-.bk-panes { display: flex; }
-.bk-view { position: relative; flex: 1; min-width: 0; }
-.bk-side { width: 300px; max-width: 42vw; overflow: auto; border-left: 1px solid var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--panel); font-size: 13px; }
-.bk-side h3 { margin: 0; font-size: 17px; }
-.bk-side small { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.bk-dim { margin: 0; color: var(--muted); }
-.bk-warn { margin: 0; padding: 6px 9px; border-radius: 8px; background: #fff1d6; color: #6b4300; font-size: 12px; }
-.bk-steps { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
-.bk-steprow { display: flex; align-items: center; gap: 8px; }
-.bk-stepnow { flex: 1; text-align: center; font-weight: 700; }
-.bk-ph { margin-top: 4px; }
-.bk-parts { border-collapse: collapse; width: 100%; }
-.bk-parts td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
-.bk-parts td.n { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.bk-sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.25); vertical-align: middle; }
-@media (max-width: 700px) { .bk-panes { flex-direction: column; } .bk-side { width: auto; max-width: none; max-height: 40vh; border-left: 0; border-top: 1px solid var(--line); } }
-@media (max-width: 700px) { .s3d-lab span { display: none; } .s3d-grp .num { width: 60px; } }
-.tpi-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.tpi-wrap .hint { font-size: 11px; }
-.al-dots { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
-.al-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.al-lines line { stroke: #1b1f24; stroke-width: 1.5; stroke-dasharray: 4 3; opacity: .55; }
-.al-dot { position: absolute; left: 0; top: 0; width: 14px; height: 14px; padding: 0; border-radius: 50%; border: 2px solid #fff; background: #1b1f24; box-shadow: 0 1px 4px rgba(0,0,0,.45); pointer-events: auto; cursor: pointer; transition: background .12s, transform 0s; }
-.al-dot:hover { background: #2d63c8; }
-.al-dot.on { background: #e8a317; border-color: #1b1f24; }
-@media (pointer: coarse) { .al-dot { width: 20px; height: 20px; margin: -3px 0 0 -3px; } }
+.fp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 2px 0 6px; }
+.fp-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; font: inherit; color: inherit; }
+.fp-tile small { font-size: 10px; line-height: 1.15; text-align: center; }
+.fp-tile[aria-pressed="true"] { border-color: var(--accent, #1f4fa8); box-shadow: 0 0 0 1px var(--accent, #1f4fa8) inset; background: color-mix(in srgb, var(--accent, #1f4fa8) 10%, var(--panel)); }
+.fp-tile svg { display: block; border-radius: 4px; }
 /* ---- Save (versions) and Tutorials */
 .docver { font: 600 11px/1 var(--f-mono, monospace); color: #cfe0ff; background: #2d63c8; border-radius: 999px; padding: 3px 7px; white-space: nowrap; }
 .tb-btn.save-btn, .tb-btn.tut-btn { display: inline-flex; align-items: center; gap: 5px; }
@@ -909,6 +902,7 @@ body.s3d-on .tut-panel { z-index: 96; }
 .tut-level.easy { background: #2e9d57; }
 .tut-level.proficient { background: #d08a12; }
 .tut-level.advanced { background: #c0392b; }
+.tut-level.expert { background: #4b2a7b; }
 .tut-panel { position: fixed; z-index: 48; width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 70px); overflow: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(0,0,0,.25); font-size: 13px; }
 .tut-panel.mini { width: min(300px, calc(100vw - 16px)); }
 .tut-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; cursor: move; background: var(--panel-2); border-bottom: 1px solid var(--line); border-radius: 12px 12px 0 0; touch-action: none; }
@@ -996,6 +990,7 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
       <button id="mode-beginner" aria-pressed="true" title="Drag shapes and combine them">Beginner</button>
       <button id="mode-advanced" aria-pressed="false" title="Sketches, features and a timeline">Advanced</button>
       <button id="mode-chisel" aria-pressed="false" title="Sculpt with brushes, like clay">Chisel</button>
+      <button id="mode-arch" aria-pressed="false" title="Architect: draw floor plans, raise walls, add doors, windows and roofs, then use the building in your design">Architect</button>
       <button id="ai-status" class="ai-status" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="ai-setup-panel" aria-live="polite" aria-atomic="true" aria-describedby="ai-status-tooltip" aria-label="Checking AI bridge. Open AI client setup.">
         <span class="ai-status-light" aria-hidden="true"></span>
         <span class="ai-status-full">Checking AI bridge</span><span class="ai-status-short" aria-hidden="true">AI</span>
@@ -1019,6 +1014,11 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
         <button data-perf="high" role="menuitemradio" title="Fewer pixels while you move the view; lighter shadows">High <small>most laptops, Chromebooks</small></button>
         <button data-perf="ultra" role="menuitemradio" title="The sharpest picture and softest shadows, for powerful computers">Ultra <small>powerful computers</small></button>
         <div class="menu-note">Every tool works the same in every mode; only how the view is drawn changes.</div>
+        <hr>
+        <div class="menu-head">Sketch lines</div>
+        <div class="sk-widths" id="sk-widths" role="group" aria-label="Sketch line width"></div>
+        <div class="sk-colors" id="sk-colors" role="group" aria-label="Sketch line colour"></div>
+        <div class="menu-note">How sketch lines look in Advanced, Beginner and Chisel. Thinner lines make small profiles easier to pick.</div>
       </div>
     </div>
     <button class="tb-btn tut-btn" id="btn-tutorials" title="Tutorials: step-by-step projects for Beginner and Advanced"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5"/><path d="M22 9v6"/></svg><span class="lbl">Tutorials</span></button>
@@ -1143,7 +1143,7 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
     <svg class="sp-logo" viewBox="0 0 24 24" aria-hidden="true"><path class="l1" d="M3 16.5 12 21l9-4.5L12 12z" fill="#2d63c8"/><path class="l2" d="M3 12 12 16.5 21 12 12 7.5z" fill="#6f98d8"/><path class="l3" d="M3 7.5 12 12l9-4.5L12 3z" fill="#e9eef4"/></svg>
     <h1 class="sp-title">JumpStart <b>3D</b></h1>
     <p class="sp-tag">Design it · Build it · Print it</p>
-    <p class="sp-ver" id="sp-ver">Version 2.0</p>
+    <p class="sp-ver" id="sp-ver">Version 2.7.4</p>
     <div class="sp-bar"><i id="loading-bar"></i></div>
     <p class="sp-msg" id="loading-msg">Starting the geometry engine…</p>
   </div>

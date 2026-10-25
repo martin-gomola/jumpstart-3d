@@ -1,4 +1,7 @@
 import { el } from "../../src/util.js";
+import { wallControls } from "./wall-controls.js";
+import { binTotalHeight } from "../shared/gridfinity-walls.js";
+import { iconLabel } from "./pictograms.js";
 import { dimensionGuide } from "./dimension-guide.js";
 import { initDrawerPanel } from "./drawer-panel.js";
 import { magnetControls } from "./magnet-controls.js";
@@ -37,6 +40,7 @@ export function templatePlan(state) {
     grid.wall = number("wall", state.wall);
   }
   if (state.kind === "bin") {
+    grid.openSides = state.openSides || [];
     grid.lip = state.lip;
     grid.dividers = { x: number("dividersX", state.dividersX, "count"), y: number("dividersY", state.dividersY, "count") };
   }
@@ -80,6 +84,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const root = document.getElementById("ai-templates-panel");
   const tabs = [...document.querySelectorAll('.ai-workspace-tabs [role="tab"]')];
   if (!root || !tabs.length) return;
+  for (const [id, name] of [["ai-templates-tab", "add"], ["ai-connection-tab", "plug"]]) iconLabel(document.getElementById(id), name);
   let kind = "bin", busy = false, cached = null, editorDocument = null, pocketCounter = 0;
   const cards = new Map(), controls = {}, pocketForms = [];
   const modeButtons = new Map();
@@ -92,6 +97,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const emptyPreview = guide.element;
   const stalePreview = el("p", { class: "ai-template-stale", hidden: true, role: "status" }, "Out of date. Select Preview to update this model.");
   const previewButton = el("button", { type: "submit", class: "ai-template-primary" }, "Preview");
+  iconLabel(previewButton, "eye");
   const addButton = el("button", { type: "button", class: "ai-template-primary", disabled: true }, "Add to document");
   const cancelButton = el("button", { type: "button" }, "Cancel preview");
   const continueButton = el("button", { type: "button", class: "ai-template-primary" }, "Continue in editor");
@@ -112,7 +118,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
     modeButtons.forEach(button => { button.disabled = active; });
     root.setAttribute("aria-busy", String(active));
     addButton.disabled = active || !cached; cancelButton.disabled = active;
-    previewButton.textContent = active ? label : "Preview";
+    iconLabel(previewButton, "eye", active ? label : "Preview");
     previewButton.classList.toggle("ai-template-primary", !cached && success.hidden);
   };
   const showError = error => { message.textContent = error.message || String(error); message.dataset.error = "true"; };
@@ -158,14 +164,15 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const constructionFields = el("div", { class: "ai-template-fields" });
   controls.floor = numberField(constructionFields, "floor", "Bottom thickness (mm)", 2, 0.8, 6);
   controls.wall = numberField(constructionFields, "wall", "Wall thickness (mm)", 1.2, 0.8, 4);
-  const binFields = el("details", { class: "ai-template-group" }, el("summary", {}, "Compartments & stacking"));
+  const binFields = el("details", { class: "ai-template-group" }, iconLabel(el("summary", {}, "Compartments & stacking"), "grid"));
   controls.lip = checkbox(binFields, "lip", "Stackable rim", true);
   const dividerFields = el("div", { class: "ai-template-fields" });
   controls.dividersX = numberField(dividerFields, "dividersX", "Width dividers", 0, 0, 6, 1);
   controls.dividersY = numberField(dividerFields, "dividersY", "Depth dividers", 0, 0, 6, 1);
-  binFields.append(dividerFields);
+  const walls = wallControls({ onChange: () => { invalidate(); updateDimensions(); } });
+  binFields.append(dividerFields, walls.element);
   const magnets = magnetControls({ id: "ai-template-magnets", onChange: () => { invalidate(); updateDimensions(); } });
-  const construction = el("details", { class: "ai-template-group" }, el("summary", {}, "Construction & magnets"), constructionFields, magnets.element);
+  const construction = el("details", { class: "ai-template-group" }, iconLabel(el("summary", {}, "Construction & magnets"), "magnet"), constructionFields, magnets.element);
   const pockets = el("div", { class: "ai-template-pockets" });
   const addPocket = el("button", { type: "button" }, "Add pocket");
   const pocketSection = el("section", { class: "ai-template-group", hidden: true }, el("h3", {}, "Pockets"), el("p", { class: "ai-template-note" }, "Clearance is per side. Suggested values need a fit test on your printer."), pockets, addPocket);
@@ -175,9 +182,9 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
     let magneticHeight = "";
     if (kind === "baseplate" && magnets.valid()) magneticHeight = ` Baseplate height ${(5 + magnetCarrierHeight(magnets.get())).toFixed(1)} mm.`;
     if (magnets.get() && magnets.valid()) magneticHeight += ` ${value(controls.columns) * value(controls.rows) * 4} magnet pockets, ${kind === "baseplate" ? "open from the top of the carrier" : "open underneath"}.`;
-    const height = kind === "baseplate" ? 5 + (magnets.get() && magnets.valid() ? magnetCarrierHeight(magnets.get()) : 0) : value(controls.heightUnits) * 7 + (kind === "bin" && controls.lip.checked ? 4.4 : 0);
-    heightNote.textContent = kind === "bin" && controls.lip.checked ? "The stackable rim adds 4.4 mm to the body height." : "Heights increase in 7 mm steps to match the grid system.";
-    const validSize = controls.columns.validity.valid && controls.rows.validity.valid && (kind === "baseplate" || controls.heightUnits.validity.valid) && magnets.valid();
+    const height = kind === "baseplate" ? 5 + (magnets.get() && magnets.valid() ? magnetCarrierHeight(magnets.get()) : 0) : kind === "bin" ? binTotalHeight({ heightUnits: value(controls.heightUnits), floor: value(controls.floor), lip: controls.lip.checked, openSides: walls.get(), dividers: { x: value(controls.dividersX), y: value(controls.dividersY) } }) : value(controls.heightUnits) * 7;
+    heightNote.textContent = kind === "bin" && walls.get().length === 4 ? "All sides are open. Only the floor and any dividers remain." : kind === "bin" && controls.lip.checked ? "The stackable rim adds 4.4 mm to the body height." : "Heights increase in 7 mm steps to match the grid system.";
+    const validSize = controls.columns.validity.valid && controls.rows.validity.valid && (kind === "baseplate" || controls.heightUnits.validity.valid && controls.floor.validity.valid && controls.wall.validity.valid) && magnets.valid();
     dimensions.textContent = validSize ? `${width} × ${depth} × ${height.toFixed(1)} mm overall. One grid cell is 42 mm.${magneticHeight}` : "Enter a valid size to update the sizing guide.";
     guide.update({ ...(validSize ? { width, depth, height } : {}), kind, columns: value(controls.columns), rows: value(controls.rows) });
     for (const input of [controls.columns, controls.rows]) {
@@ -277,7 +284,8 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   }
   fieldset.append(el("h4", {}, "Footprint"), basic, dimensions, heightFields, binFields, pocketSection, construction);
   form.append(el("div", { class: "ai-controls" }, fieldset, message), el("div", { class: "ai-template-submit" }, previewButton));
-  const settings = el("div", { class: "ai-template-settings" }, el("h3", {}, "Part type"), list, partDescription, form);
+  form.querySelector(".ai-controls").prepend(el("h3", {}, "Part type"), list, partDescription);
+  const settings = el("div", { class: "ai-template-settings" }, form);
   const singlePart = el("div", { class: "ai-single-part", hidden: true }, settings, el("div", { class: "ai-template-review" }, emptyPreview, previewArea, success));
   const drawerRoot = el("div", { class: "ai-drawer-mode" });
   const generatorSettings = el("form", { class: "ai-template-form ai-generator-settings", novalidate: true, hidden: true, "aria-label": "Gridfinity settings" });
@@ -285,7 +293,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const workflowTitle = el("h3", { id: "ai-gridfinity-title" }, "Organize your drawer");
   const workflowNote = el("p", { class: "ai-template-note" }, "Measure the inside, arrange your bins, then review your printable parts.");
   for (const [mode, title] of [["drawer", "Drawer layout"], ["part", "Single part"], ["settings", "Printer & settings"]]) {
-    const button = el("button", { type: "button", "aria-pressed": String(mode === "drawer"), "data-workspace-view": mode }, title);
+    const button = iconLabel(el("button", { type: "button", "aria-pressed": String(mode === "drawer"), "data-workspace-view": mode }, title), { drawer: "grid", part: "box", settings: "printer3d" }[mode]);
     button.onclick = () => {
       modeButtons.forEach((entry, id) => entry.setAttribute("aria-pressed", String(id === mode)));
       singlePart.hidden = mode !== "part"; drawerRoot.hidden = mode !== "drawer";
@@ -358,7 +366,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
     try { limitStatus.textContent = drawerPanel.setBinLimits({ columns: Number(limitWidth.value), rows: Number(limitDepth.value) }, readPrinterArea()); delete limitStatus.dataset.error; }
     catch (error) { limitStatus.textContent = error.message; limitStatus.dataset.error = "true"; }
   };
-  const readState = () => ({ kind, magnets: magnets.get(), ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
+  const readState = () => ({ kind, openSides: walls.get(), magnets: magnets.get(), ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
   form.addEventListener("input", () => { invalidate(); updateDimensions(); });
   form.addEventListener("change", () => invalidate());
   form.onsubmit = async event => {

@@ -7,7 +7,7 @@ import CHISEL_HTML from "./chisel.html";
 import { store, findBody, nextSeq, IDENTITY, regionsFor } from "./store.js";
 import { uid, el, nextColor } from "./util.js";
 import { isInch } from "./units.js";
-import { theme } from "./theme.js";
+import { theme, sketchColor, sketchScaled } from "./theme.js";
 import { simplify, packMesh, toB64, fromB64, contentId } from "./meshimport.js";
 import { M4, arr, nextName } from "./ops.js";
 import { gunzip } from "./inflate.js";
@@ -139,7 +139,7 @@ export function initChisel(app) {
     },
     inch: () => isInch(),
     // the workplane and sketch colors of the current theme
-    themeColors: () => ({ wp: theme.c.wp, sketch: "#" + new THREE.Color(theme.c.sketch).getHexString(), sketchFill: "#" + new THREE.Color(theme.c.sketchFill).getHexString(), preview: theme.name === "light" ? "#1f4fa8" : "#ffe600" }),
+    themeColors: () => ({ wp: theme.c.wp, sketch: "#" + new THREE.Color(sketchColor()).getHexString(), sketchW: sketchScaled(1.5), sketchFill: "#" + new THREE.Color(theme.c.sketchFill).getHexString(), preview: theme.name === "light" ? "#1f4fa8" : "#ffe600" }),
     // a sketch extruded in Chisel: a real sketch + extrude in the design (new body, or a join /
     // cut on design bodies), so it stays editable in Advanced
     cadExtrude: (req) => cadExtrude(req),
@@ -151,6 +151,7 @@ export function initChisel(app) {
     perf: () => app.perfLevel || "ultra",
   };
   app.chiselPerf = (l) => { const w = win(); if (w && w.setPerf) w.setPerf(l); };
+  app.chiselTheme = () => { const w = win(); if (w && w.setTheme) w.setTheme(document.documentElement.dataset.ui || "light"); };
   // the theme changes there: Chisel follows
   new MutationObserver(() => { const w = win(); if (w && w.setTheme) w.setTheme(document.documentElement.dataset.ui || "light"); })
     .observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui"] });

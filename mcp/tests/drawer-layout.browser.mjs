@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { watchErrors, waitIdle } from "../../test/helpers.mjs";
@@ -486,5 +487,68 @@ test("printer settings size baseplate tiles for the selected nozzle and preserve
   await expect(page.locator("#ai-template-print-width")).toHaveValue("235.5");
   await expect(page.locator("#ai-template-print-height")).toHaveValue("256");
   await page.screenshot({ path: info.outputPath("printer-area-settings.png") });
+  expect(errors).toEqual([]);
+});
+
+
+test("matching open sides support separately printed long-item bins through preview, save and undo", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await editor(page);
+  await mkdir(new URL("../../exports/ai-panel/", import.meta.url), { recursive: true });
+  const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  await page.click("#ai-status");
+  for (const [key, amount] of [["width", "294"], ["depth", "84"], ["height", "50"]]) {
+    await page.fill(`#drawer-${key}`, amount); await page.locator(`#drawer-${key}`).press("Tab");
+  }
+  await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
+  await page.locator("#ai-print-area-enabled").check();
+  for (const key of ["width", "depth", "height"]) await page.fill(`#ai-template-print-${key}`, "250");
+  await page.fill("#ai-template-max-bin-width", "5"); await page.fill("#ai-template-max-bin-depth", "5");
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
+  await page.getByRole("button", { name: "Drawer layout", exact: true }).click();
+  await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  for (let count = 0; count < 3; count++) await page.getByRole("button", { name: "Increase width", exact: true }).click();
+  await page.locator(".drawer-compartment-options summary").click();
+  const compartments = page.getByRole("group", { name: "Across width compartments", exact: true });
+  await compartments.getByRole("button", { name: "2", exact: true }).click();
+  await expect(compartments.getByRole("button", { name: "2", exact: true })).toBeFocused();
+  await compartments.getByRole("button", { name: "1", exact: true }).click();
+  await page.locator(".drawer-compartment-options summary").click();
+  await page.locator(".drawer-wall-options summary").click();
+  await page.getByRole("button", { name: "Open right side", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Open right side", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Open right side", exact: true })).toBeFocused();
+  await expect(page.locator('.drawer-bin[data-bin-id="bin-1"]')).toHaveAttribute("data-open-right", "true");
+  await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  await page.locator(".drawer-wall-options summary").click();
+  await page.getByRole("button", { name: "Open left side", exact: true }).click();
+  await page.locator(".drawer-inspector").getByRole("button", { name: "Rotate", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Open back side", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Undo layout", exact: true }).click();
+  await page.locator('.drawer-bin[data-bin-id="bin-2"]').click();
+  await expect(page.getByRole("button", { name: "Open left side", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.screenshot({ path: "exports/ai-panel/open-sided-layout.png" });
+  const before = await get();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  expect((await get()).revision).toBe(before.revision);
+  await page.screenshot({ path: "exports/ai-panel/open-sided-preview.png" });
+  await page.getByRole("button", { name: "Open front side", exact: true }).click();
+  await expect(page.locator(".drawer-3d .ai-template-stale")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add layout to document", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Open front side", exact: true }).click();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const applied = await get(), bins = applied.bodies.filter(body => body.gridfinity?.kind === "bin");
+  expect(bins).toHaveLength(2);
+  expect(bins.map(body => body.gridfinity.openSides)).toEqual([["right"], ["left"]]);
+  expect(bins.every(body => body.printFit.configured)).toBe(true);
+  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
+  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
+  const reopened = await get();
+  expect(reopened.drawerLayouts[0].definition.bins.map(bin => bin.openSides)).toEqual([["right"], ["left"]]);
+  await tool("jumpstart_undo", { editorId, expectedRevision: reopened.revision });
+  expect((await get()).bodies).toHaveLength(0);
   expect(errors).toEqual([]);
 });

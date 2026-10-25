@@ -1029,6 +1029,12 @@ This plan exercises the round cross-section, revolve, patterned cuts, preview, a
 
 ## Native CAD compatibility
 
+The adapted 2.7.4 editor includes Architect, CAM, CosForge and Voxel manual
+workspaces. These do not automatically extend the typed MCP API. Document
+reads remain available, but leave Architect or close the other workspaces
+before MCP mutations. This prevents tool-owned drafts and Architect’s native
+transfer on exit from racing a preview/apply transaction.
+
 MCP plans create normal JumpStart document nodes for sketches, features,
 modifiers, and bodies. The editor's geometry kernel evaluates those nodes; apply
 and undo use the editor's document store.
@@ -1180,3 +1186,25 @@ Source layout:
 
 Skill trigger and behavior fixtures are specifications. Structural packaging
 checks do not establish natural-language modeling reliability.
+
+### Open-sided bins for long items
+
+Select a storage bin, expand **Open sides**, then open Left, Right, Front or Back.
+Open the matching side on its neighbour: for example, the main bin’s Right side
+and an extension’s Left side. The floor and Gridfinity feet stay intact; the
+opening also removes that side’s stacking rim. Front is the lower edge of the
+plan. Open edges appear dashed and are listed on the bin. Rotation and undo
+include the openings. Single-part bins offer the same controls under
+**Compartments & stacking**.
+
+For an item about 280 mm long, plan at least seven cells overall. A 5-cell main
+bin and a 2-cell extension span 293.5 mm externally; confirm the item's width and
+clearance as well. A 5+1 arrangement is only 251.5 mm externally. Each bin must
+fit the selected printer separately. The parts sit next to each other, with the
+normal seam between Gridfinity parts; no interlocking connector is generated.
+
+Typed `gridfinity` operations and bins inside `drawerLayout` accept
+`openSides: ["right"]` (allowed values: `left`, `right`, `front`, `back`). These
+are local XY sides; left/right are -X/+X and front/back are -Y/+Y. Omission keeps
+all walls closed. Openings are bin-only and persist in editable native plans.
+Preview and inspect the generated parts before applying or exporting them.

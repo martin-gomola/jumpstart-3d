@@ -7,6 +7,9 @@ import { initSketch3D } from "./sketch3d.js";
 import { initLathe } from "./lathe.js";
 import { VERSION } from "./version.js";
 import { initBricks } from "./bricks.js";
+import { initVoxel } from "./voxel.js";
+import { initArch } from "./arch.js";
+import { initCam } from "./cam.js";
 import { initTutorials } from "./tutorials.js";
 import * as THREE from "three";
 import { Viewport, ViewCube } from "./viewport.js";
@@ -19,13 +22,14 @@ setCustomTextureSource(() => ({ ...(store.doc.texImages || {}), ...((store.previ
 import { el, parseLength, fmt, IS_MAC, IS_IOS, IS_IPHONE, watchMacLabels } from "./util.js";
 const parseLengthMM = parseLength;
 import { getUnit, setUnit, onUnit, toU, fromU, showLen, parseLen, unitName, SNAP_SIZES } from "./units.js";
-import { setThemeColors, theme } from "./theme.js";
+import { setThemeColors, theme, sketchStyle, SKETCH_WIDTHS, SKETCH_COLORS } from "./theme.js";
 import { ICON } from "./icons.js";
 import { initBeginner } from "./beginner.js";
 import { initAdvanced } from "./advanced.js";
 import { initProjects } from "./projects.js";
 import { initFlexiGen } from "./flexigen.js";
 import { initMeshStep } from "./meshstep.js";
+import { initCosForge } from "./cosforge.js";
 import { initChisel } from "./chisel.js";
 import { initMcp } from "../mcp/browser/editor-bridge.js";
 
@@ -41,6 +45,28 @@ export const app = {
   snapOn: true,
   objectSnap: true,
   gridStep() { const v = +$("snap").value; return app.snapOn && v > 0 ? v : 0; },
+  // Arrow keys move things the way they look on screen, whatever the camera angle: Left/Right
+  // along the world axis (X or Y) closest to the screen's left-right, Up/Down along the ground
+  // axis that points "up the screen" (or straight up, Z, when looking from the side), and
+  // Ctrl/Cmd + Up/Down always lifts or lowers (Z). Returns a world step of length `step`.
+  arrowDelta(e, step) {
+    const q = app.vp.camera.quaternion;
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(q), up = new THREE.Vector3(0, 1, 0).applyQuaternion(q), fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+    const ground = (v) => { const ax = Math.abs(v.x) >= Math.abs(v.y) ? new THREE.Vector3(Math.sign(v.x) || 1, 0, 0) : new THREE.Vector3(0, Math.sign(v.y) || 1, 0); return ax; };
+    const k = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : -1;
+    // Left/Right: the ground axis closest to the screen's across direction
+    const R = ground(right);
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") return R.multiplyScalar(k * step);
+    if (e.ctrlKey || e.metaKey) return new THREE.Vector3(0, 0, k * step);
+    // looking from the side: Up/Down go up and down
+    const upG = new THREE.Vector3(up.x, up.y, 0);
+    if (Math.abs(fwd.z) < 0.42 || upG.length() < 0.2) return new THREE.Vector3(0, 0, Math.sign(up.z || 1) * k * step);
+    // otherwise the other ground axis (never the same one as Left/Right, even at a 45° view),
+    // pointing the way "up the screen" goes
+    const U = R.x ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    if (U.dot(upG) < 0) U.negate();
+    return U.multiplyScalar(k * step);
+  },
   isLocked(id) { const b = findBody(store.doc, id); return !!(b && b.locked); },
 };
 
@@ -61,6 +87,7 @@ function boot() {
   $("mode-beginner").onclick = () => app.switchMode("beginner");
   $("mode-advanced").onclick = () => app.switchMode("advanced");
   $("mode-chisel").onclick = () => app.switchMode("chisel");
+  $("mode-arch").onclick = () => app.switchMode("arch");
   const vpEl = $("viewport");
   const vp = (app.vp = new Viewport(vpEl));
   // a bold origin marker: where the X (red) and Y (green) axes cross
@@ -134,13 +161,17 @@ function boot() {
 app.lathe = initLathe(app);
 { const sv = document.getElementById("sp-ver"); if (sv) sv.textContent = "Version " + VERSION; }
 app.bricks = initBricks(app);
+app.voxel = initVoxel(app);
   // Save makes a new version (v1, v2...); the number shows next to the name
   app.onVersion = () => app.refreshUI && app.refreshUI("version");
   $("btn-save").onclick = () => app.projects.saveVersion();
   $("btn-tutorials").onclick = () => app.tutorials.open();
   app.flexigen = initFlexiGen(app);
   app.meshstep = initMeshStep(app);
+  app.cosforge = initCosForge(app);
   app.chisel = initChisel(app);
+  app.arch = initArch(app);
+  app.cam = initCam(app);
 
   store.on((kind) => {
     const doc = store.view;
@@ -169,7 +200,7 @@ app.bricks = initBricks(app);
     store.update((d) => { d.name = v; }, "Rename");
   });
   $("docname").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); e.stopPropagation(); });
-  $("nav-home").onclick = () => vp.setView("home", scene.allBox());
+  $("nav-home").onclick = () => vp.setView("home", app.mode === "arch" ? app.arch.box() : scene.allBox());
   $("nav-fit").onclick = () => app.fit();
   $("nav-ortho").onclick = (e) => { vp.useOrtho = !vp.useOrtho; e.currentTarget.setAttribute("aria-pressed", vp.useOrtho); vp.request(); };
   app.setLighting = (on, quiet) => { vp.setRealistic(on); $("nav-light").setAttribute("aria-pressed", !!on); if (!quiet) savePrefs(); };
@@ -219,6 +250,10 @@ app.bricks = initBricks(app);
   $("btn-theme").onclick = () => { tmenu.hidden = !tmenu.hidden; };
   tmenu.addEventListener("click", (e) => { const b = e.target.closest("button"); const t = b?.dataset.theme, pf = b?.dataset.perf; if (t) { app.setTheme(t); tmenu.hidden = true; } else if (pf) { app.setPerf(pf); tmenu.hidden = true; } });
   window.addEventListener("pointerdown", (e) => { if (!tmenu.hidden && !tmenu.contains(e.target) && !e.target.closest("#btn-theme")) tmenu.hidden = true; });
+  // sketch line width and colour (the menu stays open so choices can be compared)
+  const hex = (n) => "#" + n.toString(16).padStart(6, "0");
+  $("sk-widths").append(...SKETCH_WIDTHS.map(([k, label, w]) => el("button", { "data-skw": k, role: "menuitemradio", title: label + " sketch lines", onclick: (e) => { e.stopPropagation(); app.setSketchStyle({ width: k }); } }, el("i", { style: { height: Math.max(1, w) + "px", opacity: w < 1 ? 0.7 : 1 } }), label.replace("Extra thick", "Extra"))));
+  $("sk-colors").append(...SKETCH_COLORS.map(([k, label, c]) => el("button", { "data-skc": k, role: "menuitemradio", class: c == null ? "sk-theme" : "", title: label + (c == null ? " (follows Light, Dark or High contrast)" : ""), "aria-label": label, onclick: (e) => { e.stopPropagation(); app.setSketchStyle({ color: k }); } }, el("span", { style: c == null ? {} : { background: hex(c) } }))));
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (app.themePref === "system") app.setTheme("system"); });
   $("btn-keys").onclick = () => app.showShortcuts();
   // Full screen, like a video player's. Esc stays with the tools: where the browser allows it the
@@ -286,12 +321,14 @@ app.setMode = function (mode, initial) {
   if (app.command) app.command.cancel();
   // Chisel: sculpting in its own frame over the work area. Leaving it saves the
   // sculpts into the design as mesh bodies.
-  const wasChisel = app.mode === "chisel";
+  const wasChisel = app.mode === "chisel", wasArch = app.mode === "arch";
   app.mode = mode;
   document.getElementById("app").dataset.mode = mode;
   $("mode-beginner").setAttribute("aria-pressed", mode === "beginner");
   $("mode-advanced").setAttribute("aria-pressed", mode === "advanced");
   $("mode-chisel").setAttribute("aria-pressed", mode === "chisel");
+  $("mode-arch").setAttribute("aria-pressed", mode === "arch");
+  if (wasArch && mode !== "arch") app.arch.leave();
   if (mode === "chisel") {
     $("inspector").hidden = true;
     document.querySelectorAll(".popover").forEach((p) => p.remove());
@@ -300,6 +337,13 @@ app.setMode = function (mode, initial) {
     return;
   }
   if (wasChisel) app.chisel.leave();
+  // Architect: its own tools and panels in the same 3D view
+  if (mode === "arch") {
+    document.querySelectorAll(".popover").forEach((p) => p.remove());
+    app.arch.enter();
+    app.refreshUI("mode");
+    return;
+  }
   // panels that belong to the other mode
   $("inspector").hidden = true;
   document.querySelectorAll(".popover").forEach((p) => p.remove());
@@ -327,7 +371,7 @@ app.switchMode = function (mode) {
     store.doc.mode = mode;
     app.projects.changed();
   }
-  if (mode !== "chisel") app.toast(mode === "advanced" ? "Advanced mode: sketches, features and the timeline" : "Beginner mode: drag shapes, group and cut with holes");
+  if (mode !== "chisel" && mode !== "arch") app.toast(mode === "advanced" ? "Advanced mode: sketches, features and the timeline" : "Beginner mode: drag shapes, group and cut with holes");
 };
 
 app.enterSketch = function (id) {
@@ -367,7 +411,7 @@ function gridFromSnap() {
 }
 function readPrefs() { try { return JSON.parse(localStorage.getItem("workplane.ui.v1") || "{}"); } catch (e) { return {}; } }
 function savePrefs() {
-  try { localStorage.setItem("workplane.ui.v1", JSON.stringify({ theme: app.themePref, snap: app.snapOn, obj: app.objectSnap, grid: snapPick.mm, gridIn: snapPick.in, lightOn: app.vp.realistic, appear: app.scene.state.appearance !== false })); } catch (e) {}
+  try { localStorage.setItem("workplane.ui.v1", JSON.stringify({ skw: sketchStyle.width, skc: sketchStyle.color, theme: app.themePref, snap: app.snapOn, obj: app.objectSnap, grid: snapPick.mm, gridIn: snapPick.in, lightOn: app.vp.realistic, appear: app.scene.state.appearance !== false })); } catch (e) {}
 }
 function loadPrefs() {
   const p = readPrefs();
@@ -378,6 +422,7 @@ function loadPrefs() {
   app.objectSnap = p.obj !== false;
   $("snap-obj").setAttribute("aria-pressed", app.objectSnap);
   app.setSnap(p.snap !== false, true);
+  app.setSketchStyle({ width: p.skw || "thin", color: p.skc || "theme" }, true);
   app.setTheme(p.theme || "system", true);
   // realistic lighting starts off (faster); it stays on only for someone who turned it on themselves
   app.setLighting(p.lightOn === true, true);
@@ -457,6 +502,20 @@ function onSlow() {
     app.toast("Things look slow on this computer. Try " + (i === 0 ? "High or Normal" : "Normal") + " in the theme menu (◐): " + (i === 0 ? "they draw" : "it draws") + " less, and every tool still works.");
   }
 }
+
+// Sketch lines: width and colour, everywhere sketches are drawn (Advanced, Beginner, Chisel).
+app.setSketchStyle = function (patch, quiet) {
+  if (patch.width && SKETCH_WIDTHS.some((x) => x[0] === patch.width)) sketchStyle.width = patch.width;
+  if (patch.color && SKETCH_COLORS.some((x) => x[0] === patch.color)) sketchStyle.color = patch.color;
+  document.querySelectorAll("#sk-widths button").forEach((b) => b.setAttribute("aria-checked", b.dataset.skw === sketchStyle.width));
+  document.querySelectorAll("#sk-colors button").forEach((b) => b.setAttribute("aria-checked", b.dataset.skc === sketchStyle.color));
+  if (app.scene) app.scene.syncSketches(store.view);
+  if (app.sketcher && app.sketcher.active) app.sketcher.redraw();
+  if (app.vp) app.vp.request();
+  // Chisel reads the colours when its theme is (re)applied
+  try { app.chiselTheme && app.chiselTheme(); } catch (e) {}
+  if (!quiet) savePrefs();
+};
 
 // Light, dark and high-contrast interface. "system" follows the device setting.
 app.setTheme = function (pref, quiet) {
@@ -557,16 +616,93 @@ app.showAbout = function () {
     el("header", {}, el("h2", {}, "About"), el("button", { class: "xbtn", "aria-label": "Close", html: ICON.close, onclick: () => back.remove() })),
     el("div", { class: "mbody", id: "about-body" },
       el("div", { class: "ab-head", html: logo }, el("div", {}, el("b", {}, "JumpStart 3D ", el("span", { class: "ab-hver" }, "Version " + VERSION)), el("span", {}, "3D design for the browser: start simple, grow into real CAD, then 3D print it."))),
+      sec("New in version 2.7.4", [
+        ["Sketch line style:", "choose how thick sketch lines are (Hairline, Thin, Medium, Thick or Extra thick) and their colour (the theme's own colour, or black, white, blue, red, green, orange, purple, yellow or cyan) in the theme menu (◐), under Sketch lines. It applies in Advanced, Beginner and Chisel and is remembered. The new default, Thin, is thinner than before."],
+        ["Shell → Hollow:", "the Shell tool now has two types. Openings removes the faces you click (an open box or cup); Hollow makes the whole model hollow inside, closed all round, with a 2 mm wall to start that you can change (quick picks 1, 2, 3 and 5 mm). Hollow works on the selected shapes, or click shapes to add them."],
+        ["Shell and Fillet in Beginner:", "Beginner's toolbar has Fillet (click edges or a face, or Round all edges of the shape) and Shell (Hollow to start). The shape's panel lists its fillets and shells with Edit and Remove, plus Round edges and Make hollow buttons. Fillet and Chamfer in Advanced have the all-edges button too."],
+        ["Hollow in Chisel:", "a new Hollow tool (in Easy and full Chisel) makes a sculpted model hollow inside with the wall thickness you choose."],
+      ]),
+      sec("New in version 2.7.3", [
+        ["No more stray planes:", "fixed flat \"planes\" that could appear across a model after an extrude, offset or cut and couldn't be removed. They were a drawing fault on some round faces (a cylinder band, for example), not part of the solid; those faces are now checked and redrawn correctly, on screen and in exports. Files that showed them look right as soon as they are opened."],
+        ["Pattern features, like Fusion 360:", "with Objects set to Features, click a face of a cut, boss, hole or text on the model to pick that feature (click again to unpick), or click it in the timeline. The whole body is no longer selected: picked features are outlined in blue and marked in the timeline, and the feature under the pointer is outlined in orange. Ticking features in the list still works."],
+      ]),
+      sec("New in version 2.7.2", [
+        ["Thinner sketch lines:", "sketch lines are now about half as thick, in the sketch editor and on the model, so small or narrow profiles are easier to see and click when you extrude, revolve or pick a profile. Selected and highlighted lines stay a little bolder."],
+      ]),
+      sec("New in version 2.7.1", [
+        ["Modern Sci-Fi armor:", "a new CosForge style with 27 original templates to build from: Vanguard, Interceptor, Sentinel, Strike Team and Flight helmets, a Night Watch cowl and a visor mask; Vanguard, Hex Core and Tactical chest pieces; back plates and a Jet Pack Mk II; pauldrons, arm guards, bracers, a Pulse Gauntlet and hand plates; thigh plates, knees, greaves, boots and toe caps; a collar, belt, hip plates and an Energy Shield. Add the whole Vanguard set at once."],
+        ["Sharper shapes:", "the new templates start with angled form cages (keeled chests, jutting jaws, ridged limbs) that you can keep reshaping in the Form step."],
+        ["Light lines:", "panel lines and emblems can glow in the accent colour (Surface details → Light lines and Glowing emblem), and 3MF exports keep the colours for multi-colour printing. A new angled-eyes helmet opening, too."],
+      ]),
+      sec("New in version 2.7", [
+        ["CosForge Form tool:", "a new Form step puts a control cage over any costume part, like the form tools in CAD. Pick points, edges, faces, rows or columns (Shift adds), then drag the arrows (X, Y, Z, or yellow to push and pull along the surface) or the white ball, or use Pull out, Push in, Move, Scale, Rotate, Flatten and Make smooth. Symmetry keeps left and right matched, soft selection blends the edit into nearby points, and the cage can be smooth or creased, with fewer or more points or subdivided. The outline, details, add-ons, cuts and joints all follow the new shape."],
+        ["26 more templates:", "Recon Helmet, Space Bubble Helmet, Jet Pack, Power Gauntlet, Armored Collar, Armored Hand Plate and Riot Shield (Sci-Fi); Dragon Helm, Dragon Pauldron, Dragon Gauntlet, King's Crown, Knight Hand Plate, Gorget and Wing Back Plate (Fantasy); High Collar, Lightning Helm, Star Gauntlet and Hero Shield (Comic Hero); Respirator Mask, Clockwork Gauntlet, Riveted Collar and Riveted Plate Pauldron (Steampunk); Menpo Face Guard, Nodowa Throat Guard, Horned Kabuto and Tekko Hand Guard (Samurai). Almost 100 templates in all."],
+        ["New part types:", "collars (gorgets) that sit on the shoulders around the neck, and a lower-face mask style."],
+      ]),
+      sec("New in version 2.6", [
+        ["CosForge:", "a new cosplay costume designer that opens in its own window (Simulate → CosForge in Advanced, or the CosForge button in Beginner). Enter the wearer's measurements and a mannequin is built to match, in an arms-down, A or T pose."],
+        ["Costume templates:", "over 70 parts in Sci-Fi, Fantasy, Comic Hero, Steampunk and Samurai styles, plus plain forms: helmets with visors, slits or cowls, masks, crowns, chest and back plates, belts, tassets, pauldrons, arm guards, bracers, hand plates, thigh plates, knee guards, greaves, boot covers, toe caps and shields. Add one part or a whole set."],
+        ["Shape and sculpt:", "every part is a form you can change: coverage, openings, edges (rolled, trimmed, flared), ridges, panel lines, hex plates, dragon scales, overlapping plates, muscles, emblems and rivets, plus add-ons like horns, spikes, fins, ears, wings, gems, antennas, goggles and thrusters. Sculpt with bulge, push, emboss, engrave and smooth brushes."],
+        ["Fit to the body:", "parts follow the body when the measurements change. Move, turn and size them, and check the fit: the inside turns green, orange or red, and helmets warn when the head won't fit through."],
+        ["Cut and join:", "cut parts anywhere with flat cuts, or let Auto-cut split them until every piece fits your printer (eight bed sizes). Joints go on the inside of each cut: pegs, snap clips, slide-in dovetails or magnet cups."],
+        ["Export or keep editing:", "save pieces as STL (a .zip of pieces), 3MF with colours or OBJ, as worn or laid out ready to print, or add them to your design to edit in the other modes. Import your own STL or 3MF parts, or objects from your design, to fit and cut them too. The costume is kept with the design."],
+      ]),
+      sec("New in version 2.5.1", [
+        ["CAM Studio machines:", "48 machine profiles, grouped from desktop and hobby routers, benchtop and knee mills, pro and shop routers, to industrial nesting routers, vertical machining centers and lasers, plus 7 with a 4th (rotary) axis. Your own machines can now have a rotary axis and a tool changer."],
+        ["Industrial G-code:", "new Fanuc-style and Haas-style posts: program number, G54, tool changes with length offsets (G43 H), coolant, and a safe return home at the end."],
+        ["More materials and bits:", "steels, stainless, cast iron, titanium, 7075 aluminium, copper, acetal, polycarbonate and carbon fiber; carbide end mills up to 3/4\", a face mill, bull and ball noses, a chamfer mill and a tap drill."],
+        ["No more freezing:", "CAM Studio now works out the toolpaths, G-code and the whole cutting simulation in the background, so the window keeps responding while it works and you can keep changing settings. Scrubbing and replaying are spread over frames too. While it works, the model stays on screen with a progress bubble, and 4th-axis jobs are about ten times faster."],
+      ]),
+      sec("New in version 2.5", [
+        ["Log cabins:", "new Log cabin wall types in Architect: round logs (8\", 10\" or 250 mm) that cross past each corner, and hewn square logs (6\", 8\" or 200 mm) with chinking between them. Pick one before drawing, or turn any wall into logs with Build as. They go to Beginner and Advanced as real logs you can print."],
+        ["Simulate:", "a new Simulate tool in Architect (press S) with the weather, moving water and a flood test. Run a rainstorm (light to hurricane, 1 hour to a day): rain runs off the roof, soaks into the ground (grass and gravel soak it up, paving doesn't) and flows downhill. Or let a river or the sea rise from the edges of the land. It shows where the water collects, whether it gets above the floor at each door, and can fix it by raising the house on ground that slopes away."],
+        ["CAM Studio 4th axis:", "Setup → 4th axis (rotary) mills round parts: the stock is a bar held between a chuck and a tailstock that turns (A axis) while the bit cuts from above, so handles, chess pieces, figures and cylinders are carved all the way around. Rotary roughing and finishing, a turning simulation, and G-code with A moves for grblHAL / FluidNC, LinuxCNC and Mach3, with four new machines that have a rotary axis."],
+        ["Roofs:", "a roof now always sits on top of the walls under it, even if the walls are raised later or made taller. A roof that covers the whole level follows the walls when they move or grow. Drag a roof to move it (it snaps to the outside of the walls), nudge it with the arrow keys, type its center, or click Fit to walls."],
+        ["Wall colour:", "pick a colour for the walls when you raise them (nine quick colours or any colour), and walls now have dark outlines so light walls are easy to see."],
+        ["Floor plans:", "the Floor plan button saves the plan as a drawing: PDF or SVG on Letter, Tabloid, A4 or A3 at a standard scale (1/4\" = 1', 1:50…), or DXF at full size for CAD. Solid walls, door swings, windows and dimensions, one level or all of them."],
+        ["7 new Architect tutorials:", "a round-log cabin, a square-log workshop, a corner café, landscape basics, a pond garden, a flood test, and a house and landscape ready to 3D print (12 Architect tutorials in all)."],
+      ]),
+      sec("New in version 2.4", [
+        ["Architect:", "the mode is now called Architect. Going back to Beginner or Advanced brings the house along by itself, scaled down to fit the standard 256 × 256 mm build plate, and the camera goes back to the home view near the origin. Back in Architect it is full size again."],
+        ["Landscape:", "make the ground around the house, then raise hills, dig valleys, smooth and flatten it, dig ponds, lakes and streams that fill with water, paint 22 kinds of ground (grass, meadow, dry grass, moss, beach, dune and desert sand, gravel, river stones, stone and brick paths, slate, rock, clay, mud, mulch, flower beds, snow, paving…), and place 39 trees, shrubs, grasses, flowers and stones (oak, willow, cypress, blue fir, cherry blossom, apple, aspen, palms, cactus, boxwood, lavender, roses, hydrangea, ferns, pampas grass, cattails, wildflowers, tulips, lily pads, boulders, rock piles, stepping stones, pebbles…). The landscape stays in Architect; only the house goes to the other modes."],
+        ["Weather and water:", "a weather simulator (sunny, cloudy, rain, thunderstorm with lightning, snow, fog) with wind that sways the plants, and moving water with waves on ponds and lakes. Each can be turned on or off; they are only for looking at."],
+        ["Finishes:", "give walls, roofs and floors a colour and a texture from the library (brick, siding, stucco, stone, shingles, slate, metal roofing, wood and more), and walls a raised or cut face pattern. They become real texture layers and face patterns when the house goes to Beginner or Advanced."],
+        ["Export:", "export the house with its landscape (ground, water, trees), scaled down together to fit the build plate, as 3MF or OBJ with colours, or STL."],
+      ]),
+      sec("New in version 2.3", [
+        ["CAM Studio:", "Advanced → Simulate → CAM Studio plans how a CNC router, mill or laser cuts your design and simulates it, cut by cut: roughing, finishing, facing, cutouts with tabs, laser cutting and engraving. Basic mode asks a few questions (machine, material, bits, quality) and works out feeds and speeds; Pro mode shows every operation and setting, with your own machine and bit profiles. Machines from a desktop 3018 to a 4'×8' router and a laser; flat, ball, bull-nose, V-bits, drills and laser heads. It warns about crashes and too-deep cuts, estimates the time, saves G-code for GRBL, LinuxCNC, Mach3 or Marlin, and can send it over USB to GRBL and Marlin machines (Chrome or Edge). Built with openly published methods (drop-cutter toolpaths as in OpenCAMLib, height-field simulation as in CAMotics)."],
+        ["Architect:", "a feet-and-inches / metric switch in the toolbar (with standard wall sizes and grid for each), and 5 step-by-step tutorials, from a garden shed to a two-story house ready to 3D print."],
+      ]),
+      sec("New in version 2.2", [
+        ["Architect:", "a new mode for houses and buildings. Draw a floor plan with Wall (corner by corner, typing exact lengths like 12' 6\") or Room, then raise the walls to the height you need. Put in doors and windows from a catalog of common sizes (interior, front, double, sliding patio, bifold, garage; single hung, slider, casement, picture, transom, round) by pointing at a wall, or type exact positions on the wall's own grid. Click a wall to edit it and the rest of the building turns see-through. Add gable, hip, shed, pyramid, barrel or flat roofs with slope and overhang presets, floors and more levels, then Send to design: the building becomes editable shapes in Beginner or Advanced at a scale you choose (1:24, 1:48, 1:50, 1:87, 1:100, 1:200 or full size)."],
+      ]),
+      sec("New in version 2.1.3", [
+        ["Pattern on face:", "a new tool in Beginner (Face pattern) and Advanced (Decorate → Pattern on face). Click a flat face and raise or cut hexagons, diamond plate, screen mesh, circles, triangles, knurl or ribs into it, or the lines between them. Set the pattern size, gap, height or depth, direction (angle), border and an offset; keep whole shapes or trim them at the edge. It is a real feature, not a texture: it stays editable (timeline in Advanced, the shape panel in Beginner) and follows the face when the shape is resized."],
+        ["26 new textures:", "new Wood, Building and Fabric groups: oak, knotty pine, fine grain, end grain, floor planks, bamboo, weathered wood; roof shingles, slate roof, fish-scale shingles, clapboard siding, barrel roof tiles, corrugated metal, floor tiles, tread plate; blue jean (denim), canvas, burlap, corduroy, quilted, window screen, rope; plus leaf veins, pineapple, rough rock and golf ball dimples. Each starts at a tile size that suits it."],
+      ]),
+      sec("New in version 2.1.2", [
+        ["Voxel Studio:", "Advanced → Simulate → Voxel Studio opens in its own window and turns the selected objects (or all of them) into cubes, 16 to 64 across, solid or hollow. Paint single faces or whole cubes, fill flat areas, pick colors, add and remove cubes (with left-right mirroring), undo and redo, then export STL or a colored 3MF, or add it to the design (one part per color)."],
+        ["Moving things:", "the arrow keys now move objects the way they look on screen, whichever way the camera is turned and however the object is rotated: Left and Right go across the screen, Up and Down go away and toward you (or up and down when you look from the side), and Ctrl+Up/Down always goes straight up and down. In Beginner, Advanced and the Move tool; , and . turn by 1° after picking a rotation arc."],
+      ]),
+      sec("New in version 2.1.1", [
+        ["20 new tutorials:", "10 more for Beginner (bookmark, plant marker, cookie cutter, tic-tac-toe, trinket tray, Tower of Hanoi, phone amplifier, marble maze, box with a lid, pencil box) and 10 more for Advanced (washers, luggage tag, spring toy, plant pot, cable organizer, gear spinner, chess rook, bangle, bolt and nut, press-fit box), from Easy to a new Expert level."],
+      ]),
+      sec("New in version 2.1", [
+        ["3D text:", "Advanced → Create → 3D text: text that lies on any face or the workplane and reads upright. Drag it anywhere and it follows the faces, snapping to face centers and the grid; turn Snap off (or hold Alt while dragging) to move it freely. Arrow keys nudge it, Across / Up place it exactly, Center puts it in the middle, and Angle and Turn spin it."],
+        ["Emboss text:", "drag the text across the body to move it (the letters update as you go), with the same snapping, Across / Up offsets from the face center, a Center button and arrow-key nudging."],
+        ["Sketch text:", "dragging keeps where you grabbed it, and the text's middle snaps to the face center, the origin, points, shape centers and the grid (hold Alt while dragging to move it freely). New Center on face buttons and arrow-key nudging."],
+      ]),
       sec("New in version 2.0", [
         ["3D Sketch:", "draw lines in 3D on a body, a virtual sphere, egg or cube, or in the air, with a split screen: turn the camera with one hand while you draw with the other (touch, pen, mouse or trackpad). Freehand or nodes, undo and redo; every line becomes a solid tube."],
         ["Lathe:", "turn a body (or a copy of it) or a square or round blank on a virtual wood lathe: pick the speed, a foot pedal (Space) that you hold or that stays on, seven chisels you can twist, flying chips, then hollow it out and add it to the design or export STL, 3MF or OBJ. In Beginner, Advanced and Chisel."],
         ["Jump Brick Builder:", "in Advanced → Simulate, rebuild objects out of printable stud-and-tube building bricks (classic 8 mm or jumbo 16 mm) with a parts list and layer-by-layer building steps, built in place or laid out on print beds."],
         ["Also:", "a 256 × 256 mm Beginner workplane, path patterns in Advanced, imperial threads, and two new Lathe tutorials."],
       ]),
-      sec("Three modes", [
+      sec("Four modes", [
         ["Beginner:", "drag-and-drop shapes, solids and holes, grouping, align, mirror, pattern and drop to workplane, like Tinkercad."],
         ["Advanced:", "sketch-based, parametric modeling with a feature timeline, like Fusion 360."],
         ["Chisel:", "3D sculpting with brushes, like digital clay, in Easy (big, simple tools for kids and first-timers) or Pro (30 brushes, masking, cuts and more)."],
+        ["Architect:", "floor plans, walls, doors, windows and roofs for houses and buildings, a landscape with water and trees, sent to Beginner or Advanced as editable shapes (scaled to fit the build plate) or exported with the landscape."],
         ["Switch any time:", "your design carries over between modes."]]),
       sec("Beginner tools", [
         ["Shapes:", "box, cylinder, sphere, cone, pyramid, wedge, torus, tube, hemisphere, prism, text, star, heart, roof, round roof, paraboloid, gem, spring, capsule and arrow, each as a solid or a hole."],
@@ -579,7 +715,7 @@ app.showAbout = function () {
         ["Hole:", "simple, counterbore, countersink and tapped holes with standard screw sizes."],
         ["Threads:", "modeled ISO threads with a print offset for 3D-printed parts."],
         ["Modify:", "fillet, chamfer, offset face, shell, combine, split body, split face, pattern, move/copy, scale and align."],
-        ["Decorate:", "surface textures (including your own pictures), emboss or deboss text on flat and curved faces, and appearances (colors and materials)."],
+        ["Decorate:", "surface textures (including your own pictures), patterns raised on or cut into flat faces, emboss or deboss text on flat and curved faces, and appearances (colors and materials)."],
         ["Inspect:", "measure distances, angles and sizes."]]),
       sec("Chisel sculpting", [
         ["Your design is there:", "bodies from Beginner and Advanced show up ready to sculpt. Sculpt, cut or move one and it becomes a sculpt; undo brings the original back. Copy sculpts a copy instead."],
@@ -592,6 +728,7 @@ app.showAbout = function () {
       sec("Simulate", [
         ["3D Print Sim:", "30+ printer profiles (Bambu Lab, Creality, Elegoo, Flashforge, Prusa, Snapmaker), multi-color printing with AMS-style switchers, dual nozzles and tool changers: paint faces with a filament per toolhead and watch the tool changes (changes, purge waste, prime tower), supports, layer-by-layer preview, print time, and strength maps."],
         ["Simulate:", "joints and motion, stress tests, and printed-part strength by filament and print orientation."],
+        ["CosForge:", "design cosplay costumes on a mannequin built from your measurements, with themed templates you can shape, reshape with a control cage (Form), sculpt, fit, cut into printable pieces with joints, and export or add to your design."],
         ["FlexiGen:", "turn one object into a print-in-place articulated flexi model with six joint styles, then export STL or 3MF. It works on a copy, so your design is never changed."],
         ["Render:", "photo-style pictures with studio, sun, spotlight, overcast or three-point lighting, light color and direction, your own background picture, and Low to Ultra high quality, saved as PNG."]]),
       sec("Files and saving", [
@@ -632,11 +769,12 @@ app.showShortcuts = function () {
     el("header", {}, el("h2", {}, "Keyboard shortcuts"), el("button", { class: "xbtn", "aria-label": "Close", html: ICON.close, onclick: () => back.remove() })),
     el("div", { class: "mbody keys-grid" },
       rows("Sketching (both modes)", [["L", "Line"], ["R", "Rectangle (last type used; ▾ for 2-point, 3-point, center)"], ["C", "Circle"], ["A", "Arc"], ["P", "Polygon"], ["Shift T", "Text"], ["Enter / dbl-click", "Finish a spline"], ["T", "Trim"], ["D", "Dimension"], ["X", "Construction line"], ["S", "Select"], ["E", "Finish and extrude"], ["Tab", "Next typed value"], ["Esc", "Stop / finish sketch"]]),
-      rows("Advanced", [["L R C", "Start a sketch with that tool"], ["S", "Create sketch"], ["E", "Extrude"], ["Shift R", "Revolve"], ["Q", "Offset face (press pull)"], ["H", "Hole"], ["F", "Fillet"], ["Shift C", "Chamfer"], ["M", "Move / copy"], ["A", "Align"], ["P", "Pattern"], ["B", "Combine"], ["T", "Texture"], ["I", "Measure"], ["Shift F", "Fit all"], ["Drag right / left", "Window / crossing select"]]),
-      rows("Beginner", [["L R C", "Sketch a line, rectangle or circle"], ["E", "Extrude"], ["A", "Align"], ["P", "Pattern"], ["M", "Mirror"], ["H", "Make hole"], ["S", "Make solid"], ["D", "Drop to workplane"], ["T", "Texture"], ["F", "Fit all"], ["Arrows", "Nudge (Shift ×10)"], ["Ctrl ↑↓", "Lift / lower"], ["Ctrl G", "Group (Shift: ungroup)"], ["Ctrl D", "Duplicate"], ["Tab", "Type sizes on the selected shape (Shift Tab: back)"], ["I", "Measure"]]),
+      rows("Advanced", [["L R C", "Start a sketch with that tool"], ["Arrows", "Nudge the selection, the way it looks on screen (Ctrl ↑↓: up / down)"], ["S", "Create sketch"], ["E", "Extrude"], ["Shift R", "Revolve"], ["Q", "Offset face (press pull)"], ["H", "Hole"], ["F", "Fillet"], ["Shift C", "Chamfer"], ["M", "Move / copy"], ["A", "Align"], ["P", "Pattern"], ["B", "Combine"], ["T", "Texture"], ["I", "Measure"], ["Shift F", "Fit all"], ["Drag right / left", "Window / crossing select"]]),
+      rows("Beginner", [["L R C", "Sketch a line, rectangle or circle"], ["E", "Extrude"], ["A", "Align"], ["P", "Pattern"], ["M", "Mirror"], ["H", "Make hole"], ["S", "Make solid"], ["D", "Drop to workplane"], ["T", "Texture"], ["F", "Fit all"], ["Arrows", "Nudge, the way it looks on screen (Shift ×10)"], ["Ctrl ↑↓", "Lift / lower"], [", .", "Turn 1° after a rotation arc (Shift 15°)"], ["Ctrl G", "Group (Shift: ungroup)"], ["Ctrl D", "Duplicate"], ["Tab", "Type sizes on the selected shape (Shift Tab: back)"], ["I", "Measure"]]),
+      rows("Architect", [["W", "Wall (click each corner)"], ["R", "Room (drag corner to corner)"], ["E", "Raise walls"], ["D", "Door"], ["N", "Window"], ["O", "Roof"], ["G", "Floor"], ["T", "Finishes (textures, colours, patterns)"], ["L", "Landscape (ground, water, plants)"], ["S", "Simulate (weather, flood test)"], ["Arrows", "Nudge the selected roof, door or window"], ["V", "Select"], ["0-9 Enter", "While drawing a wall: type its exact length (12' 6\" or 3600)"], ["Enter", "Finish the walls you are drawing"], ["Shift", "Draw at any angle"], ["Alt", "Turn snapping off for a moment"], ["P", "Plan view / 3D"], ["X", "See-through on or off"], ["Delete", "Delete the selection"], ["Esc", "Stop drawing, back to Select"]]),
       rows("Chisel (Pro)", [["D", "Standard brush"], ["C", "Clay"], ["S", "Smooth"], ["T", "Flatten"], ["G", "Move brush"], ["N", "Snakehook"], ["Q", "Mask"], ["J", "Paint"], ["M", "Select & move"], ["[ ]", "Brush size"], ["Shift drag", "Smooth"], ["Alt drag", "Invert brush"], ["Ctrl drag", "Mask"], ["X", "Mirror X"], ["F", "Frame"], ["Drag right / left", "Window / crossing select (Select & move)"], ["Tab", "Type sizes (Select & move)"], ["R C P", "Rectangle, circle, polygon (Sketch)"], ["E", "Extrude the sketch"], ["Esc", "Cancel the shape / sketch"]]),
       ...(IS_MAC ? [rows("Mac trackpad", [["Option drag", "Orbit"], ["Option Shift drag", "Pan"], ["Pinch", "Zoom"], ["Two-finger scroll", "Zoom"], ["Control click", "Right-click menu (drag to orbit)"]])] : []),
-      rows("Everywhere", [["← →", "After using a rotation arc or ring: turn 1° (Shift: 15°)"], ["Ctrl C", "Copy"], ["Ctrl V", "Paste"], ["Ctrl A", "Select all"], ["Right-click", "Copy, paste, duplicate, delete"], ["Ctrl Z", "Undo"], ["Ctrl Shift Z", "Redo"], ["Ctrl L", "Lock / unlock"], ["Ctrl S", "Save"], ["Shift S", "Snapping on / off"], ["Del", "Delete"], ["Home", "Home view"], ["?", "This list"]])));
+      rows("Everywhere", [[", .", "After using a rotation arc or ring: turn 1° (Shift: 15°)"], ["Ctrl C", "Copy"], ["Ctrl V", "Paste"], ["Ctrl A", "Select all"], ["Right-click", "Copy, paste, duplicate, delete"], ["Ctrl Z", "Undo"], ["Ctrl Shift Z", "Redo"], ["Ctrl L", "Lock / unlock"], ["Ctrl S", "Save"], ["Shift S", "Snapping on / off"], ["Del", "Delete"], ["Home", "Home view"], ["?", "This list"]])));
   back.append(modal);
   document.body.append(back);
   back.addEventListener("keydown", (e) => { if (e.key === "Escape") back.remove(); });
@@ -670,6 +808,7 @@ app.select = function (ids) {
 app.selected = () => app.sel.map((id) => findBody(store.view, id)).filter(Boolean);
 
 app.fit = function () {
+  if (app.mode === "arch") { app.vp.fit(app.arch.box()); return; }
   const box = app.sel.length ? app.sel.reduce((b, id) => b.union(app.scene.bodyTightBox(id) || new THREE.Box3()), new THREE.Box3()) : app.scene.allBox();
   app.vp.fit(box.isEmpty() ? null : box);
 };
@@ -695,7 +834,8 @@ app.refreshUI = function (kind) {
   const nameEl = $("docname");
   if (document.activeElement !== nameEl) nameEl.value = store.doc.name;
   { const v = app.projects ? app.projects.version() : 0, ve = $("docver"); ve.hidden = !v; ve.textContent = "v" + v; ve.title = v ? `Saved ${v} time${v > 1 ? "s" : ""}: the next Save makes v${v + 1}` : ""; }
-  if (app.mode === "beginner") {
+  if (app.mode === "arch") app.arch.refresh(kind);
+  else if (app.mode === "beginner") {
     if (app.sketcher.active) { app.advanced.sketchUI(kind); $("inspector").hidden = true; }
     else {
       // the sketch palette belongs to sketch editing only
@@ -710,7 +850,8 @@ app.status = function () {
   const busy = app.scene && (app.scene.busy() || app.kernel.inflight || app.kernel.queue.size);
   $("busy").hidden = !busy || !app.kernel.ready;
   let hint = "";
-  if (app.sketcher.active) hint = app.sketchHint();
+  if (app.mode === "arch") hint = app.arch.hint();
+  else if (app.sketcher.active) hint = app.sketchHint();
   else if (app.command) hint = app.command.hint ? app.command.hint() : "";
   else if (app.mode === "beginner") hint = app.vp.touchMode ? "Drag shapes onto the workplane. Drag empty space to orbit, two fingers to pan and zoom." : (IS_MAC ? "Drag shapes onto the workplane. Option-drag (or two-finger click and drag) to orbit, Option+Shift-drag to pan, pinch or scroll to zoom." : "Drag shapes onto the workplane. Right-drag to orbit, Shift+right-drag or middle-drag to pan, scroll to zoom.");
   else if (app.sel.length === 1 && !app.isLocked(app.sel[0])) hint = "Drag the white handles to scale the body. Double-click a body or timeline item to edit it.";
@@ -848,6 +989,7 @@ app.promptValue = function ({ at, label, value, onOk, onCancel, unit = getUnit()
 function onKey(e) {
   if (app.mode === "chisel") return; // Chisel has its own keys (in its frame)
   const tag = (e.target.tagName || "").toLowerCase();
+  if (e.target.closest?.("tool-choice")) return;
   if (tag === "input" || tag === "select" || tag === "textarea") return;
   if (document.querySelector(".modal-back")) return;
   // the 3D Print Sim never changes the design: only view keys work there
@@ -864,12 +1006,14 @@ function onKey(e) {
   if (mod && k === "s") { e.preventDefault(); app.projects.saveVersion(); return; }
   if (e.key === "?") { e.preventDefault(); app.showShortcuts(); return; }
   if (!mod && e.shiftKey && k === "s" && !app.sketcher.active) { e.preventDefault(); app.setSnap(!app.snapOn); return; }
+  if (app.mode === "arch") { if (app.arch.key(e)) e.preventDefault(); return; }
   if (app.sketcher.active) {
     if (app.sketcher.typeKey(e)) return;
     if (/^[0-9.\-]$/.test(e.key) && !app.sketcher.input.root.hidden) return;
     if (e.key === "Escape") { if (!app.sketcher.escape()) app.exitSketch(); e.preventDefault(); return; }
     if (e.key === "Enter") { if (app.sketcher.state) app.sketcher.commitTyped(); else app.exitSketch(); return; }
     if (e.key === "Delete" || e.key === "Backspace") { app.sketcher.deleteSelection(); e.preventDefault(); return; }
+    if (/^Arrow/.test(e.key) && !mod && app.sketcher.nudge(e)) { e.preventDefault(); return; }
     const map = { l: "line", r: "rect*", c: "circle", a: "arc3", p: "polygon", t: "trim", d: "dim", s: "select" };
     if (!mod && (k === "e" || k === "q")) { e.preventDefault(); app.quickExtrude(); return; }
     if (!mod && e.shiftKey && k === "t") { app.sketcher.setTool("text"); return; }
@@ -892,8 +1036,9 @@ function onKey(e) {
   }
   if (e.key === "Home") { app.vp.setView("home", app.scene.allBox()); return; }
   if (!mod && k === "e" && !e.shiftKey && !e.altKey) { e.preventDefault(); app.quickExtrude(); return; }
-  // the open tool can use the arrow keys (Move / Copy turns 1° with them)
+  // the open tool can use the arrow keys (Move / Copy moves with them, and turns with , and .)
   if (app.command && app.command.arrowKey && /^Arrow/.test(e.key) && app.command.arrowKey(e)) { e.preventDefault(); return; }
+  if (app.command && app.command.turnKey && (e.code === "Comma" || e.code === "Period") && app.command.turnKey(e)) { e.preventDefault(); return; }
   const handled = app.mode === "beginner" ? app.beginner.key(e) : app.advanced.key(e);
   if (handled) e.preventDefault();
 }

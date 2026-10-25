@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { watchErrors, waitIdle } from "../../test/helpers.mjs";
+import { watchErrors, waitIdle, loadDoc, newDoc, body, prim } from "../../test/helpers.mjs";
 
 let broker, baseURL, requestId = 0;
 
@@ -341,4 +341,43 @@ test("single parts respect saved printer bounds before they can be applied", asy
   expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
   await expect(page.getByRole("button", { name: "Add to document", exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test("single-part wall openings clear the matching rim and invalidate a changed preview", async ({ page }) => {
+  const errors = watchErrors(page), editorId = await editor(page);
+  await page.click("#ai-status");
+  await page.getByRole("button", { name: "Single part", exact: true }).click();
+  await page.getByText("Compartments & stacking", { exact: true }).click();
+  await page.getByRole("button", { name: "Open right side", exact: true }).click();
+  const before = await tool("jumpstart_get_document", { editorId });
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.locator("#ai-template-message")).toContainText("Preview ready", { timeout: 90_000 });
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
+  await page.getByRole("button", { name: "Open back side", exact: true }).click();
+  await expect(page.locator("#ai-template-preview .ai-template-stale")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add to document", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.locator("#ai-template-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Add to document", exact: true }).click();
+  await expect(page.locator(".ai-template-success")).toBeVisible();
+  const applied = await tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  expect(applied.bodies).toHaveLength(1);
+  expect(applied.bodies[0].gridfinity.openSides).toEqual(["right", "back"]);
+  expect(applied.bodies[0].gridfinity.lip).toBe(true);
+  expect(applied.bodies[0].dimensions.z).toBeCloseTo(25.4, 4);
+  expect(errors).toEqual([]);
+});
+
+test("new manual workspaces block MCP mutations while preserving document reads", async ({ page }) => {
+  const editorId = await editor(page);
+  await loadDoc(page, newDoc("Manual workspace guard", "advanced", { bodies: [body("guard-part", "Guard part", prim("box", { w: 20, d: 20, h: 12 }))] }));
+  for (const name of ["arch", "cam", "voxel", "cosforge"]) {
+    await page.evaluate(name => name === "arch" ? window.__app.setMode("arch") : window.__app[name].open(), name);
+    const before = await tool("jumpstart_get_document", { editorId });
+    const result = await tool("jumpstart_undo", { editorId, expectedRevision: before.revision }, true);
+    expect(JSON.stringify(result)).toContain("before using MCP edits");
+    expect(JSON.stringify(result).toLowerCase()).toContain(name === "arch" ? "architect" : name);
+    expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
+    await page.evaluate(name => name === "arch" ? window.__app.setMode("advanced") : window.__app[name].close(), name);
+  }
 });

@@ -1,3 +1,4 @@
+import "./tool-choice.js";
 // Small shared helpers: ids, expression parsing for numeric fields, zip, colors.
 
 let idCounter = 0;

@@ -99,3 +99,78 @@ test("4x5 and 6x6 native bins and magnetic socket carriers have connected measur
   console.info(JSON.stringify({ largerGridfinityBuildMs: Date.now() - started, bodies: parts.length }));
   expect(errors).toEqual([]);
 });
+
+test("open bin walls remove their rims while retaining connected floors and Gridfinity feet", async ({ page }, info) => {
+  const errors = watchErrors(page);
+  const sides = ["left", "right", "front", "back"];
+  const specs = [[], ...sides.map(side => [side]), sides, sides];
+  const document = fixture(specs.map((openSides, index) => ({ kind: "bin", columns: 2, rows: 1, lip: true, openSides, ...(index === 6 ? { dividers: { x: 1 } } : {}), position: [index * 110, 0, 0] })));
+  await boot(page, info); await loadDoc(page, document);
+  const parts = await page.evaluate(() => window.__store.doc.bodies.map(body => {
+    const data = window.__app.scene.views.get(body.id)?.data;
+    return { error: window.__app.scene.errors.get(body.id), bounds: data?.bbox, volume: data?.volume, vertices: Array.from(data?.vertices || []), triangles: Array.from(data?.triangles || []) };
+  }));
+  const { inspectGeometry } = await import("../browser/inspection.js");
+  for (const part of parts) {
+    expect(part.error).toBeUndefined(); expect(part.volume).toBeGreaterThan(0);
+    const validation = inspectGeometry(part, { mesh: true }).meshValidation;
+    expect(validation.valid).toBe(true); expect(validation.disconnectedComponents).toBe(1);
+  }
+  expect(parts[5].bounds.max[2]).toBeCloseTo(9, 5);
+  expect(parts[6].bounds.max[2]).toBeCloseTo(20.99, 5);
+  const probe = (w, d, h, x = 0, y = 0, z = 0) => ({ node: { t: "prim", kind: "box", p: { w, d, h, r: 0, c: 0 }, mods: [] }, m: [...IDENTITY.slice(0, 12), x, y, z, 1] });
+  const pairs = [];
+  for (let index = 0; index < document.bodies.length; index++) {
+    const native = { node: resolveNode(document.bodies[index].node, document), m: IDENTITY };
+    pairs.push({ id: `base-${index}`, a: native, b: probe(90, 50, 9) });
+    if (index === 6) pairs.push({ id: "retained-divider", a: native, b: probe(.5, .5, 2, 0, -18.8, 12) });
+    if (index <= 2) {
+      pairs.push({ id: `retained-front-${index}`, a: native, b: probe(90, .5, 12, 0, -20.5, 10) });
+      pairs.push({ id: `retained-back-${index}`, a: native, b: probe(90, .5, 12, 0, 20.5, 10) });
+    }
+    if (index >= 1 && index <= 4) {
+      const side = sides[index - 1], x = side === "left" ? -41.15 : side === "right" ? 41.15 : 0, y = side === "front" ? -20.15 : side === "back" ? 20.15 : 0;
+      const shape = side === "left" || side === "right" ? [.4, 4] : [4, .4];
+      pairs.push({ id: `wall-${side}`, a: native, b: probe(...shape, 4, x, y, 12) });
+      pairs.push({ id: `rim-${side}`, a: native, b: probe(...shape, .5, x, y, 22) });
+    }
+  }
+  const measured = [];
+  for (let offset = 0; offset < pairs.length; offset += 8) measured.push(...await page.evaluate(pairs => window.__app.kernel.inspectPairs(pairs), pairs.slice(offset, offset + 8)));
+  expect(measured.every(result => result.status === "measured"), JSON.stringify(measured)).toBe(true);
+  const base = measured.find(result => result.id === "base-0").overlapVolumeMm3;
+  const front = measured.find(result => result.id === "retained-front-0").overlapVolumeMm3, back = measured.find(result => result.id === "retained-back-0").overlapVolumeMm3;
+  for (const result of measured) {
+    if (result.id.startsWith("base-")) expect(result.overlapVolumeMm3).toBeCloseTo(base, 5);
+    else if (result.id === "retained-divider") expect(result.overlapVolumeMm3).toBeGreaterThan(.4);
+    else if (result.id.startsWith("retained-front")) expect(result.overlapVolumeMm3).toBeCloseTo(front, 5);
+    else if (result.id.startsWith("retained-back")) expect(result.overlapVolumeMm3).toBeCloseTo(back, 5);
+    else expect(result.overlapVolumeMm3).toBeCloseTo(0, 6);
+  }
+  expect(errors).toEqual([]);
+});
+
+test("separately printable adjoining bins clear a 280 mm item across their open sides", async ({ page }, info) => {
+  const { compileMcpModel } = await import("../browser/models.js");
+  const definition = { id: "drawer", type: "drawerLayout", width: 294, depth: 84, height: 50, includeBaseplate: false, binLimits: { columns: 5, rows: 5 }, printArea: { width: 250, depth: 250, height: 250, edgeMargin: 2 }, bins: [
+    { id: "main", x: 0, y: 0, columns: 5, rows: 2, openSides: ["right"] },
+    { id: "extension", x: 5, y: 0, columns: 2, rows: 2, openSides: ["left"] },
+  ] };
+  const document = compileMcpModel(newDoc("Long item bins", "advanced"), { operations: [definition] }).document;
+  const closed = compileMcpModel(newDoc("Closed control", "advanced"), { operations: [{ ...definition, bins: definition.bins.map(bin => ({ ...bin, openSides: [] })) }] }).document;
+  await boot(page, info); await loadDoc(page, document);
+  const errors = await page.evaluate(() => [...window.__app.scene.errors.values()].map(String));
+  expect(errors).toEqual([]);
+  expect(document.bodies).toHaveLength(2);
+  expect(document.bodies.every(body => body.mcpPrintFit.configured)).toBe(true);
+  expect(document.bodies.map(body => body.mcpGridfinity.width)).toEqual([209.5, 83.5]);
+  const item = { node: { t: "prim", kind: "box", p: { w: 280, d: 20, h: 5, r: 0, c: 0 }, mods: [] }, m: [...IDENTITY.slice(0, 12), 0, 0, 10, 1] };
+  const pairs = [document, closed].flatMap((source, index) => source.bodies.map((body, i) => ({ id: `${index ? "closed" : "open"}-${i}`, a: { node: resolveNode(body.node, source), m: body.m }, b: item })));
+  const measured = await page.evaluate(pairs => window.__app.kernel.inspectPairs(pairs), pairs);
+  expect(measured.every(result => result.status === "measured"), JSON.stringify(measured)).toBe(true);
+  for (const result of measured) {
+    if (result.id.startsWith("open")) expect(result.overlapVolumeMm3).toBeCloseTo(0, 6);
+    else expect(result.overlapVolumeMm3).toBeGreaterThan(1);
+  }
+  await page.screenshot({ path: info.outputPath("adjoining-open-bins.png") });
+});

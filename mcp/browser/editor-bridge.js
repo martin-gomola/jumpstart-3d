@@ -13,6 +13,7 @@ import { selectGeometry } from "../shared/geometry.js";
 import { initAgentStatus, initAiSetupPanel, STATUS_HOLD_MS } from "./ai-status.js";
 import { initTemplatePanel } from "./template-panel.js";
 import { previewViewer } from "./preview-viewer.js";
+import { checkPrintFit } from "../shared/print-area.js";
 import { summarizeDrawerLayouts } from "./drawer-layout.js";
 
 import { createNativeParametricModel, reviseNativeParameters } from "./native-parameters.js";
@@ -65,6 +66,12 @@ function bodyInfo(body, app, includeGeometry = false, options = {}) {
     role: bodyRole(body),
     ...(body.mcpDrawerLayout ? { drawerLayout: { layoutId: body.mcpDrawerLayout.layoutId, partId: body.mcpDrawerLayout.partId } } : {}),
     ...(body.mcpGridfinity ? { gridfinity: Object.fromEntries(Object.entries(clone(body.mcpGridfinity)).filter(([key]) => !["nodeSignature", "sketchSignatures"].includes(key))) } : {}),
+    ...(body.mcpDrawerSpacer ? { drawerSpacer: Object.fromEntries(Object.entries(clone(body.mcpDrawerSpacer)).filter(([key]) => key !== "sketchSignatures")) } : {}),
+    ...(body.mcpPrintFit ? { printFit: (() => {
+      if (!size || view?.pending || !body.mcpDrawerLayout?.definition?.printArea) return { configured: true, status: "unknown", source: "current bounds" };
+      try { return { ...checkPrintFit(body.mcpDrawerLayout.definition.printArea, size.x, size.y, size.z, body.name), status: "passed", source: "current bounds" }; }
+      catch (error) { return { configured: true, status: "failed", error: error.message, source: "current bounds" }; }
+    })() } : {}),
     ...(body.mcpPockets ? { pockets: clone(body.mcpPockets) } : {}),
     feature: body.node?.t ?? "unknown",
     ...(body.turned ? { turned: clone(body.turned) } : {}),
@@ -470,6 +477,16 @@ export function initMcp(app) {
         ...metadata,
       };
       const afterSignatures = signatures(compiled.document);
+      if (result.valid) for (const { body } of results) {
+        const area = body.mcpDrawerLayout?.definition?.printArea;
+        if (!area || !compiled.affectedBodyIds.includes(body.id)) continue;
+        const dimensions = bodyInfo(body, app).dimensions;
+        try {
+          if (!dimensions) throw new Error("Printer fit requires measured preview bounds.");
+          const fit = checkPrintFit(area, dimensions.x, dimensions.y, dimensions.z, body.name);
+          const report = result.bodies.find(entry => entry.id === body.id); if (report) report.printFit = { ...fit, source: "measured preview bounds" };
+        } catch (error) { result.valid = false; result.validation.geometricRequirements = "failed"; errors.push({ id: body.id, category: "acceptance", error: error.message }); }
+      }
       const afterBodies = new Map(compiled.document.bodies.map((body) => [body.id, bodyInfo(body, app)]));
       result.changes = comparePreviewBodies(beforeBodies, afterBodies, beforeSignatures, afterSignatures);
       if (result.valid) {

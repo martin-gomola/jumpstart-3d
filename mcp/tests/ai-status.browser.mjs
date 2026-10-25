@@ -137,6 +137,10 @@ test("AI shares the mode switch and restores the CAD selection when closed", asy
   await expect(group.locator("button")).toHaveText(["Beginner", "Advanced", "Chisel", /AI/]);
   await expect(ai.locator(".ai-status-short")).toHaveText("AI");
   const originalMode = await page.evaluate(() => window.__app.mode);
+  await page.evaluate(() => {
+    window.__coveredEditorKeys = [];
+    document.addEventListener("keydown", event => { if (event.key === "Delete") window.__coveredEditorKeys.push(event.key); });
+  });
   const mode = page.locator(`#mode-${originalMode}`);
   for (const theme of ["light", "dark", "contrast"]) {
     await page.evaluate(theme => document.documentElement.dataset.ui = theme, theme);
@@ -144,6 +148,10 @@ test("AI shares the mode switch and restores the CAD selection when closed", asy
     await page.keyboard.press("Enter");
     await expect(ai).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("#ai-setup-panel")).toBeVisible();
+    await page.locator("#ribbon button:not(:disabled)").first().evaluate(el => el.focus());
+    await expect(page.locator("#ai-setup-close")).toBeFocused();
+    await page.keyboard.press("Delete");
+    expect(await page.evaluate(() => window.__coveredEditorKeys)).toEqual([]);
     expect(await page.evaluate(() => window.__app.mode)).toBe(originalMode);
     const styles = await group.evaluate(element => {
       const ai = getComputedStyle(element.querySelector("#ai-status"));
@@ -164,4 +172,10 @@ test("AI shares the mode switch and restores the CAD selection when closed", asy
   await expect(page.locator("#ai-setup-panel")).toBeHidden();
   await expect(page.locator("#mode-advanced")).toHaveAttribute("aria-pressed", "true");
   await expect(ai).toHaveAttribute("aria-expanded", "false");
+  expect(await page.locator("#ribbon").evaluate(el => el.inert)).toBe(false);
+  expect(await page.locator("#app > .work").evaluate(el => el.inert)).toBe(false);
+  const cadControl = page.locator("#ribbon button:not(:disabled)").first();
+  await cadControl.focus(); await expect(cadControl).toBeFocused();
+  await page.keyboard.press("Delete");
+  expect(await page.evaluate(() => window.__coveredEditorKeys)).toEqual(["Delete"]);
 });

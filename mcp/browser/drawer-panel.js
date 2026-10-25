@@ -1,20 +1,25 @@
 import { el } from "../../src/util.js";
+import { dimensionGuide } from "./dimension-guide.js";
 import { drawerMetrics, normalizeDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../shared/drawer-layout.js";
 import { normalizeMagnetPockets, magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
 import { magnetControls } from "./magnet-controls.js";
 import { normalizeBinLimits } from "../shared/gridfinity-limits.js";
+import { normalizeCornerSpacers, cornerSpacerParts } from "../shared/drawer-spacers.js";
+import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "../shared/print-area.js";
 
 const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);
 
 export function initDrawerPanel({ root, request, subscribe, onBusy, createPreviewView }) {
   let preferredBinLimits = normalizeBinLimits();
+  let preferredPrintArea = false;
+  try { const saved = localStorage.getItem("jumpstart.gridfinity.printArea"); if (saved) preferredPrintArea = normalizePrintArea(JSON.parse(saved)); } catch { /* Browser preferences are optional. */ }
   try { const saved = localStorage.getItem("jumpstart.gridfinity.binLimits"); if (saved) preferredBinLimits = normalizeBinLimits(JSON.parse(saved)); } catch { /* Browser preferences are optional. */ }
   let previewView = null;
   const disposePreviewView = () => { previewView?.dispose(); previewView = null; };
   let draft, selectedId = null, documentId = null, savedLayouts = [], counter = 0, cached = null, busy = false, gesture = null, view = "layout";
   let undo = [], redo = [], measurementsCollapsed = false;
-  const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, baseplateMagnets: false, binLimits: copy(preferredBinLimits), floor: 2, wall: 1.2, bins: [] });
+  const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, baseplateMagnets: false, printArea: copy(preferredPrintArea), binLimits: copy(preferredBinLimits), floor: 2, wall: 1.2, bins: [] });
   draft = fresh();
   const field = (name, label, initial = "", step = "any") => {
     const id = `drawer-${name}`, input = el("input", { id, type: "number", min: name === "height" ? 14 : 42, max: name === "height" ? 10000 : 881.99, step, value: initial, required: true, "aria-describedby": "drawer-message" });
@@ -28,6 +33,25 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   const measurements = el("div", { class: "ai-template-fields" }, width.label, depth.label, height.label);
   const example = el("button", { type: "button", class: "drawer-example" }, "Try a 336 × 252 mm example");
   const fit = el("p", { id: "drawer-fit", class: "ai-template-note", "aria-live": "polite" });
+  const spacerToggle = el("input", { id: "drawer-corner-spacers", type: "checkbox" });
+  const spacerClearance = field("spacer-clearance", "Outer-edge clearance (mm)", 0.2, 0.1);
+  const spacerHeight = field("spacer-height", "Spacer height (mm)", 5, 0.5);
+  const spacerLeg = field("spacer-leg", "Contact leg length (mm)", 20, 1);
+  for (const [control, min, max] of [[spacerClearance.input, 0, 1], [spacerHeight.input, 1, 12], [spacerLeg.input, 5, 60]]) { control.min = min; control.max = max; }
+  const spacerFields = el("div", { class: "ai-template-fields", hidden: true }, spacerClearance.label, spacerHeight.label, spacerLeg.label);
+  const spacerNote = el("p", { class: "ai-template-note", role: "status" });
+  const spacerGroup = el("div", { class: "ai-template-group" }, el("label", { class: "ai-template-field", for: spacerToggle.id }, spacerToggle, el("span", {}, "Corner spacers")), spacerFields, spacerNote);
+  const changeSpacers = () => {
+    if (busy) return;
+    try {
+      const value = spacerToggle.checked ? normalizeCornerSpacers({ clearance: Number(spacerClearance.input.value), height: Number(spacerHeight.input.value), legLength: Number(spacerLeg.input.value) }) : false;
+      const next = copy(draft); next.cornerSpacers = value;
+      if (value) cornerSpacerParts(next, drawerMetrics(next));
+      commit(next);
+    } catch (error) { spacerToggle.checked = !!draft.cornerSpacers; announce(error.message, true); }
+  };
+  spacerToggle.onchange = changeSpacers;
+  for (const input of spacerFields.querySelectorAll("input")) { input.oninput = () => { invalidate(); previewButton.disabled = true; }; input.onchange = () => { if ([...spacerFields.querySelectorAll("input")].every(input => input.validity.valid)) changeSpacers(); }; }
   const baseplate = el("input", { id: "drawer-baseplate", type: "checkbox" }); baseplate.checked = true;
   const baseplateField = el("label", { class: "ai-template-field", for: baseplate.id }, baseplate, el("span", {}, "Include matching baseplates"));
   const saved = el("section", { class: "drawer-saved", hidden: true });
@@ -50,33 +74,40 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   const carrierNote = el("p", { class: "ai-template-note", hidden: true });
   construction.append(baseMagnets.element, carrierNote);
   const measureSummary = el("summary", {}, "Drawer measurements");
-  const newDrawer = el("button", { type: "button", class: "ai-template-remove", title: "Clear the draft and enter new drawer measurements. Undo layout restores the previous draft." }, "New drawer");
-  const measureDetails = el("details", { class: "drawer-measurements", open: true }, measureSummary, el("div", { class: "drawer-measure-fields" }, nameLabel, measurements, example));
-  const settings = el("div", { class: "ai-template-settings drawer-settings" }, el("div", { class: "drawer-view-toolbar" }, el("h3", {}, "Your drawer"), newDrawer), saved, measureDetails, fit,
-    el("div", { class: "ai-template-actions" }, addBin, fill), inspector, construction, message,
-    el("div", { class: "ai-template-submit" }, previewButton));
+  const newDrawer = el("button", { type: "button", title: "Clear the draft and enter new drawer measurements. Undo layout restores the previous draft." }, "New drawer");
+  const measureDetails = el("details", { class: "drawer-measurements", open: true }, measureSummary, el("div", { class: "drawer-measure-fields" }, measurements, nameLabel));
+  const binActions = el("div", { class: "ai-template-actions drawer-bin-actions" }, addBin, fill);
+  const settings = el("div", { class: "ai-controls drawer-settings" }, el("div", { class: "drawer-view-toolbar" }, el("h3", {}, "Your drawer"), newDrawer), saved, measureDetails, fit, spacerGroup,
+    inspector, construction, message);
+  const settingsShell = el("div", { class: "ai-template-settings" }, settings, el("div", { class: "ai-template-submit" }, previewButton));
   const board = el("div", { id: "drawer-board", class: "drawer-board", role: "group", "aria-label": "Drawer layout. Drag empty cells to draw a bin; drag a bin to move it." });
-  const empty = el("div", { class: "drawer-empty" }, el("strong", {}, "Start with your drawer’s inside measurements"), el("p", {}, "The grid will show how many bins fit."));
+  const measureGuide = dimensionGuide({ title: "Start with the inside measurements", note: "Measure the clear space inside your drawer. Leave enough height for it to close." });
+  const empty = el("div", { class: "drawer-empty" }, measureGuide.element, example);
   const ghost = el("div", { class: "drawer-ghost", hidden: true, "aria-hidden": "true" });
   const front = el("p", { class: "drawer-front" }, "Front of drawer");
   const boardArea = el("div", { class: "drawer-board-area" }, empty, board, front);
   const layoutView = el("div", { class: "drawer-layout-view" }, boardArea, partsSummary,
     el("p", { class: "ai-template-note" }, "Drag to draw or move a bin. Arrow keys move the selected bin; Shift + arrows resize it."));
-  const imageArea = el("section", { class: "ai-template-preview drawer-3d", hidden: true, "aria-label": "Drawer 3D preview" });
+  const imageArea = el("section", { class: "ai-template-preview drawer-3d", tabindex: "-1", hidden: true, "aria-label": "Drawer 3D preview" });
   const stale = el("p", { class: "ai-template-stale", hidden: true, role: "status" }, "Out of date. Preview the layout again before adding.");
   const add = el("button", { type: "button", class: "ai-template-primary", disabled: true }, "Add layout to document");
   const cancel = el("button", { type: "button" }, "Cancel preview");
+  const continueButton = el("button", { type: "button", class: "ai-template-primary", hidden: true }, "Continue in editor");
+  continueButton.onclick = () => document.getElementById("ai-setup-close").click();
   const layoutTab = el("button", { type: "button", "aria-pressed": "true" }, "Layout"), imageTab = el("button", { type: "button", "aria-pressed": "false", disabled: true }, "3D preview");
-  const review = el("div", { class: "ai-template-review drawer-review" },
-    el("div", { class: "drawer-view-toolbar" }, el("div", { class: "ai-template-shapes", role: "group", "aria-label": "Drawer view" }, layoutTab, imageTab), el("div", { class: "ai-template-actions" }, undoButton, redoButton)), layoutView, imageArea);
-  root.append(settings, review);
+  const progress = el("ol", { class: "ai-flow", "aria-label": "Make a drawer organizer" }, ...["Measure", "Arrange", "Review"].map(text => el("li", {}, text)));
+  const review = el("div", { class: "ai-template-review drawer-review" }, progress,
+    el("div", { class: "drawer-view-toolbar" }, el("div", { class: "ai-template-shapes", role: "group", "aria-label": "Drawer view" }, layoutTab, imageTab), binActions, el("div", { class: "ai-template-actions" }, undoButton, redoButton)), layoutView, imageArea);
+  root.append(settingsShell, review);
 
   function setView(next) {
-    view = next; layoutView.hidden = next !== "layout"; imageArea.hidden = next !== "preview";
+    view = next;
+    progress.querySelectorAll("li").forEach((step, index) => { if (index === (next === "preview" ? 2 : ready() ? 1 : 0)) step.setAttribute("aria-current", "step"); else step.removeAttribute("aria-current"); });
+    layoutView.hidden = next !== "layout"; imageArea.hidden = next !== "preview";
     layoutTab.setAttribute("aria-pressed", String(next === "layout")); imageTab.setAttribute("aria-pressed", String(next === "preview"));
   }
   layoutTab.onclick = () => setView("layout"); imageTab.onclick = () => setView("preview");
-  const invalidate = () => { cached = null; add.disabled = true; if (imageArea.childElementCount) stale.hidden = false; };
+  const invalidate = () => { cached = null; add.disabled = true; continueButton.hidden = true; previewButton.classList.add("ai-template-primary"); if (imageArea.childElementCount) stale.hidden = false; };
   newDrawer.onclick = () => {
     if (busy) return;
     selectedId = null; gesture = null; ghost.hidden = true;
@@ -95,7 +126,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   }
   const picked = () => draft.bins.find(bin => bin.id === selectedId);
   const focusBin = id => [...board.querySelectorAll("[data-bin-id]")].find(button => button.dataset.binId === id)?.focus();
-  const nextBin = rect => ({ id: `bin-${++counter}`, label: `Bin ${counter}`, ...rect, heightUnits: Math.max(2, Math.min(3, Math.floor((draft.height - drawerBinBaseZ(draft)) / 7))), kind: "bin", dividers: { x: 0, y: 0 }, lip: false, magnets: false });
+  const nextBin = rect => ({ id: `bin-${++counter}`, label: `Bin ${counter}`, ...rect, heightUnits: Math.max(2, Math.min(3, Math.floor(Math.min(draft.height - drawerBinBaseZ(draft), normalizePrintArea(draft.printArea)?.height ?? Infinity) / 7))), kind: "bin", dividers: { x: 0, y: 0 }, lip: false, magnets: false });
   function updateBin(changes) {
     const bin = picked(); if (!bin || busy) return false;
     const candidate = { ...bin, ...changes }, next = copy(draft);
@@ -135,6 +166,9 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     title.value = draft.name; width.input.value = draft.width || ""; depth.input.value = draft.depth || ""; height.input.value = draft.height || "";
     baseplate.checked = draft.includeBaseplate; advancedFloor.input.value = draft.floor; advancedWall.input.value = draft.wall;
     baseMagnets.set(draft.baseplateMagnets || false);
+    spacerToggle.checked = !!draft.cornerSpacers;
+    const spacerOptions = normalizeCornerSpacers(draft.cornerSpacers || true);
+    spacerClearance.input.value = spacerOptions.clearance; spacerHeight.input.value = spacerOptions.height; spacerLeg.input.value = spacerOptions.legLength;
     for (const input of [width.input, depth.input, height.input, advancedFloor.input, advancedWall.input]) {
       if (input.value) input.setAttribute("aria-invalid", String(!input.validity.valid)); else input.removeAttribute("aria-invalid");
     }
@@ -151,7 +185,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     };
   }
   title.onchange = () => { const next = copy(draft); next.name = title.value; commit(next); };
-  baseplate.onchange = () => { const next = copy(draft); next.includeBaseplate = baseplate.checked; if (!next.includeBaseplate) { next.baseplateMagnets = false; baseMagnets.set(false); } commit(next); };
+  baseplate.onchange = () => { const next = copy(draft); next.includeBaseplate = baseplate.checked; if (!next.includeBaseplate) { next.baseplateMagnets = false; next.cornerSpacers = false; spacerToggle.checked = false; baseMagnets.set(false); } commit(next); };
   example.onclick = () => { const next = fresh(); Object.assign(next, { width: 336, depth: 252, height: 50, name: "Example drawer" }); selectedId = null; commit(next); syncFields(); announce("Example size loaded. Replace it with your own inside measurements."); };
 
   function renderInspector() {
@@ -165,14 +199,16 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     if (inspector.nextElementSibling !== nextInspector) settings.insertBefore(inspector, nextInspector);
     const nextMeasurements = bin ? inspector : fit;
     if (measureDetails.nextElementSibling !== nextMeasurements) settings.insertBefore(measureDetails, nextMeasurements);
-    if (!bin) { inspector.append(el("h3", {}, "Bin settings"), el("p", { class: "ai-template-note" }, draft.bins.length ? "Select a bin on the drawer to adjust it." : "Draw a rectangle on the grid or choose Add bin.")); return; }
+    if (!bin) { inspector.append(el("h3", {}, "Make room for your things"), el("p", { class: "ai-template-note" }, draft.bins.length ? "Select a bin on the drawer to adjust it." : draft.includeBaseplate ? "Choose Add bin, or drag across the grid to draw one. You can also preview just the baseplates." : "Draw a rectangle on the grid or choose Add bin.")); return; }
     const label = el("input", { id: "drawer-bin-label", type: "text", maxlength: 80, value: bin.label, disabled: busy });
     label.onchange = () => updateBin({ label: label.value });
     const inspectorHeader = el("div", { class: "drawer-inspector-header" }, el("h3", {}, bin.label));
     inspector.append(inspectorHeader, el("label", { class: "ai-template-field", for: label.id }, el("span", {}, "Name"), label));
     const stepper = (key, title, mm) => {
       const minus = el("button", { type: "button", "aria-label": `Decrease ${title.toLowerCase()}`, disabled: busy || bin[key] <= 1 }, "−");
-      const plus = el("button", { type: "button", "aria-label": `Increase ${title.toLowerCase()}`, disabled: busy || bin[key] >= normalizeBinLimits(draft.binLimits)[key] }, "+");
+      let printable = true;
+      try { checkPrintFit(draft.printArea, (bin.columns + (key === "columns" ? 1 : 0)) * 42 - 0.5, (bin.rows + (key === "rows" ? 1 : 0)) * 42 - 0.5, bin.heightUnits * 7 + (bin.lip ? 4.4 : 0), bin.label); } catch { printable = false; }
+      const plus = el("button", { type: "button", "aria-label": `Increase ${title.toLowerCase()}`, disabled: busy || !printable || bin[key] >= normalizeBinLimits(draft.binLimits)[key] }, "+");
       minus.onclick = () => updateBin({ [key]: bin[key] - 1 }); plus.onclick = () => updateBin({ [key]: bin[key] + 1 });
       return el("div", { class: "drawer-stepper" }, el("span", {}, title), el("div", {}, minus, el("output", {}, `${bin[key]} cells`), plus), el("small", {}, `${mm.toFixed(1)} mm`));
     };
@@ -186,7 +222,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     const heights = el("div", { class: "ai-template-shapes", role: "group", "aria-label": "Bin height" });
     for (const units of [...new Set([2, 3, 5, 7, bin.heightUnits])].sort((a, b) => a - b)) {
       const total = units * 7 + (bin.lip ? 4.4 : 0) + drawerBinBaseZ(draft);
-      const button = el("button", { type: "button", disabled: busy || total > draft.height, "aria-pressed": String(bin.heightUnits === units) }, `${units * 7} mm`);
+      const button = el("button", { type: "button", disabled: busy || total > draft.height || units * 7 + (bin.lip ? 4.4 : 0) > (normalizePrintArea(draft.printArea)?.height ?? Infinity), "aria-pressed": String(bin.heightUnits === units) }, `${units * 7} mm`);
       button.onclick = () => updateBin({ heightUnits: units }); heights.append(button);
     }
     inspector.append(heights);
@@ -261,18 +297,31 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     const validDimensions = ready(), m = drawerMetrics(draft);
     measureSummary.textContent = validDimensions ? `${draft.name} · ${draft.width} × ${draft.depth} × ${draft.height} mm` : "Drawer measurements";
     example.hidden = validDimensions;
+    measureGuide.update({ width: draft.width, depth: draft.depth, height: draft.height, kind: "drawer" });
+    inspector.hidden = !validDimensions; construction.hidden = !validDimensions; spacerGroup.hidden = !validDimensions; binActions.hidden = !validDimensions;
+    progress.querySelectorAll("li").forEach((step, index) => { if (index === (view === "preview" ? 2 : validDimensions ? 1 : 0)) step.setAttribute("aria-current", "step"); else step.removeAttribute("aria-current"); });
     fit.textContent = validDimensions ? `${m.columns} × ${m.rows} grid · ${m.gridWidth} × ${m.gridDepth} mm. Spare space: ${(m.spareWidth / 2).toFixed(1)} mm per side, ${(m.spareDepth / 2).toFixed(1)} mm front/back.` : "Enter the drawer’s inside measurements in millimetres.";
     const magnetCount = draft.bins.reduce((sum, bin) => sum + (bin.magnets ? bin.columns * bin.rows * 4 : 0), 0) + (draft.includeBaseplate && draft.baseplateMagnets ? m.total * 4 : 0);
     partsSummary.textContent = validDimensions ? `${draft.bins.length} bins · ${m.occupied} of ${m.total} cells used (${m.fill}%).${draft.includeBaseplate ? " Matching baseplates included." : ""}${magnetCount ? ` ${magnetCount} magnet pockets.` : ""}` : "";
+    if (validDimensions && !draft.bins.length && draft.includeBaseplate) partsSummary.textContent = `Baseplates only · ${m.total} grid cells.${magnetCount ? ` ${magnetCount} magnet pockets.` : ""}`;
     let error; try { normalizeDrawerLayout(draft); } catch (failure) { error = failure.message; }
+    spacerToggle.checked = !!draft.cornerSpacers; spacerToggle.disabled = busy || !draft.includeBaseplate || !validDimensions;
+    spacerFields.hidden = !draft.cornerSpacers;
+    for (const input of spacerFields.querySelectorAll("input")) input.disabled = busy || !draft.cornerSpacers;
+    spacerNote.textContent = "";
+    if (draft.cornerSpacers) {
+      try { const parts = cornerSpacerParts(draft, m); spacerNote.textContent = parts.length ? `${parts.length} separate flat-bottom spacers, ${draft.cornerSpacers.height} mm tall. Test printed fit before making all four.` : "The grid fills the drawer; no spacers are needed."; }
+      catch (failure) { error = failure.message; spacerNote.textContent = failure.message; }
+    }
     baseMagnets.setDisabled(busy || !draft.includeBaseplate);
     carrierNote.hidden = !draft.baseplateMagnets;
     if (draft.baseplateMagnets) { const lift = magnetCarrierHeight(draft.baseplateMagnets); carrierNote.textContent = `Magnet carrier adds ${lift.toFixed(1)} mm. Baseplate height: ${(5 + lift).toFixed(1)} mm. Bin seating height is included in drawer-fit checks.`; }
-    previewButton.disabled = busy || !!error || !baseMagnets.valid(); previewButton.title = error || "";
+    previewButton.classList.toggle("ai-template-primary", !cached && continueButton.hidden);
+    previewButton.disabled = busy || !!error || !baseMagnets.valid() || !!draft.cornerSpacers && ![...spacerFields.querySelectorAll("input")].every(input => input.validity.valid); previewButton.title = error || "";
     addBin.disabled = busy || !validDimensions || draft.bins.length >= 16; fill.disabled = busy || !validDimensions;
     undoButton.disabled = busy || !undo.length; redoButton.disabled = busy || !redo.length;
     const supplied = [draft.width, draft.depth, draft.height].every(value => Number.isFinite(value) && value > 0);
-    if ((draft.bins.length || supplied) && error && !error.includes("add between 1")) announce(error, true);
+    if ((draft.bins.length || supplied) && error) announce(error, true);
     renderInspector(); renderBoard();
   }
   const cell = event => {
@@ -327,24 +376,29 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
       }
       cached = preview; imageTab.disabled = false; stale.hidden = true;
       disposePreviewView();
-      imageArea.replaceChildren(el("h3", {}, "Review drawer layout"), stale);
+      const reviewTitle = el("h3", { tabindex: "-1" }, "Review drawer layout");
+      const previewContent = el("div", { class: "ai-preview-content" }, reviewTitle, stale);
+      imageArea.replaceChildren(previewContent);
       const image = preview.images?.find(image => image.view === "isometric");
-      try { previewView = createPreviewView(preview.previewId); imageArea.append(previewView.element); }
-      catch { if (image) imageArea.append(el("img", { src: image.dataUrl, alt: "3D preview of the proposed drawer bins and baseplates" }), el("p", { class: "ai-template-note" }, "Interactive view unavailable. Showing the preview image.")); }
-      imageArea.append(el("p", { class: "ai-template-note" }, `${preview.bodies.length} editable parts. Printed fit remains unverified.`), el("div", { class: "ai-template-actions" }, add, cancel));
+      try { previewView = createPreviewView(preview.previewId); previewContent.append(previewView.element); }
+      catch { if (image) previewContent.append(el("img", { src: image.dataUrl, alt: "3D preview of the proposed drawer bins and baseplates" }), el("p", { class: "ai-template-note" }, "Interactive view unavailable. Showing the preview image.")); }
+      const footer = el("div", { class: "ai-preview-footer" }, el("p", { class: "ai-template-note" }, `${preview.bodies.length} editable parts. Printed fit remains unverified.`), el("div", { class: "ai-template-actions" }, add, cancel, continueButton));
+      imageArea.append(footer);
+      const rotated = preview.bodies.filter(body => body.printFit?.rotation === 90);
+      if (rotated.length) footer.prepend(el("p", { class: "ai-template-note" }, `${rotated.length} part(s) need a 90° turn on the print bed. Drawer assembly positions are unchanged.`));
       add.textContent = definition.replaceExisting ? "Update layout in document" : "Add layout to document";
-      setView("preview"); announce("Preview ready. The document is unchanged.");
+      setView("preview"); reviewTitle.focus(); announce("Preview ready. The document is unchanged.");
     } catch (error) { announce(error.message, true); }
     finally { setBusy(false); }
   };
   add.onclick = async () => {
     if (!cached || busy) return;
     const preview = cached; setBusy(true);
-    try { await request("apply_model", { previewId: preview.previewId }); cached = null; add.disabled = true; stale.hidden = true; await refreshDocument(await request("get_document", {}), false); announce("Layout added. Save the project to keep it; Undo restores the previous document."); }
+    try { await request("apply_model", { previewId: preview.previewId }); cached = null; add.disabled = true; stale.hidden = true; await refreshDocument(await request("get_document", {}), false); continueButton.hidden = false; announce("Layout added. Save the project to keep it; Undo restores the previous document."); }
     catch (error) { invalidate(); announce(error.message, true); }
     finally { setBusy(false); }
   };
-  cancel.onclick = () => { cached = null; add.disabled = true; disposePreviewView(); imageArea.replaceChildren(); imageTab.disabled = true; setView("layout"); announce("Preview cancelled. The document is unchanged."); };
+  cancel.onclick = () => { cached = null; add.disabled = true; disposePreviewView(); imageArea.replaceChildren(); imageTab.disabled = true; setView("layout"); previewButton.focus(); announce("Preview cancelled. The document is unchanged."); };
   async function refreshDocument(current, autoLoad = true) {
     const changedDocument = documentId !== current.document.id;
     documentId = current.document.id; savedLayouts = current.drawerLayouts || [];
@@ -368,13 +422,17 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   render();
   return { refreshDocument, deactivate: invalidate,
     getBinLimits: () => normalizeBinLimits(draft.binLimits),
-    setBinLimits(value) {
+    getPrintArea: () => normalizePrintArea(draft.printArea),
+    setBinLimits(value, printArea = draft.printArea) {
       if (busy) throw new Error("Wait for the current preview to finish.");
       const limits = normalizeBinLimits(value);
       if (draft.bins.some(bin => bin.columns > limits.columns || bin.rows > limits.rows)) throw new Error("Existing bins exceed these limits. Resize or remove them, or start a new drawer first.");
-      const next = copy(draft); next.binLimits = limits;
-      commit(next, "Bin limits updated. Preview again before applying."); preferredBinLimits = copy(limits);
-      try { localStorage.setItem("jumpstart.gridfinity.binLimits", JSON.stringify(limits)); return "Limits saved for this drawer and new drawers in this browser."; }
-      catch { return "Limits applied to this drawer. Browser preferences could not be saved."; }
+      const next = copy(draft); next.binLimits = limits; next.printArea = normalizePrintArea(printArea);
+      if (next.includeBaseplate) baseplateTileLimits(next.printArea);
+      for (const bin of next.bins) checkPrintFit(next.printArea, bin.columns * 42 - 0.5, bin.rows * 42 - 0.5, bin.heightUnits * 7 + (bin.lip ? 4.4 : 0), bin.label);
+      if (ready() && (next.bins.length || next.includeBaseplate)) normalizeDrawerLayout(next);
+      commit(next, "Settings updated. Preview again before applying."); preferredBinLimits = copy(limits); preferredPrintArea = copy(next.printArea);
+      try { localStorage.setItem("jumpstart.gridfinity.binLimits", JSON.stringify(limits)); localStorage.setItem("jumpstart.gridfinity.printArea", JSON.stringify(next.printArea)); return "Settings saved for this drawer and new drawers in this browser."; }
+      catch { return "Settings applied to this drawer. Browser preferences could not be saved."; }
     } };
 }

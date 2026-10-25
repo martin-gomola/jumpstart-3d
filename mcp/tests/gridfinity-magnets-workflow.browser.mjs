@@ -68,6 +68,7 @@ test("single-part magnetic baseplates validate fit dimensions, preview read-only
   await page.click("#ai-status"); await page.click("#ai-templates-tab");
   await page.getByRole("button", { name: "Single part", exact: true }).click();
   await page.getByRole("button", { name: /Baseplate A matching/ }).click();
+  await page.getByText("Construction & magnets", { exact: true }).click();
   await page.locator("#ai-template-magnets").check();
   await page.fill("#ai-template-magnets-diameter", "0");
   const before = await get();

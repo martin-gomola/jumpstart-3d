@@ -282,10 +282,10 @@ test("selecting a bin reveals its inspector and keeps quick actions visible with
 test("Gridfinity Settings persist bin limits and enable a measured 4x5 bin without shrinking existing bins", async ({ page }, info) => {
   const errors = watchErrors(page), editorId = await openPlanner(page);
   await dimensions(page, 230, 690, 60);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
   await page.fill("#ai-template-max-bin-width", "5"); await page.fill("#ai-template-max-bin-depth", "6");
-  await page.getByRole("button", { name: "Save limits", exact: true }).click();
-  await expect(page.getByRole("form", { name: "Gridfinity settings" })).toContainText("Limits saved");
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(page.getByRole("form", { name: "Gridfinity settings" })).toContainText("Settings saved");
   await page.getByRole("button", { name: "Drawer layout", exact: true }).click();
   await page.getByRole("button", { name: "Add bin", exact: true }).click();
   for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Increase width", exact: true }).click();
@@ -300,9 +300,9 @@ test("Gridfinity Settings persist bin limits and enable a measured 4x5 bin witho
   await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
   expect(applied.drawerLayouts[0].definition.binLimits).toEqual({ columns: 5, rows: 6 });
   expect(applied.drawerLayouts[0].definition.bins[0]).toMatchObject({ columns: 4, rows: 5 });
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
   await page.fill("#ai-template-max-bin-depth", "4");
-  await page.getByRole("button", { name: "Save limits", exact: true }).click();
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
   await expect(page.getByRole("form", { name: "Gridfinity settings" })).toContainText("Existing bins exceed");
   expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(applied.revision);
   await page.getByRole("button", { name: "Drawer layout", exact: true }).click();
@@ -314,7 +314,7 @@ test("Gridfinity Settings persist bin limits and enable a measured 4x5 bin witho
   await expect(page.locator(".drawer-bin").first()).toContainText("5 × 6");
   await page.reload(); await page.waitForFunction(() => window.__app?.kernel?.ready); await page.waitForSelector("#loading", { state: "hidden" });
   await page.click("#ai-status"); await page.click("#ai-templates-tab");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
   await expect(page.locator("#ai-template-max-bin-width")).toHaveValue("5");
   await expect(page.locator("#ai-template-max-bin-depth")).toHaveValue("6");
   await page.screenshot({ path: info.outputPath("gridfinity-settings.png") });
@@ -342,4 +342,149 @@ test("drawer disclosures use pointer cursors and keyboard toggles; reduced motio
   expect(await button.evaluate(el => getComputedStyle(el).transform)).toBe("none");
   await page.mouse.up();
   await page.screenshot({ path: info.outputPath("disclosure-polish.png") });
+});
+
+test("corner spacers preview as connected native stops outside the grid, persist, update and undo", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  await dimensions(page, 230, 695, 60);
+  await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  await page.locator("#drawer-corner-spacers").check();
+  await expect(page.locator("#drawer-fit")).toContainText("11.5 mm front/back");
+  const previewButton = page.getByRole("button", { name: "Preview layout", exact: true });
+  for (const theme of ["light", "dark", "contrast"]) {
+    await page.evaluate(theme => window.__app.setTheme(theme, true), theme);
+    await previewButton.hover();
+    const ratio = await previewButton.evaluate(el => {
+      const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+      const style = getComputedStyle(el), a = luminance(style.color), b = luminance(style.backgroundColor);
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  }
+  const before = await tool("jumpstart_get_document", { editorId });
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
+  await page.screenshot({ path: info.outputPath("corner-spacers-preview.png") });
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const applied = await tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  const stops = applied.bodies.filter(body => body.drawerSpacer), plates = applied.bodies.filter(body => body.gridfinity?.kind === "baseplate");
+  expect(stops).toHaveLength(4); expect(applied.drawerLayouts[0].editable).toBe(true);
+  for (const stop of stops) {
+    expect(stop.dimensions.x).toBeCloseTo(29.8, 3); expect(stop.dimensions.y).toBeCloseTo(31.3, 3); expect(stop.dimensions.z).toBeCloseTo(5, 3);
+    expect(stop.volume).toBeCloseTo(2663.7, 2);
+    expect(stop.bounds.min[2]).toBeCloseTo(0, 5);
+    const sx = stop.drawerSpacer.corner.includes("right") ? 1 : -1, sy = stop.drawerSpacer.corner.includes("back") ? 1 : -1;
+    const plate = plates.toSorted((a, b) => (sx * b.bounds.center[0] + sy * b.bounds.center[1]) - (sx * a.bounds.center[0] + sy * a.bounds.center[1]))[0];
+    const inspection = await tool("jumpstart_inspect_geometry", { editorId, expectedRevision: applied.revision, bodyId: stop.id, mesh: true, againstBodyId: plate.id, pairChecks: { maximumOverlapVolume: 0 } });
+    expect(inspection.meshValidation.valid).toBe(true); expect(inspection.meshValidation.disconnectedComponents).toBe(1);
+    expect(inspection.pair.status).toBe("measured"); expect(inspection.pair.overlapVolumeMm3).toBeCloseTo(0, 5); expect(inspection.pair.distanceMm).toBeCloseTo(0, 4);
+  }
+  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
+  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
+  await page.fill("#drawer-spacer-clearance", "0.4"); await page.locator("#drawer-spacer-clearance").press("Tab");
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Update layout in document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const updated = await tool("jumpstart_get_document", { editorId });
+  expect(updated.bodies).toHaveLength(applied.bodies.length);
+  expect(updated.bodies.filter(body => body.drawerSpacer).every(body => body.drawerSpacer.clearance === 0.4)).toBe(true);
+  await tool("jumpstart_undo", { editorId, expectedRevision: updated.revision });
+  expect((await tool("jumpstart_get_document", { editorId })).bodies.filter(body => body.drawerSpacer).every(body => body.drawerSpacer.clearance === 0.2)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("an empty drawer can preview and add only baseplates and spacers, then save, reopen and undo", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  await dimensions(page, 230, 695, 60);
+  await expect(page.locator(".drawer-bin")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeEnabled();
+  await expect(page.locator("#drawer-summary")).toContainText("Baseplates only");
+  await page.locator("#drawer-corner-spacers").check();
+  const before = await tool("jumpstart_get_document", { editorId });
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
+  await page.screenshot({ path: info.outputPath("baseplates-and-spacers.png") });
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const applied = await tool("jumpstart_get_document", { editorId });
+  expect(applied.bodies).toHaveLength(12);
+  expect(applied.bodies.filter(body => body.drawerSpacer)).toHaveLength(4);
+  expect(applied.bodies.filter(body => body.gridfinity?.kind === "baseplate")).toHaveLength(8);
+  expect(applied.drawerLayouts[0].definition.bins).toEqual([]);
+  expect(applied.drawerLayouts[0].editable).toBe(true);
+  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
+  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
+  const reopened = await tool("jumpstart_get_document", { editorId });
+  expect(reopened.bodies).toHaveLength(12);
+  expect(reopened.drawerLayouts[0].definition.bins).toEqual([]);
+  await tool("jumpstart_undo", { editorId, expectedRevision: reopened.revision });
+  expect((await tool("jumpstart_get_document", { editorId })).bodies).toHaveLength(0);
+  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.getByText("Advanced construction", { exact: true }).click();
+  await page.locator("#drawer-baseplate").uncheck();
+  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
+  await expect(page.locator("#drawer-message")).toContainText("Enable matching baseplates or add a bin");
+  expect(errors).toEqual([]);
+});
+
+test("printer settings size baseplate tiles for the selected nozzle and preserve printer-fit metadata", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  await dimensions(page, 230, 695, 60);
+  await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Main nozzle ·/ }).click();
+  await expect(page.locator("#ai-template-print-width")).toHaveValue("256");
+  await expect(page.locator("#ai-template-print-height")).toHaveValue("260");
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(page.getByRole("form", { name: "Gridfinity settings" })).toContainText("Settings saved");
+  await page.getByRole("button", { name: "Drawer layout", exact: true }).click();
+  const before = await tool("jumpstart_get_document", { editorId });
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const applied = await tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  expect(applied.bodies).toHaveLength(3);
+  expect(applied.bodies.map(body => [body.gridfinity.columns, body.gridfinity.rows])).toEqual([[5, 6], [5, 6], [5, 4]]);
+  for (const part of applied.bodies) {
+    expect(part.dimensions.x).toBeLessThanOrEqual(252.0001); expect(part.dimensions.y).toBeLessThanOrEqual(252.0001);
+    expect(part.printFit.status).toBe("passed"); expect(part.printFit.source).toBe("current bounds");
+  }
+  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
+  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
+  expect((await tool("jumpstart_get_document", { editorId })).drawerLayouts[0].definition.printArea.height).toBe(260);
+  await page.evaluate(id => window.__store.update(doc => { doc.bodies.find(body => body.id === id).m[0] *= 2; }, "Manual size edit"), applied.bodies[0].id);
+  const edited = await tool("jumpstart_get_document", { editorId });
+  expect(edited.bodies.find(body => body.id === applied.bodies[0].id).printFit.status).toBe("failed");
+  await tool("jumpstart_undo", { editorId, expectedRevision: edited.revision });
+  await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
+  await page.fill("#ai-template-print-height", "4");
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(page.getByRole("form", { name: "Gridfinity settings" })).toContainText("exceeds the usable printer area");
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(applied.revision);
+  await page.getByRole("button", { name: /^Auxiliary nozzle ·/ }).click();
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
+  await page.getByRole("button", { name: "Drawer layout", exact: true }).click();
+  await page.getByRole("button", { name: "New drawer", exact: true }).click();
+  await dimensions(page, 252, 210, 60);
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await expect(page.locator(".drawer-3d")).toContainText("90° turn");
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const second = await tool("jumpstart_get_document", { editorId });
+  expect(second.bodies).toHaveLength(4);
+  const rotated = second.bodies.find(body => body.printFit.rotation === 90);
+  expect(rotated.gridfinity.columns).toBe(6); expect(rotated.gridfinity.rows).toBe(5);
+  await tool("jumpstart_save_document", { editorId, expectedRevision: second.revision });
+  await page.reload(); await page.waitForFunction(() => window.__app?.kernel?.ready); await page.waitForSelector("#loading", { state: "hidden" });
+  await page.click("#ai-status"); await page.click("#ai-templates-tab"); await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
+  await expect(page.locator("#ai-template-print-width")).toHaveValue("235.5");
+  await expect(page.locator("#ai-template-print-height")).toHaveValue("256");
+  await page.screenshot({ path: info.outputPath("printer-area-settings.png") });
+  expect(errors).toEqual([]);
 });

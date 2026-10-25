@@ -17,7 +17,7 @@ test("drawer dimensions yield a centered standard grid, spare space and tiled na
   assert.ok(parts.every(p => p.columns <= 4 && p.rows <= 4));
 });
 test("layout bounds, overlap, height, unknown fields and budgets are rejected without silently moving bins", () => {
-  for (const input of [layout({ bins: [] }), layout({ width: Infinity }), layout({ unexpected: true }), layout({ bins: [bin(), bin("b", { x: 1 })] }), layout({ bins: [bin("b", { x: 5 })] }), layout({ bins: [bin("b", { x: -1 })] }), layout({ height: 21 }), layout({ width: 840, depth: 840 }), layout({ bins: [bin("b", { columns: 5 })] }), layout({ bins: [bin("b", { kind: "mesh" })] })]) assert.throws(() => normalizeDrawerLayout(input));
+  for (const input of [layout({ bins: [], includeBaseplate: false }), layout({ width: Infinity }), layout({ unexpected: true }), layout({ bins: [bin(), bin("b", { x: 1 })] }), layout({ bins: [bin("b", { x: 5 })] }), layout({ bins: [bin("b", { x: -1 })] }), layout({ height: 21 }), layout({ width: 840, depth: 840 }), layout({ bins: [bin("b", { columns: 5 })] }), layout({ bins: [bin("b", { kind: "mesh" })] })]) assert.throws(() => normalizeDrawerLayout(input));
   assert.equal(normalizeDrawerLayout(layout({ includeBaseplate: false, height: 21 })).bins[0].heightUnits, 3);
   assert.throws(() => normalizeDrawerLayout(layout({ height: 25, bins: [bin("b", { lip: true })] })), /too tall/);
   assert.throws(() => normalizeDrawerLayout(layout({ bins: [bin("b", { kind: "insert", dividers: { x: 1 } })] })), /insert blanks/);
@@ -76,4 +76,52 @@ test("configurable bin limits support larger native bins without changing defaul
   assert.equal(drawerMetrics(filled).fill, 100);
   assert.throws(() => normalizeDrawerLayout({ ...large, binLimits: { columns: 4, rows: 4 } }), /configured/);
   for (const binLimits of [{ columns: 7 }, { rows: 0 }, { columns: 2.5 }, { columns: Infinity }, { unexpected: 5 }, null]) assert.throws(() => normalizeDrawerLayout({ ...large, binLimits }));
+});
+
+test("corner spacers occupy only drawer margins and remain editable owned native parts", () => {
+  const input = layout({ width: 230, depth: 695, height: 60, cornerSpacers: true });
+  const normalized = normalizeDrawerLayout(input), parts = drawerParts(normalized).filter(p => p.type === "drawerSpacer");
+  assert.equal(parts.length, 4);
+  assert.throws(() => drawerParts({ ...input, bins: [bin("spacer-front-left")] }), /conflict/);
+  assert.deepEqual(normalized.cornerSpacers, { clearance: 0.2, height: 5, legLength: 20 });
+  for (const part of parts) for (const rect of part.rectangles) {
+    const minX = part.position[0] + rect.x - rect.width / 2, maxX = minX + rect.width;
+    const minY = part.position[1] + rect.y - rect.depth / 2, maxY = minY + rect.depth;
+    assert.ok(minX >= -114.8 - 1e-8 && maxX <= 114.8 + 1e-8 && minY >= -347.3 - 1e-8 && maxY <= 347.3 + 1e-8);
+    assert.ok(maxX <= -105 + 1e-8 || minX >= 105 - 1e-8 || maxY <= -336 + 1e-8 || minY >= 336 - 1e-8);
+  }
+  const compiled = compileMcpModel(doc(), { operations: [input] }).document;
+  assert.equal(compiled.bodies.filter(body => body.mcpDrawerSpacer).length, 4);
+  assert.equal(summarizeDrawerLayouts(compiled)[0].editable, true);
+  const revised = compileMcpModel(compiled, { operations: [{ ...input, replaceExisting: true, cornerSpacers: { clearance: 0.4 } }] }).document;
+  assert.equal(revised.bodies.length, compiled.bodies.length);
+  const edited = structuredClone(compiled); edited.bodies.find(body => body.mcpDrawerSpacer).node.children[0].node.p.h += 1;
+  assert.equal(summarizeDrawerLayouts(edited)[0].editable, false);
+  assert.throws(() => compileMcpModel(edited, { operations: [{ ...input, replaceExisting: true }] }), /edited/);
+});
+
+test("spacer options reject unprintably thin gaps, oversized legs and invalid dimensions; exact fits need no stops", () => {
+  for (const cornerSpacers of [{ clearance: -1 }, { height: 0 }, { legLength: 100 }, { arbitrary: 1 }, { clearance: Infinity }]) assert.throws(() => normalizeDrawerLayout(layout({ cornerSpacers })));
+  assert.throws(() => normalizeDrawerLayout(layout({ cornerSpacers: true, includeBaseplate: false })), /baseplate/);
+  assert.throws(() => normalizeDrawerLayout(layout({ width: 252.5, cornerSpacers: true })), /thin/);
+  assert.throws(() => normalizeDrawerLayout(layout({ width: 42, depth: 180, bins: [bin("small", { columns: 1 })], cornerSpacers: { legLength: 21 } })), /overlap/);
+  assert.equal(drawerParts(layout({ width: 252, depth: 168, cornerSpacers: true })).filter(p => p.type === "drawerSpacer").length, 0);
+  const singleAxis = drawerParts(layout({ width: 252, depth: 180, cornerSpacers: true })).filter(p => p.type === "drawerSpacer");
+  assert.equal(singleAxis.length, 4); assert.ok(singleAxis.every(p => p.rectangles.length === 1));
+});
+
+test("baseplate-only layouts support optional spacers and remain editable without allowing empty output", () => {
+  const base = layout({ bins: [] });
+  assert.equal(normalizeDrawerLayout(base).bins.length, 0);
+  assert.ok(drawerParts(base).every(part => part.kind === "baseplate"));
+  const withSpacers = { ...base, width: 230, depth: 695, cornerSpacers: true };
+  const built = compileMcpModel(doc(), { operations: [withSpacers] }).document;
+  assert.equal(built.bodies.length, 12);
+  assert.equal(built.bodies.filter(body => body.mcpDrawerSpacer).length, 4);
+  assert.equal(built.bodies.filter(body => body.mcpGridfinity?.kind === "bin").length, 0);
+  assert.equal(summarizeDrawerLayouts(built)[0].editable, true);
+  const revised = compileMcpModel(built, { operations: [{ ...withSpacers, replaceExisting: true, cornerSpacers: false }] }).document;
+  assert.equal(revised.bodies.length, 8);
+  assert.throws(() => normalizeDrawerLayout({ ...base, includeBaseplate: false }), /baseplates or add a bin/);
+  assert.throws(() => normalizeDrawerLayout({ ...base, includeBaseplate: false, cornerSpacers: true }), /baseplates/);
 });

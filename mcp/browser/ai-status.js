@@ -24,7 +24,7 @@ export const AI_STATUS_CSS = `
 .ai-status:not([data-tooltip-dismissed]):hover .ai-status-tooltip, .ai-status:not([data-tooltip-dismissed]):focus .ai-status-tooltip { display: block; }
 .ai-status[data-setup-open="true"]:not([data-tooltip-dismissed]):hover .ai-status-tooltip, .ai-status[data-setup-open="true"]:not([data-tooltip-dismissed]):focus .ai-status-tooltip { display: none; }
 .ai-status-tooltip::before { content: ""; position: absolute; inset-inline: 0; bottom: 100%; height: var(--ai-status-tooltipOffset); }
-.ai-setup-panel { position: fixed; inset-block-start: calc(var(--ai-status-panelTop) + env(safe-area-inset-top, 0)); inset-inline-end: 0; inset-block-end: 0; z-index: var(--ai-status-panelLayer); box-sizing: border-box; display: flex; flex-direction: column; width: 100%; max-width: var(--ai-status-panelWidth); overflow-y: auto; background: var(--panel); color: var(--ink); border-inline-start: var(--ai-status-panelBorder) solid var(--line); }
+.ai-setup-panel { position: fixed; inset-block-start: calc(var(--ai-status-panelTop) + env(safe-area-inset-top, 0)); inset-inline: 0; inset-block-end: 0; z-index: var(--ai-status-panelLayer); box-sizing: border-box; display: flex; flex-direction: column; width: auto; max-width: none; overflow-y: auto; background: var(--panel); color: var(--ink); border: 0; }
 .ai-setup-panel[hidden] { display: none; }
 .ai-setup-header { display: flex; align-items: center; gap: var(--ai-status-panelGap); padding: var(--ai-status-panelPadding); border-block-end: var(--ai-status-panelBorder) solid var(--line-2); }
 .ai-setup-header h2 { flex: 1; margin: 0; font: 600 var(--ai-status-panelTitleSize)/var(--ai-status-panelSmallLine) var(--f-label); letter-spacing: var(--ai-status-panelTracking); text-transform: uppercase; }
@@ -121,12 +121,22 @@ export function initAiSetupPanel() {
   if (!trigger || !panel) return () => {};
   const closeButton = document.getElementById("ai-setup-close");
   const copyStatus = document.getElementById("ai-setup-copy-status");
+  const blockedRegions = new Map();
   const setOpen = (open, { dismissTooltip = false, restoreFocus = true } = {}) => {
     panel.hidden = !open;
+    if (open && !blockedRegions.size) {
+      for (const region of document.querySelectorAll("#ribbon, #app > .work, #app > .status, .chisel-host")) { blockedRegions.set(region, region.inert); region.inert = true; }
+    } else if (!open) {
+      for (const [region, previous] of blockedRegions) region.inert = previous;
+      blockedRegions.clear();
+    }
     trigger.dataset.setupOpen = String(open);
     trigger.setAttribute("aria-expanded", String(open));
     trigger.setAttribute("aria-label", `${document.getElementById("ai-setup-state")?.textContent || "AI client"}. ${open ? "Close" : "Open"} AI workspace.`);
-    if (open) closeButton?.focus();
+    if (open) {
+      closeButton?.focus();
+      panel.dispatchEvent(new Event("workspaceopen"));
+    }
     else {
       if (dismissTooltip) trigger.dataset.tooltipDismissed = "true";
       if (restoreFocus) trigger.focus();
@@ -142,6 +152,14 @@ export function initAiSetupPanel() {
     event.stopImmediatePropagation();
     setOpen(false, { dismissTooltip: true });
   };
+  const chooseClient = event => {
+    const choice = event.target.closest("[data-client-choice]");
+    if (!choice) return;
+    panel.querySelectorAll("[data-client-choice]").forEach(button => button.setAttribute("aria-pressed", String(button === choice)));
+    panel.querySelectorAll("[data-ai-client]").forEach(section => { section.hidden = section.dataset.aiClient !== choice.dataset.clientChoice; });
+    if (copyStatus) copyStatus.textContent = "";
+  };
+  panel.addEventListener("click", chooseClient);
   const copy = async (event) => {
     const button = event.target.closest("[data-copy-target]");
     if (!button) return;
@@ -154,16 +172,22 @@ export function initAiSetupPanel() {
       if (copyStatus) copyStatus.textContent = "Copy was unavailable. Select the setup text and copy it.";
     }
   };
+  const isolateWorkspaceKeys = event => { if (!((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s")) event.stopPropagation(); };
+  panel.addEventListener("keydown", isolateWorkspaceKeys);
   trigger.addEventListener("click", toggle);
   modeButtons.forEach(button => button.addEventListener("click", leaveWorkspace));
   closeButton?.addEventListener("click", close);
   panel.addEventListener("click", copy);
   window.addEventListener("keydown", onKeyDown, true);
   return () => {
+    for (const [region, previous] of blockedRegions) region.inert = previous;
+    blockedRegions.clear();
+    panel.removeEventListener("keydown", isolateWorkspaceKeys);
     trigger.removeEventListener("click", toggle);
     modeButtons.forEach(button => button.removeEventListener("click", leaveWorkspace));
     closeButton?.removeEventListener("click", close);
     panel.removeEventListener("click", copy);
+    panel.removeEventListener("click", chooseClient);
     window.removeEventListener("keydown", onKeyDown, true);
   };
 }

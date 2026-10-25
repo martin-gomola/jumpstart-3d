@@ -9,11 +9,16 @@ Add to document.
 Use the existing editor theme variables and `mcp/tokens/ai-status.json`. Keep the
 CAD palette, typefaces, control states, and keyboard focus conventions. The
 desktop workspace has independently scrollable settings and model-review columns.
-Generators uses a maximum width of 72 rem with a 28 rem settings column on desktop,
-bounded by the viewport so settings gain room without squeezing the preview.
-Connection and Generators share this desktop width. Keep the title, workspace
+The AI workspace fills the viewport below the main app header, with a 24 rem
+settings column and an expanding layout/preview area on desktop.
+Create and AI connection share this full width. Create opens by default; no AI
+connection is required to use the generators. Keep the title, workspace
 tabs and Close action on one compact desktop header row; switching tabs must not
 resize or shift the panel. Stack header navigation only at narrower widths.
+Keep the main mode switch available. Covered CAD regions are inert until the
+workspace closes; preserve their prior inert state, scene and document. Back to
+editor, Escape and choosing a CAD mode restore access. Workspace keys must not
+trigger hidden CAD edits; the explicit project Save shortcut remains available.
 
 Disclosure rows use full-row pointer targets, a trailing chevron, and distinct
 open/hover/focus states. Inputs use the stronger neutral boundary on a recessed
@@ -29,18 +34,33 @@ choosing a CAD mode closes the AI workspace.
 
 ## Drawer-first interaction
 
-- Keep Connection separate from Generators. Gridfinity is a named generator section,
-  with Drawer layout and Single part as its workflows. Future unrelated generators
+- Keep AI connection separate from Create. Show only the selected AI client’s
+  setup instructions. Gridfinity is a named generator section,
+  with Drawer layout and Single part as its workflows. Printer & settings is a
+  secondary action. Future unrelated generators
   belong beside Gridfinity, not inside its drawer or part controls.
 - Default Gridfinity to Drawer layout; retain Single part for cutouts and detailed CAD parameters.
+- Allow an empty bin arrangement to preview/apply matching baseplates and optional
+  spacers. Label it Baseplates only, explain that bins are optional, and reject
+  output with neither bins nor baseplates.
 - Gridfinity Settings exposes maximum drawer-bin width/depth in cells and shows
   their millimetre footprint. Defaults remain 4 by 4; validated native generation
   supports up to 6 by 6. Persist limits with the drawer, remember browser defaults
   for new drafts, and reject reductions that exceed existing bins without resizing them.
   Keep geometry/time/memory budgets separate from user preferences.
+- Printer settings expose editable XY/Z nozzle envelopes and an explicit reserve
+  per bed edge. Tile baseplates to the usable area within native limits, trying
+  90-degree rotation to reduce tile count. Show required bed rotation without
+  moving the drawer assembly. Check measured preview bounds and refresh fit
+  after native edits. Keep per-part fit distinct from print-bed packing or physical
+  printability. Preserve legacy tiling when no printer is configured.
 - Keep New drawer beside the drawer heading, including for unsaved drafts. It clears
   draft bins, measurements and preview in one undoable action, focuses width, and
   leaves already applied CAD bodies unchanged.
+- Offer optional corner spacers beside measured spare space. Generate separate,
+  flat-bottom native parts outside the centered grid, with adjustable clearance,
+  height and contact legs. Show their count and test-fit guidance. Do not silently
+  produce thin walls or certify drawer-corner shape, friction or printed fit.
 - Ask for inside width, depth, and usable height in millimetres. Derive the 42 mm grid
   and show spare space per side. Example measurements must be explicitly chosen and labelled.
 - Draw and move bins directly on the grid, with keyboard and stepper alternatives.
@@ -68,6 +88,27 @@ choosing a CAD mode closes the AI workspace.
   ambiguous magnet diameters, and account for the magnetic carrier's added height
   in drawer-fit checks. Place these controls under More bin options/Advanced.
 
+## Beginner controls and review
+
+- Use a task heading and a Measure / Arrange / Review indicator for drawer work.
+  Keep Add bin and Fill gaps beside the canvas. Show an inside-measurement sketch
+  and an explicitly chosen sample drawer before dimensions are entered.
+- Keep the control column's action footer outside its scrolling content. Selecting
+  a bin reveals its settings without moving the canvas; keyboard focus must remain
+  visible as the inspector scrolls.
+- Single part starts with Bin. Use a compact illustrated type selector, footprint
+  steppers, physical-height presets and an exact height disclosure. Put wall/floor
+  thickness and magnets under Construction & magnets, and compartment/stacking
+  options in their own disclosure. Inserts retain measured cutouts, with Position
+  & fit and reference evidence disclosed separately.
+- A proportional SVG sizing sketch updates while editing. It is a guide, not an
+  inspected model. Both part and drawer native previews support orbit, zoom,
+  Top view and Reset view. Keep explicit preview, geometry inspection and apply.
+- Check single-part measured preview bounds against the saved printer area before
+  allowing apply. A printer envelope check does not certify physical printed fit.
+- Printer setup pairs editable controls with a proportional build-area diagram.
+  Preserve browser preferences, per-drawer limits and print-fit metadata.
+
 ## Reference adaptation
 
 The interaction reference is `andymai/gridfinity-layout-tool`, snapshot
@@ -90,5 +131,7 @@ The AI mode entry was checked open/closed at 1280, 1440 and 1920 px in light,
 dark and high contrast: aligned button bounds and zero live top-bar axe violations.
 Keyboard opening, Escape/focus return and returning to Advanced have browser coverage.
 The kit's mobile-first gate still flags the existing whole-editor base toolbar.
-Its semantic contrast-token gate cannot consume our flat AI token schema; use
-the rendered state/axe checks and explicit app-theme contrast pairs for this surface.
+The panel gate harness bundles the production UI modules and original theme CSS.
+It derives the kit’s semantic contrast pairs from those actual theme definitions;
+no separate palette is maintained. Run `node mcp/tests/run-ai-panel-gates.mjs` for
+the panel gates, and `npm test` for native geometry and transaction coverage.

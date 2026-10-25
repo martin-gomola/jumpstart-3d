@@ -65,16 +65,24 @@ JumpStart exposes the running local editor through a stdio MCP server. The serve
 
 ### AI workspace templates
 
-Open **AI → Generators → Gridfinity**, then choose **Drawer layout** or
+Open **AI → Create**, then choose **Drawer layout** or
 **Single part** for an insert, bin, or baseplate. These workflows belong to the
-Gridfinity generator; other generators can have their own controls. On desktop, the workspace expands to show scrollable
-settings beside the model preview, dimensions, and Add/Cancel actions. The
-Generators panel uses the same typed plans and preview/apply checks as the agent.
+Gridfinity generator; other generators can have their own controls. The workspace
+fills the page below the main app header. Desktop controls scroll beside the
+expanding layout/model preview, dimensions, and Add/Cancel actions. Covered CAD
+controls are inactive while it is open; the main mode switch remains available.
+Use **Back to editor**, Escape, or a CAD mode to return without losing the draft.
+The Create panel uses the same typed plans and preview/apply checks as the agent.
+Single part starts with Bin. Footprint steppers and height choices update a sizing
+sketch immediately; this sketch is not a geometry or print-fit check. **Preview**
+builds the native model and offers orbit, zoom, Top view and Reset view. After
+adding a part or layout, **Continue in editor** returns to the CAD document for
+saving or export to a slicer. No connected AI client is required for these tools.
 
 Changing a value keeps the last preview visible with an **Out of date** label
 and disables **Add to document**. Select **Preview** to rebuild and inspect the
 new values before adding them. **Cancel preview** discards the proposal. The
-Connection tab contains client setup instructions.
+AI connection tab contains client setup instructions.
 
 Preview images show only the proposed or changed bodies. Existing document parts
 remain in the editor but are excluded from the image, even when they overlap the
@@ -87,6 +95,10 @@ camera changes do not edit the document or apply the layout. If interactive
 rendering is unavailable, the static preview image remains available.
 
 **Drawer layout** begins with inside width, depth, and usable height in mm.
+Bins are optional when matching baseplates are enabled. Leave the grid empty,
+optionally enable Corner spacers, then Preview layout and Add layout to document
+to create only the baseplate tiles and spacers. MCP plans use `bins: []` for this
+workflow. A plan with neither bins nor baseplates is rejected.
 Choose **New drawer** beside the drawer heading to clear the draft and enter new
 measurements in one click. **Undo layout** restores the previous draft; already
 applied document parts are unchanged.
@@ -99,14 +111,65 @@ and Ctrl/Cmd+Z affect the layout draft while planner controls have focus.
 
 Preview layout creates a typed `drawerLayout` operation. It checks overlaps,
 bounds, height and resource limits, then generates editable native bins and matching
-baseplates. Baseplates are tiled into parts no larger than 4 by 4 cells. Inspect
+baseplates. Without printer settings, baseplates use tiles up to 4 by 4 cells;
+configured printer areas choose tiles up to the validated native 6 by 6 limit. Inspect
 the 3D preview before Add. Save the project after adding to persist the layout.
 Saved layouts can be loaded and regenerated; native edits, missing/locked parts
 and external dependencies block replacement rather than discarding those edits.
 
+### Drawer corner spacers
+
+Enable **Corner spacers** beside the drawer's spare-space information to add
+four small, separate native stops between the centered grid and drawer walls.
+They require matching baseplates. Defaults are 5 mm height, 20 mm contact legs
+and 0.2 mm clearance at each outer drawer edge; all are adjustable.
+
+For a rectangular 230 × 695 mm drawer and 210 × 672 mm grid, the nominal margins
+are 10 mm per side and 11.5 mm front/back. Default L-shaped stops occupy about
+29.8 × 31.3 × 5 mm per corner. They stay outside the grid and have flat bottoms.
+One-axis margins produce straight stops; an exact fit generates none. Margins
+that leave less than 1 mm of material and overlapping legs fail validation.
+
+MCP plans use `drawerLayout.cornerSpacers: true` or an object with `clearance`,
+`height` and `legLength`, in mm. The parts share layout ownership and follow its
+preview, inspection, explicit apply, save/reopen, replacement and undo workflow.
+Native edits to a spacer block regeneration instead of being discarded.
+
+Print one spacer first and adjust clearance for the actual drawer and printer.
+Rounded drawer corners and physical retention are not certified by the preview.
+Export spacer bodies individually, or arrange them on a print bed; the assembled
+drawer preview is not an automatically packed print plate.
+
 ### Gridfinity settings
 
-Open **Gridfinity → Settings** to set maximum drawer-bin width and depth in cells.
+Set **Printer area** to size baseplate tiles for individual printing. The supplied
+nozzle presets are main 256 × 256 × 260 mm and auxiliary 235.5 × 256 × 256 mm;
+dimensions remain editable. These are configurable rectangular envelopes, not a
+certification of a particular machine or slicer. The default reserve is 2 mm at
+each XY bed edge; increase it to allow for your skirt, brim or other exclusions.
+
+With this reserve, main-nozzle tiles can reach 6 × 6 cells (252 × 252 mm), and
+auxiliary-nozzle tiles 5 × 6 cells (210 × 252 mm). The tiler also tries swapping
+the two directions when it reduces tile count. A 230 × 695 mm drawer's 5 × 16
+grid becomes three baseplates: 5 × 6, 5 × 6 and 5 × 4. Existing grid geometry
+and corner spacer positions stay aligned.
+
+Typed plans set `drawerLayout.printArea` to `{width, depth, height, edgeMargin}`
+in mm, with an optional `name`. Omit it or use `false` for legacy 4 × 4 tiling.
+Bins, baseplates and spacers must fit individually, permitting 90-degree bed
+rotation. Actual preview bounds are checked before apply with a 0.001 mm numeric
+allowance for kernel/tessellation rounding; this does not replace the edge reserve.
+Readback `printFit` reports current measured bounds and required bed rotation,
+and reports failed fit after an oversized native edit rather than an old success.
+
+**Save settings** applies preferences to the current draft and remembers browser
+defaults for new drawers. The printer area is also saved with the native layout.
+Changing settings does not resize existing bins, change the document, or
+automatically pack the assembled layout onto a single print plate. Export parts
+individually or arrange them in your slicer; check support, adhesion, wipe towers
+and other slicer-specific requirements there.
+
+Open **AI → Create → Printer & settings** to set maximum drawer-bin width and depth in cells.
 Defaults are 4 × 4; each direction supports 1–6 cells (up to a 251.5 mm bin edge).
 The settings show the maximum footprint in mm for comparison with your printer.
 Drawing, resizing and Fill gaps use these limits. Reducing them below existing
@@ -115,7 +178,7 @@ bin sizes is rejected; bins are never silently resized or deleted.
 The typed `drawerLayout.binLimits` object uses `columns` and `rows`. It is saved
 with the native layout and defaults to 4 × 4 when absent. UI settings are also
 remembered in this browser for new drawers. Standalone Gridfinity parts support
-up to 6 × 6 cells; drawer baseplates still tile at 4 × 4. The 16-bin, 144-cell,
+up to 6 × 6 cells; baseplate tiles follow the printer area when configured. The 16-bin, 144-cell,
 preview timeout and geometry inspection budgets remain enforced.
 
 ### Optional magnet pockets

@@ -1,3 +1,5 @@
+import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "./print-area.js";
+import { normalizeCornerSpacers, cornerSpacerParts } from "./drawer-spacers.js";
 import { GRIDFINITY_LIMITS, normalizeBinLimits } from "./gridfinity-limits.js";
 // Drawer planning uses grid cells; the native Gridfinity generator owns interface geometry.
 import { normalizeMagnetPockets, magnetCarrierHeight } from "./gridfinity-magnets.js";
@@ -32,6 +34,7 @@ export function placementError(drawer, candidate, ignoreId) {
   const limits = normalizeBinLimits(drawer.binLimits);
   if (candidate.columns < 1 || candidate.rows < 1 || candidate.columns > limits.columns || candidate.rows > limits.rows) return `Bin exceeds the configured ${limits.columns} × ${limits.rows} cell limit. Adjust Gridfinity Settings.`;
   if (candidate.x < 0 || candidate.y < 0 || candidate.x + candidate.columns > columns || candidate.y + candidate.rows > rows) return "Keep the bin inside the drawer grid.";
+  try { checkPrintFit(drawer.printArea, candidate.columns * 42 - 0.5, candidate.rows * 42 - 0.5, (candidate.heightUnits ?? 2) * 7 + (candidate.lip ? 4.4 : 0), candidate.label || "Bin"); } catch (error) { return error.message; }
   const overlap = (drawer.bins || []).find(bin => bin.id !== ignoreId && bin.x < candidate.x + candidate.columns && bin.x + bin.columns > candidate.x && bin.y < candidate.y + candidate.rows && bin.y + bin.rows > candidate.y);
   return overlap ? `That space is occupied by ${overlap.label || "another bin"}.` : null;
 }
@@ -43,7 +46,7 @@ export function firstDrawerSpace(drawer, columns = 1, rows = 1, ignoreId) {
   return null;
 }
 export function normalizeDrawerLayout(raw) {
-  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "baseplateMagnets", "floor", "wall", "bins", "replaceExisting", "binLimits"], "plan");
+  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "baseplateMagnets", "floor", "wall", "bins", "replaceExisting", "binLimits", "cornerSpacers", "printArea"], "plan");
   if (raw.type !== "drawerLayout") fail("type must be drawerLayout");
   const id = text(raw.id, "id"), layoutId = text(raw.layoutId, "layoutId", id);
   if (!/^[a-zA-Z0-9_-]+$/.test(layoutId)) fail("layoutId must use letters, numbers, underscores or hyphens");
@@ -52,9 +55,10 @@ export function normalizeDrawerLayout(raw) {
   for (const key of ["includeBaseplate", "replaceExisting"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") fail(`${key} must be a boolean`);
   const result = { type: "drawerLayout", id, layoutId, name: text(raw.name, "name", "Drawer layout"), width, depth, height,
     includeBaseplate: raw.includeBaseplate !== false, baseplateMagnets: normalizeMagnetPockets(raw.baseplateMagnets, "baseplateMagnets"), replaceExisting: raw.replaceExisting === true,
-    binLimits: normalizeBinLimits(raw.binLimits), floor: number(raw.floor ?? 2, 0.8, 6, "floor"), wall: number(raw.wall ?? 1.2, 0.8, 4, "wall"), bins: [] };
+    printArea: normalizePrintArea(raw.printArea), cornerSpacers: normalizeCornerSpacers(raw.cornerSpacers), binLimits: normalizeBinLimits(raw.binLimits), floor: number(raw.floor ?? 2, 0.8, 6, "floor"), wall: number(raw.wall ?? 1.2, 0.8, 4, "wall"), bins: [] };
   if (result.baseplateMagnets && !result.includeBaseplate) fail("baseplate magnet pockets require matching baseplates");
-  if (!Array.isArray(raw.bins) || !raw.bins.length || raw.bins.length > DRAWER_LIMITS.bins) fail(`add between 1 and ${DRAWER_LIMITS.bins} bins`);
+  if (!Array.isArray(raw.bins) || raw.bins.length > DRAWER_LIMITS.bins) fail(`use between 0 and ${DRAWER_LIMITS.bins} bins`);
+  if (!raw.bins.length && !result.includeBaseplate) fail("Enable matching baseplates or add a bin before previewing.");
   const ids = new Set();
   for (const [i, entry] of raw.bins.entries()) {
     object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets"], `bin ${i + 1}`);
@@ -77,6 +81,9 @@ export function normalizeDrawerLayout(raw) {
   const metrics = drawerMetrics(result);
   if (metrics.columns > 20 || metrics.rows > 20) fail("use at most 20 cells per drawer direction");
   if (metrics.occupied > DRAWER_LIMITS.cells || result.includeBaseplate && metrics.total > DRAWER_LIMITS.cells) fail("preview up to 144 grid cells at a time; divide a larger drawer into sections");
+  const tiles = result.includeBaseplate ? baseplateTileLimits(result.printArea, metrics) : { columns: 4, rows: 4 };
+  if (result.includeBaseplate) checkPrintFit(result.printArea, Math.min(tiles.columns, metrics.columns) * 42, Math.min(tiles.rows, metrics.rows) * 42, 5 + magnetCarrierHeight(result.baseplateMagnets), "Baseplate");
+  for (const stop of cornerSpacerParts(result, metrics)) checkPrintFit(result.printArea, Math.max(...stop.rectangles.map(rect => rect.width)), Math.max(...stop.rectangles.map(rect => rect.depth)), stop.height, stop.name);
   return result;
 }
 export function drawerParts(raw) {
@@ -85,12 +92,16 @@ export function drawerParts(raw) {
     position: [(x + columns / 2) * 42 - m.gridWidth / 2, (y + rows / 2) * 42 - m.gridDepth / 2, kind === "baseplate" ? 0 : drawerBinBaseZ(drawer)], ...extra });
   for (const bin of drawer.bins) parts.push(part(bin.id, bin.kind, bin.x, bin.y, bin.columns, bin.rows,
     { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, dividers: bin.dividers, magnets: bin.magnets }));
-  if (drawer.includeBaseplate) for (let y = 0; y < m.rows; y += 4) for (let x = 0; x < m.columns; x += 4) {
-    parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(4, m.columns - x), Math.min(4, m.rows - y), { name: `Baseplate ${x / 4 + 1}, ${y / 4 + 1}`, magnets: drawer.baseplateMagnets }));
+  const tile = drawer.includeBaseplate ? baseplateTileLimits(drawer.printArea, m) : { columns: 4, rows: 4 };
+  if (drawer.includeBaseplate) for (let y = 0; y < m.rows; y += tile.rows) for (let x = 0; x < m.columns; x += tile.columns) {
+    parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(tile.columns, m.columns - x), Math.min(tile.rows, m.rows - y), { name: `Baseplate ${x / tile.columns + 1}, ${y / tile.rows + 1}`, magnets: drawer.baseplateMagnets }));
   }
+  parts.push(...cornerSpacerParts(drawer, m));
+  if (new Set(parts.map(part => part.id)).size !== parts.length) fail("Bin ids conflict with generated baseplate or spacer ids; rename the bin id.");
   return parts;
 }
 export function fillDrawerGaps(drawer, makeBin) {
+  checkPrintFit(drawer.printArea, 41.5, 41.5, 14, "Minimum size bin");
   const next = structuredClone(drawer), { columns, rows } = drawerMetrics(next);
   const limits = normalizeBinLimits(drawer.binLimits);
   for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {

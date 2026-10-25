@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { watchErrors, waitIdle } from "../../test/helpers.mjs";
@@ -6,6 +7,7 @@ import { watchErrors, waitIdle } from "../../test/helpers.mjs";
 let broker, baseURL, requestId = 0;
 
 test.beforeAll(async () => {
+  await mkdir(new URL("../../exports/ai-panel/", import.meta.url), { recursive: true });
   broker = spawn(process.execPath, ["mcp/server/server.mjs"], {
     cwd: new URL("../..", import.meta.url),
     env: { ...process.env, JUMPSTART_MCP_HOST: "127.0.0.1", JUMPSTART_MCP_PORT: "0", JUMPSTART_MCP_HTTP_ONLY: "1" },
@@ -68,11 +70,26 @@ test("Generators groups drawer and part workflows under the Gridfinity feature",
   await page.click("#ai-status");
   const panel = page.locator("#ai-setup-panel");
   await expect(panel).toBeVisible();
-  const connection = page.getByRole("tab", { name: "Connection" });
-  const templates = page.getByRole("tab", { name: "Generators" });
+  const connection = page.getByRole("tab", { name: "AI connection" });
+  const templates = page.getByRole("tab", { name: "Create" });
   const connectionBounds = await panel.boundingBox();
-  await expect(connection).toHaveAttribute("aria-selected", "true");
+  expect(connectionBounds.x).toBe(0);
+  expect(connectionBounds.width).toBe(page.viewportSize().width);
+  expect(await page.locator("#ribbon").evaluate(el => el.inert)).toBe(true);
+  expect(await page.locator("#app > .work").evaluate(el => el.inert)).toBe(true);
+  expect(await page.locator(".topbar").evaluate(el => el.inert)).toBe(false);
+  await expect(templates).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#drawer-width")).toBeVisible();
+  await connection.click();
   await expect(page.locator("#ai-setup-codex")).toBeVisible();
+  await expect(page.locator("#ai-setup-claude")).toBeHidden();
+  await page.getByRole("button", { name: "Claude Code", exact: true }).click();
+  await expect(page.locator("#ai-setup-claude")).toBeVisible();
+  await expect(page.locator("#ai-setup-codex")).toBeHidden();
+  await page.getByRole("button", { name: "Antigravity CLI", exact: true }).click();
+  await expect(page.locator("#ai-setup-antigravity")).toBeVisible();
+  await page.screenshot({ path: "exports/ai-panel/connection.png" });
+  await page.getByRole("button", { name: "Codex", exact: true }).click();
   await templates.focus();
   await page.keyboard.press("Enter");
   await expect(templates).toHaveAttribute("aria-selected", "true");
@@ -97,7 +114,7 @@ test("Generators groups drawer and part workflows under the Gridfinity feature",
   await expect(page.getByRole("button", { name: /Baseplate/ })).toBeVisible();
   await expect(page.locator("#ai-connection-panel")).toBeHidden();
   await templates.focus();
-  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowRight");
   await expect(connection).toBeFocused();
   await expect(connection).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#ai-connection-panel")).toBeVisible();
@@ -122,6 +139,7 @@ test("desktop settings stay beside the preview and edits retain a stale image un
   await page.click("#ai-status");
   await page.click("#ai-templates-tab");
   await page.getByRole("button", { name: "Single part", exact: true }).click();
+  await page.locator('[data-template="insert"]').click();
   const before = await get();
   expect(before.bodies).toHaveLength(0);
   await page.getByText("Reference and dimensions", { exact: true }).click();
@@ -135,7 +153,7 @@ test("desktop settings stay beside the preview and edits retain a stale image un
   await expect(page.locator("#ai-template-message")).toContainText("Preview ready", { timeout: 90_000 });
   const previewArea = page.locator("#ai-template-preview");
   await expect(previewArea).toBeVisible();
-  await expect(previewArea.locator("img")).toHaveAttribute("alt", /isometric/i);
+  await expect(previewArea.locator("canvas")).toBeVisible();
   await expect(previewArea).toContainText("Connected geometry checked");
   const afterPreview = await get();
   expect(afterPreview.revision).toBe(before.revision);
@@ -143,18 +161,18 @@ test("desktop settings stay beside the preview and edits retain a stale image un
 
   const desktopLayout = await page.evaluate(() => {
     const panel = document.querySelector("#ai-setup-panel").getBoundingClientRect();
-    const settings = document.querySelector(".ai-template-settings").getBoundingClientRect();
+    const settings = document.querySelector(".ai-single-part .ai-template-settings").getBoundingClientRect();
     const preview = document.querySelector("#ai-template-preview").getBoundingClientRect();
     return { panelWidth: panel.width, settingsRight: settings.right, previewLeft: preview.left, previewTop: preview.top };
   });
   expect(desktopLayout.panelWidth).toBeGreaterThan(900);
   expect(desktopLayout.settingsRight).toBeLessThan(desktopLayout.previewLeft);
-  const image = previewArea.locator("img");
-  const source = await image.getAttribute("src");
+  const canvas = previewArea.locator("canvas");
+  await canvas.evaluate(element => { element.dataset.retainedPreview = "true"; });
   await page.fill("#ai-template-1-depth", "9");
   await expect(previewArea).toBeVisible();
   await expect(previewArea).toContainText("Out of date");
-  await expect(image).toHaveAttribute("src", source);
+  await expect(canvas).toHaveAttribute("data-retained-preview", "true");
   await expect(page.getByRole("button", { name: "Add to document" })).toBeDisabled();
   const previewTop = await previewArea.evaluate(element => element.getBoundingClientRect().top);
   expect(previewTop).toBeCloseTo(desktopLayout.previewTop, 1);
@@ -177,6 +195,8 @@ test("desktop settings stay beside the preview and edits retain a stale image un
   expect(applied.bodies[0]).toMatchObject({ gridfinity: { kind: "insert", columns: 2, rows: 3 }, pockets: [{ id: "pocket1", depth: 9, clearance: 0.3, sourceEvidence: { kind: "manufacturer", units: "in", product: "Sample organizer", url: "https://example.com/dimensions" } }] });
   await expect(page.getByRole("button", { name: "Add to document" })).toHaveCount(0);
   expect((await get()).bodies).toHaveLength(1);
+  await page.getByRole("button", { name: "Continue in editor", exact: true }).click();
+  await expect(page.locator("#ai-setup-panel")).toBeHidden();
   await tool("jumpstart_undo", { editorId, expectedRevision: applied.revision });
   expect((await get()).bodies).toHaveLength(0);
   expect(errors).toEqual([]);
@@ -193,6 +213,7 @@ test("a selected reference body supplies envelope dimensions and remains in the 
   await page.click("#ai-status");
   await page.click("#ai-templates-tab");
   await page.getByRole("button", { name: "Single part", exact: true }).click();
+  await page.locator('[data-template="insert"]').click();
   await page.getByText("Reference and dimensions", { exact: true }).click();
   const referenceButton = page.getByRole("button", { name: "Measured tool envelope" });
   await expect(referenceButton).toBeVisible();
@@ -255,5 +276,69 @@ test("a new template preview excludes existing parts and restores their viewport
   await page.screenshot({ path: testInfo.outputPath("isolated-template-preview.png") });
   await page.getByRole("button", { name: "Cancel preview", exact: true }).click();
   expect(await page.evaluate(id => window.__app.scene.views.get(id)?.group.visible, before.bodies[0].id)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+
+test("beginner sizing gives live dimensions and keeps setup separate at wide and narrow widths", async ({ page }) => {
+  const errors = watchErrors(page);
+  await editor(page);
+  await page.click("#ai-status");
+  await expect(page.locator("#ai-templates-tab")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#ai-connection-panel")).toBeHidden();
+  await page.screenshot({ path: "exports/ai-panel/drawer-start.png" });
+  await page.getByRole("button", { name: "Try a 336 × 252 mm example", exact: true }).click();
+  await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  await expect(page.locator(".drawer-bin")).toHaveCount(1);
+  await page.screenshot({ path: "exports/ai-panel/drawer-arrange.png" });
+  await page.getByRole("button", { name: "Single part", exact: true }).click();
+  await expect(page.locator('[data-template="bin"]')).toHaveAttribute("aria-pressed", "true");
+  const guide = page.locator(".ai-single-part .ai-dimension-guide svg");
+  await expect(guide).toHaveAttribute("aria-label", /83[.,]5 mm wide/);
+  await page.getByRole("button", { name: "Increase part width", exact: true }).click();
+  await expect(guide).toHaveAttribute("aria-label", /125[.,]5 mm wide/);
+  await page.getByRole("button", { name: "35 mm", exact: true }).click();
+  await expect(guide).toHaveAttribute("aria-label", /39[.,]4 mm tall/);
+  await page.fill("#ai-template-columns", "6");
+  await expect(page.getByRole("button", { name: "Increase part width", exact: true })).toBeDisabled();
+  await page.fill("#ai-template-columns", "2");
+  for (const theme of ["light", "dark", "contrast"]) {
+    await page.evaluate(theme => document.documentElement.dataset.ui = theme, theme);
+    await page.screenshot({ path: `exports/ai-panel/part-${theme}.png` });
+  }
+  await page.getByText("Construction & magnets", { exact: true }).click();
+  await page.fill("#ai-template-floor", "0");
+  await page.getByText("Construction & magnets", { exact: true }).click();
+  await page.locator(".ai-single-part button[type=submit]").click();
+  await expect(page.locator("#ai-template-floor")).toBeFocused();
+  await expect(page.locator("#ai-template-floor")).toBeVisible();
+  await page.fill("#ai-template-floor", "2");
+  await expect(page.locator("#ai-template-floor")).not.toHaveAttribute("aria-invalid", "true");
+  await page.getByText("Construction & magnets", { exact: true }).click();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const motion = await page.getByRole("button", { name: "Increase part width", exact: true }).evaluate(button => getComputedStyle(button).transitionDuration);
+  expect(motion).toBe("0s");
+  await page.setViewportSize({ width: 320, height: 760 });
+  const panel = page.locator("#ai-setup-panel");
+  expect(await panel.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: "exports/ai-panel/part-narrow.png" });
+  expect(errors).toEqual([]);
+});
+
+test("single parts respect saved printer bounds before they can be applied", async ({ page }) => {
+  const errors = watchErrors(page), editorId = await editor(page);
+  await page.click("#ai-status");
+  await page.getByRole("button", { name: "Printer & settings", exact: true }).click();
+  await page.locator("#ai-print-area-enabled").check();
+  for (const [key, amount] of [["width", "90"], ["depth", "90"], ["height", "100"]]) await page.fill(`#ai-template-print-${key}`, amount);
+  await page.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(page.getByRole("form", { name: "Gridfinity settings" })).toContainText("Settings saved");
+  await page.screenshot({ path: "exports/ai-panel/printer.png" });
+  await page.getByRole("button", { name: "Single part", exact: true }).click();
+  const before = await tool("jumpstart_get_document", { editorId });
+  await page.locator(".ai-single-part button[type=submit]").click();
+  await expect(page.locator("#ai-template-message")).toContainText("exceeds the usable printer area", { timeout: 90_000 });
+  expect((await tool("jumpstart_get_document", { editorId })).revision).toBe(before.revision);
+  await expect(page.getByRole("button", { name: "Add to document", exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });

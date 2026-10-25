@@ -1039,37 +1039,46 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
       </div>
     </div>
   </header>
-  <aside id="ai-setup-panel" class="ai-setup-panel" hidden role="dialog" aria-modal="false" aria-labelledby="ai-setup-title">
+  <aside id="ai-setup-panel" class="ai-setup-panel" data-active-tab="templates" hidden role="dialog" aria-modal="false" aria-labelledby="ai-setup-title">
     <header class="ai-setup-header">
-      <h2 id="ai-setup-title">AI workspace</h2>
+      <h2 id="ai-setup-title">Maker workspace</h2>
       <div class="ai-workspace-tabs" role="tablist" aria-label="AI workspace">
-        <button id="ai-connection-tab" type="button" role="tab" aria-selected="true" aria-controls="ai-connection-panel">Connection</button>
-        <button id="ai-templates-tab" type="button" role="tab" aria-selected="false" aria-controls="ai-templates-panel" tabindex="-1">Generators</button>
+        <button id="ai-templates-tab" type="button" role="tab" aria-selected="true" aria-controls="ai-templates-panel">Create</button>
+        <button id="ai-connection-tab" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="ai-connection-panel">AI connection</button>
       </div>
-      <button id="ai-setup-close" class="ai-setup-close" type="button">Close</button>
+      <button id="ai-setup-close" class="ai-setup-close" type="button">Back to editor</button>
     </header>
-    <div id="ai-connection-panel" class="ai-setup-body" role="tabpanel" aria-labelledby="ai-connection-tab">
+    <div id="ai-connection-panel" class="ai-setup-body" role="tabpanel" aria-labelledby="ai-connection-tab" hidden>
+      <div class="ai-connection-overview">
+      <div class="ai-connection-intro"><h3>Connect your AI assistant</h3><p>Ask your assistant to build and edit models here. You can also create Gridfinity parts without connecting.</p></div>
       <section class="ai-setup-current" aria-live="polite">
-        <span class="ai-setup-kicker">JumpStart MCP</span>
+        <span class="ai-setup-kicker">Connection status</span>
         <strong id="ai-setup-state">Checking AI bridge</strong>
         <p id="ai-setup-detail">Checking the local MCP bridge.</p>
       </section>
+      </div>
+      <div class="ai-connection-setup">
       <p class="ai-setup-note">Start JumpStart with <code>make up</code>, then sign in to your AI client. No model API key is needed.</p>
-      <section class="ai-setup-client">
+      <div class="ai-client-picker" role="group" aria-label="Choose your AI client">
+        <button type="button" data-client-choice="codex" aria-pressed="true">Codex</button>
+        <button type="button" data-client-choice="claude" aria-pressed="false">Claude Code</button>
+        <button type="button" data-client-choice="antigravity" aria-pressed="false">Antigravity CLI</button>
+      </div>
+      <section class="ai-setup-client" data-ai-client="codex">
         <h3>Codex</h3>
         <p>From the JumpStart project root, run:</p>
         <pre><code id="ai-setup-codex">make codex-install</code></pre>
         <div class="ai-setup-copy-row"><button class="ai-setup-copy" type="button" data-copy-target="ai-setup-codex">Copy command</button></div>
         <p>Restart Codex or open a new chat to load the plugin.</p>
       </section>
-      <section class="ai-setup-client">
+      <section class="ai-setup-client" data-ai-client="claude" hidden>
         <h3>Claude Code</h3>
         <p>From the JumpStart project root, run:</p>
         <pre><code id="ai-setup-claude">claude mcp add --scope user --transport stdio jumpstart -- node "$(pwd)/mcp/server/stdio-proxy.mjs"</code></pre>
         <div class="ai-setup-copy-row"><button class="ai-setup-copy" type="button" data-copy-target="ai-setup-claude">Copy command</button></div>
         <p>Check the server entry with <code>claude mcp get jumpstart</code>.</p>
       </section>
-      <section class="ai-setup-client">
+      <section class="ai-setup-client" data-ai-client="antigravity" hidden>
         <h3>Antigravity CLI</h3>
         <p>Add this entry to <code>~/.gemini/config/mcp_config.json</code>. Replace the sample path with the absolute path to this checkout:</p>
         <pre><code id="ai-setup-antigravity">{
@@ -1084,8 +1093,9 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
         <p>In <code>agy</code>, run <code>/mcp</code> to check the connection.</p>
       </section>
       <p id="ai-setup-copy-status" class="ai-setup-copy-status" role="status" aria-live="polite"></p>
+      </div>
     </div>
-    <div id="ai-templates-panel" class="ai-setup-body ai-templates" role="tabpanel" aria-labelledby="ai-templates-tab" hidden></div>
+    <div id="ai-templates-panel" class="ai-setup-body ai-templates" role="tabpanel" aria-labelledby="ai-templates-tab"></div>
   </aside>
   <nav class="ribbon" id="ribbon" aria-label="Tools"></nav>
   <main class="work">

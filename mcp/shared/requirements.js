@@ -16,6 +16,7 @@ export const geometryCheckSchema = { oneOf: [
   { description: "Heuristic print check along world +Z, bed at the body's lowest Z. Give maxOverhangArea and/or minWall.", ...object({ id, kind: { const: "printability" },
     overhangAngle: { type: "number", minimum: 0, maximum: 89, description: "Degrees from vertical a downward face may lean without support; default 45." },
     maxOverhangArea: { type: "number", minimum: 0, maximum: 100000000, description: "Allowed unsupported downward area in mm²." },
+    baseZone: { type: "number", minimum: 0, maximum: 10, description: "Downward faces wholly within this height above the bed count as base overhang, not overhang; default 1 mm." },
     minWall: { type: "number", exclusiveMinimum: 0, maximum: 100, description: "Thinnest acceptable wall in mm, probed along inward normals." },
     maxThinWallArea: { type: "number", minimum: 0, maximum: 100000000, description: "Allowed surface area over walls thinner than minWall in mm²; default 0." } }, ["id", "kind"]) },
 ] };

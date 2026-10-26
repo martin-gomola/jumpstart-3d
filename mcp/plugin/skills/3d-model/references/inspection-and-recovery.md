@@ -12,8 +12,14 @@
 
 Before building, write a short checklist: required dimensions and orientation,
 expected body/component counts, preserved bodies, and requested exports. Give
-each item an independent measurement or a complete visual review. Record missing
-measurements as assumptions. Do not manufacture dimensions from a screenshot.
+each item an independent measurement or a complete visual review. Do not
+manufacture dimensions from a screenshot.
+
+Record where every dimension came from: `measured` (by whom and with what),
+`given` by the user, `listed` (quote the product page or datasheet and its
+rounding), or `assumed` with a reason. List what the evidence does not show as
+unknowns. Make assumed dimensions native parameters, and repeat the list in the
+final report.
 
 All preview tools accept optional `requirements` alongside the plan or edit:
 
@@ -40,6 +46,11 @@ its lowest Z: `maxOverhangArea` (mm²) limits downward faces steeper than
 `overhangAngle` (default 45° from vertical), and `minWall` with optional
 `maxThinWallArea` (default 0) limits surface over walls thinner than `minWall`.
 Use `overhangBounds`, `thinWallBounds` and `thinnestSamples` to locate a failure.
+Each printability result has `notes` with a `code`, `severity` and `fix`. An
+`error` note is a failed limit; `warn` notes (`slender`, `bed_contact`,
+`thin_part`, or an overhang within its limit) do not fail the check. Apply each
+note's fix to the model or name why it stays, then preview again. Downward faces
+within `baseZone` (default 1 mm) of the bed are `base_overhang`, not overhang.
 Native pair queries also measure distance and intersection volume for supported
 single CAD/STEP solids. These checks do not recognize arbitrary holes or pockets,
 measure exact wall thickness everywhere, or certify continuous-motion interference.
@@ -66,7 +77,9 @@ Do not center or align reference geometry in a way that hides a placement error.
    `jumpstart_inspect_geometry` for dimensions, sections, and mesh checks. A
    phone-cradle preview must report one connected support mesh before apply. A
    cropped image is insufficient visual evidence; obtain a complete view before
-   claiming the appearance was checked.
+   claiming the appearance was checked. Look at the images even when every check
+   passes: mirrored text, a hole in the wrong face or a feature too shallow to
+   see passes the numbers.
 3. Correct the plan and preview again when errors or measurements disagree with
    the request. Stop on unsupported operations or critical validation failures.
 4. Apply only the successful `previewId` using `jumpstart_apply_model` against the
@@ -92,8 +105,8 @@ roles; an excluded or empty selection fails, rather than exporting another part.
 Check actual export success; mesh-only models may not support a useful STEP solid.
 
 Report the created or revised part, measured dimensions, editable representation,
-assumptions, unverified fit requirements, and returned local export link when
-available. Do not claim printability, electrical suitability, or installation fit
+where each dimension came from and the unknowns, remaining printability notes,
+unverified fit requirements, and returned local export link when available. Do not claim printability, electrical suitability, or installation fit
 from dimensions alone.
 
 ## Failure recovery

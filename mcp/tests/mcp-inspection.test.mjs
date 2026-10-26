@@ -56,6 +56,27 @@ test('printability measures downward overhangs above the bed and thin walls from
  for(let i=0;i<inverted.triangles.length;i+=3)[inverted.triangles[i+1],inverted.triangles[i+2]]=[inverted.triangles[i+2],inverted.triangles[i+1]];
  assert.ok(Math.abs(inspectPrintability(inverted,{minWall:2}).overhangArea-100)<1e-9);
 });
+test('printability separates base overhangs and measures bed contact and proportions',()=>{
+ const base=inspectPrintability(boxes([[0,0,0],[10,10,5]],[[20,0,0.3],[22,2,0.8]]));
+ assert.equal(base.overhangArea,0);assert.ok(Math.abs(base.baseOverhangArea-4)<1e-9);assert.ok(Math.abs(base.bedContactArea-100)<1e-9);
+ assert.ok(Math.abs(inspectPrintability(boxes([[0,0,0],[10,10,5]],[[20,0,0.3],[22,2,0.8]]),{baseZone:0}).overhangArea-4)<1e-9);
+ const tower=inspectPrintability(boxes([[0,0,0],[5,5,30]]));
+ assert.equal(tower.slenderness,6);assert.equal(tower.thinnestDimension,5);assert.ok(Math.abs(tower.bedContactArea-25)<1e-9);
+ const notes=inspectGeometry(boxes([[0,0,0],[5,5,30]]),{checks:[{id:'print',kind:'printability',maxOverhangArea:0}]}).checks[0];
+ assert.equal(notes.pass,true);assert.deepEqual(notes.notes.map(n=>[n.code,n.severity]),[['slender','warn'],['bed_contact','warn']]);
+ assert.ok(notes.notes.every(n=>n.fix));
+});
+test('printability notes carry fixes and mark threshold failures as errors',()=>{
+ const mesh=boxes([[0,0,0],[10,10,1]],[[20,0,5],[30,10,6]]);
+ const result=inspectGeometry(mesh,{checks:[{id:'print',kind:'printability',maxOverhangArea:50,minWall:2}]}).checks[0];
+ const byCode=Object.fromEntries(result.notes.map(n=>[n.code,n]));
+ assert.equal(byCode.overhang.severity,'error');assert.match(byCode.overhang.message,/worst at 90°.*5\.0 mm above the bed/);
+ assert.equal(byCode.thin_wall.severity,'error');assert.match(byCode.thin_wall.fix,/at least 2 mm/);
+ assert.equal(byCode.slender,undefined);
+ const passing=inspectGeometry(mesh,{checks:[{id:'print',kind:'printability',maxOverhangArea:100}]}).checks[0];
+ assert.equal(passing.pass,true);assert.equal(passing.notes.find(n=>n.code==='overhang').severity,'warn');
+ assert.equal(inspectGeometry(boxes([[0,0,0],[10,10,1]]),{checks:[{id:'print',kind:'printability',maxOverhangArea:0}]}).checks[0].notes[0].code,'thin_part');
+});
 test('printability checks gate on thresholds and report unknown for unsupported input',()=>{
  const mesh=boxes([[0,0,0],[10,10,1]],[[20,0,5],[30,10,6]]);
  const run=(check)=>inspectGeometry(mesh,{checks:[{id:'print',kind:'printability',...check}]}).checks[0];

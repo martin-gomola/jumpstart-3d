@@ -134,12 +134,14 @@ function nearestHit({root,order,tris},o,d,maxT,eps,budget) {
 }
 
 /** Overhangs and thin walls for printing along world +Z with the bed at the lowest Z.
- * A triangle overhangs when it faces down more than overhangAngle from vertical and is not on the bed.
+ * A triangle overhangs when it faces down more than overhangAngle from vertical and is not on the bed;
+ * one wholly within baseZone of the bed is reported separately as base overhang.
  * With minWall, four points per triangle are probed along the inward normal; material that ends
  * within minWall marks that share of the triangle as thin wall. Heuristic, not a print certification.
  */
-export function inspectPrintability(mesh, { overhangAngle=45, minWall, tolerance=1e-5, maxRayTests=20000000 } = {}) {
+export function inspectPrintability(mesh, { overhangAngle=45, minWall, baseZone=1, tolerance=1e-5, maxRayTests=20000000 } = {}) {
   tolerance=toleranceOf(tolerance);
+  if(!Number.isFinite(baseZone)||baseZone<0||baseZone>10)throw new Error('baseZone must be between 0 and 10 mm');
   if(!Number.isFinite(overhangAngle)||overhangAngle<0||overhangAngle>89)throw new Error('overhangAngle must be between 0 and 89 degrees');
   if(minWall!==undefined&&(!Number.isFinite(minWall)||minWall<=0||minWall>100))throw new Error('minWall must be between 0 and 100 mm');
   const validation=inspectTriangleMesh(mesh,{tolerance});
@@ -154,12 +156,18 @@ export function inspectPrintability(mesh, { overhangAngle=45, minWall, tolerance
   }
   const grow=(box,tri)=>{for(const p of tri)for(let k=0;k<3;k++){box.min[k]=Math.min(box.min[k],p[k]);box.max[k]=Math.max(box.max[k],p[k]);}};
   const emptyBox=()=>({min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]});
-  let surfaceArea=0,overhangArea=0,overhangTriangles=0,thinWallArea=0,thinWallTriangles=0,thinnestWall=null;
+  let surfaceArea=0,overhangArea=0,overhangTriangles=0,baseOverhangArea=0,bedContactArea=0,worstOverhangAngle=null,thinWallArea=0,thinWallTriangles=0,thinnestWall=null;
   const overhangBox=emptyBox(),thinBox=emptyBox(),thinSamples=[],budget={tests:maxRayTests};
   const hierarchy=minWall===undefined?null:boundingHierarchy(tris);
   for(const {tri,area,normal} of faces){
     surfaceArea+=area;
-    if(normal[2]<limit&&!tri.every(p=>p[2]-bed<=eps)){overhangArea+=area;overhangTriangles++;grow(overhangBox,tri);}
+    const onBed=tri.every(p=>p[2]-bed<=eps);
+    if(onBed&&normal[2]< -0.999)bedContactArea+=area;
+    if(normal[2]<limit&&!onBed){
+      // Downward faces within baseZone of the bed are a base fillet or chamfer that the first layers carry.
+      if(Math.max(...tri.map(p=>p[2]))-bed<=baseZone)baseOverhangArea+=area;
+      else{overhangArea+=area;overhangTriangles++;grow(overhangBox,tri);worstOverhangAngle=Math.max(worstOverhangAngle??0,Math.asin(Math.min(1,-normal[2]))*180/Math.PI);}
+    }
     if(!hierarchy)continue;
     const center=tri[0].map((v,k)=>(v+tri[1][k]+tri[2][k])/3),inward=normal.map(v=>-v);let hits=0;
     for(const point of [center,...tri.map(p=>p.map((v,k)=>(v+center[k])/2))]){
@@ -170,9 +178,12 @@ export function inspectPrintability(mesh, { overhangAngle=45, minWall, tolerance
     if(hits){thinWallArea+=area*hits/4;grow(thinBox,tri);if(hits>=2)thinWallTriangles++;}
   }
   thinSamples.sort((a,b)=>a.thickness-b.thickness);
+  const [width,depth,height]=validation.bounds.dimensions;
   return {source:'generated triangle mesh',buildDirection:'+Z',bedZ:bed,overhangAngle,surfaceArea,overhangArea,overhangTriangles,overhangBounds:overhangTriangles?overhangBox:null,
+    worstOverhangAngle,highestOverhangAboveBed:overhangTriangles?overhangBox.max[2]-bed:null,baseZone,baseOverhangArea,bedContactArea,
+    slenderness:height/Math.max(Math.min(width,depth),tolerance),thinnestDimension:Math.min(width,depth,height),
     ...(hierarchy?{minWall,thinWallArea,thinWallTriangles,thinnestWall,thinWallBounds:thinWallArea?thinBox:null,thinnestSamples:thinSamples.slice(0,5),rayTests:maxRayTests-budget.tests}:{}),
-    limitations:['Assumes printing along world +Z with the bed at the lowest Z; inspect the intended print pose.','Overhangs use per-triangle normals; bridges, chamfered support and slicer settings are not modelled.',
+    limitations:['Assumes printing along world +Z with the bed at the lowest Z; inspect the intended print pose.','Overhangs use per-triangle normals; bridges, chamfered support and slicer settings are not modelled.','Slenderness and thinnest dimension use the axis-aligned bounds; a part lying diagonally reads wider than it is.',
       ...(hierarchy?['Thin walls are probed at four points per triangle along the inward normal; walls thinner than minWall between probes or measured obliquely can be missed.']:[]),'Does not certify printability, strength or slicer success.']};
 }
 

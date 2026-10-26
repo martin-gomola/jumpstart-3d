@@ -5,6 +5,33 @@ import { inspectPrintability, inspectTriangleMesh, sectionTriangleMesh, sampleSo
 // Estimated triangle passes per check; printability also enforces its own ray-test budget.
 export const checkPasses = (check) => check.kind === "channels" ? 104 : check.kind === "printability" ? 4 : 2;
 
+// Advisory starting points for a 0.4 mm FDM nozzle; only the check's declared limits fail it.
+const SLENDER_RATIO = 4, MIN_BED_CONTACT_MM2 = 100, MIN_PART_DIMENSION_MM = 1.2;
+const area = (value) => `${value.toFixed(1)} mm²`;
+
+export function printabilityNotes(measured, expected) {
+  const notes = [];
+  if (measured.overhangArea > 0) notes.push({ code: "overhang", severity: expected.maxOverhangArea !== undefined && measured.overhangArea > expected.maxOverhangArea + 1e-9 ? "error" : "warn",
+    message: `${area(measured.overhangArea)} faces down more than ${measured.overhangAngle}° from vertical, the worst at ${measured.worstOverhangAngle.toFixed(0)}° and up to ${measured.highestOverhangAboveBed.toFixed(1)} mm above the bed (see overhangBounds).`,
+    fix: "Chamfer those downward faces to the overhang angle, or rotate the part so they face up. When supports print from the X2D auxiliary nozzle, keep the shape and leave them to slicer supports." });
+  if (measured.baseOverhangArea > 0) notes.push({ code: "base_overhang", severity: "note",
+    message: `${area(measured.baseOverhangArea)} faces down within ${measured.baseZone} mm of the bed, such as a bottom-edge fillet; the first layers usually carry it.`,
+    fix: "Prefer a 45° chamfer to a fillet on bottom edges; otherwise leave it." });
+  if (expected.minWall !== undefined && measured.thinWallArea > 0) notes.push({ code: "thin_wall", severity: measured.thinWallArea > expected.maxThinWallArea + 1e-9 ? "error" : "warn",
+    message: `${area(measured.thinWallArea)} of surface lies over walls thinner than ${expected.minWall} mm, the thinnest ${measured.thinnestWall.toFixed(2)} mm (see thinnestSamples).`,
+    fix: `Thicken the walls at thinnestSamples to at least ${expected.minWall} mm, or remove the feature if it is decorative.` });
+  if (measured.slenderness > SLENDER_RATIO) notes.push({ code: "slender", severity: "warn",
+    message: `The part is ${measured.slenderness.toFixed(1)} times taller than its narrowest footprint and can be knocked over while printing.`,
+    fix: "Widen the base, add a removable foot, or lay the part down." });
+  if (measured.bedContactArea < MIN_BED_CONTACT_MM2) notes.push({ code: "bed_contact", severity: "warn",
+    message: `Only ${area(measured.bedContactArea)} lies flat on the bed.`,
+    fix: "Add a flat face or pad on the bed side, rotate the part onto a larger flat face, or enable a brim in the slicer." });
+  if (measured.thinnestDimension < MIN_PART_DIMENSION_MM) notes.push({ code: "thin_part", severity: "warn",
+    message: `The thinnest overall dimension is ${measured.thinnestDimension.toFixed(2)} mm, only a few extrusion widths for a 0.4 mm nozzle.`,
+    fix: `Thicken the part to at least ${MIN_PART_DIMENSION_MM} mm.` });
+  return notes;
+}
+
 // Parallel flat-bottom channels only. Results are inferred from tessellation sections,
 // never from primitive parameters or the expected values supplied by the agent.
 export function measureParallelChannels(mesh, { axis = "Y", crossAt = 0, tolerance = 0.001 } = {}) {
@@ -78,12 +105,12 @@ export function inspectGeometry(mesh, options = {}) {
       if (check.kind === "printability") {
         if (check.maxOverhangArea === undefined && check.minWall === undefined) throw new Error("Printability check needs maxOverhangArea and/or minWall");
         if (check.maxThinWallArea !== undefined && check.minWall === undefined) throw new Error("maxThinWallArea requires minWall");
-        const measured = inspectPrintability(mesh, { overhangAngle: check.overhangAngle, minWall: check.minWall, tolerance });
+        const measured = inspectPrintability(mesh, { overhangAngle: check.overhangAngle, minWall: check.minWall, baseZone: check.baseZone, tolerance });
         const expected = { overhangAngle: measured.overhangAngle, maxOverhangArea: check.maxOverhangArea, minWall: check.minWall, maxThinWallArea: check.minWall === undefined ? undefined : check.maxThinWallArea ?? 0 };
         const errors = [];
         if (expected.maxOverhangArea !== undefined && measured.overhangArea > expected.maxOverhangArea + 1e-9) errors.push(`overhang area ${measured.overhangArea.toFixed(2)} mm² exceeds ${expected.maxOverhangArea} mm²`);
         if (expected.minWall !== undefined && measured.thinWallArea > expected.maxThinWallArea + 1e-9) errors.push(`surface over walls thinner than ${expected.minWall} mm is ${measured.thinWallArea.toFixed(2)} mm², above ${expected.maxThinWallArea} mm²`);
-        return { id: check.id, kind: check.kind, expected, measured, pass: !errors.length, errors };
+        return { id: check.id, kind: check.kind, expected, measured, pass: !errors.length, errors, notes: printabilityNotes(measured, expected) };
       }
       throw new Error("Unsupported geometry check");
     } catch (error) { return { id: check.id, kind: check.kind, expected: check.expected, pass: null, error: error.message, guidance: failureGuidance(error) }; }

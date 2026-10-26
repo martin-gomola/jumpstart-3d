@@ -6,8 +6,9 @@ text-to-cad `2f793659fb7bab537e2f00836e06448fc4087cb2`.
 
 Paths below resolve from the repository root.
 
-The current implementation covers items 1–3. Items 4–8 remain an ordered
-backlog, not claims of implemented functionality. Keep this file updated with
+The current implementation covers items 1–3 and 9; items 6 and 8 are partly
+covered by item 9. Items 4–8 and 10 remain an ordered backlog, not claims of
+implemented functionality. Keep this file updated with
 actual evidence. Existing local work must be preserved; no upstream push or PR.
 
 ## Invariants for every shipped item
@@ -115,6 +116,43 @@ Source: text-to-cad `skills/dfam-check/scripts/dfam_tool.py`; SOMA heat maps are
 - [ ] Keep sampling explicitly distinct from a certified global minimum thickness.
 - [ ] Acceptance: a known thin rib is located; neighboring parts do not turn gaps into walls;
       incomplete measurements are never reported as a complete pass.
+
+## 9. Printability heuristics and fix notes — implement the idea independently — complete
+
+Source ideas: HackerSCAD `source/hackerscad/geom/printability.d` (GPL-3.0, reviewed
+2026-10-26) and print3d `src/print3d/printability.py`, `skill/SKILL.md` (MIT,
+reviewed 2026-10-26). Both inspired the checks; no code was copied.
+
+- [x] Add a `printability` geometry check usable in `jumpstart_inspect_geometry`
+      and preview requirements; failed or unknown results block apply.
+- [x] Measure downward overhang area for a +Z build, excluding the bed and
+      reporting faces within `baseZone` of it separately as base overhang.
+- [x] Probe thin walls along inward normals through a bounding-volume hierarchy
+      with a ray-test budget; report thinnest samples and bounds.
+- [x] Return `notes` with code, severity and fix; only declared limits fail.
+      Advisory notes cover slender parts, small bed contact and thin parts.
+- [x] Reject open or inconsistently wound meshes and incomplete checks as unknown.
+- [x] Skill: default Bambu Lab X2D profile and slicer handoff, dimension
+      provenance with unknowns, and image review even when checks pass.
+- [ ] Item 6 remains open for candidate orientations; this check reports only
+      the current pose. Item 8 remains open for neighbor-aware sampling,
+      coverage statistics and overlays.
+
+## 10. Photo measurement and likeness check — implement the idea independently — planned
+
+Source idea: print3d `src/print3d/photo.py`, `spec.py`, `likeness.py` and
+`skill/references/from-photo.md`, `from-listing.md` (MIT, reviewed 2026-10-26).
+
+- [ ] Scale a photo from a reference of known size (card, coin, ruler, A4) or a
+      quoted listing dimension; never from the object itself.
+- [ ] Rectify an angled flat face from four corners of known size.
+- [ ] Record each dimension as measured, given, listed or assumed, with pixels,
+      reference and tolerance; list unknowns.
+- [ ] Project the model's silhouette along each photographed view, overlay it on
+      the photo, and fail when overlap, size, rotation or mirroring disagree.
+- [ ] Keep photos as untrusted managed imports; no remote fetch from the MCP.
+- [ ] Acceptance: a part photographed beside a ruler is measured within the
+      stated tolerance and a mirrored model fails the likeness check.
 
 ## Deliberately deferred
 

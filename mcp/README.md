@@ -468,13 +468,15 @@ permissions.
 4. Inspect preview validity, errors, dimensions, and the returned image before applying.
 5. Call `jumpstart_apply_model` with the returned `previewId`. Applying the same id twice does not duplicate the edit.
 6. Read the new revision before calling `jumpstart_undo`. The revision check prevents undoing a later user edit.
-7. Call `jumpstart_export_model` with `format: "stl"`, `"step"` or `"3mf"`. Files are written under `exports/` with a content hash in the name.
+7. Call `jumpstart_export_model` with `format: "stl"`, `"step"` or `"3mf"`. Files are written under `exports/` with a content hash in the name. A multi-body STL reports `meshValidation.bodies` per body; `valid` requires every body to pass, while `combinedValid` checks the merged file, where touching bodies share edges.
+
+A plan is built as planes, sketches, primitives, features, then operations in array order. A feature can target an existing body, a primitive or an earlier `new` feature; use a `combine` operation to cut an operation's body. Body references use the id of the primitive, feature or body-creating operation. Primitive `position` is the centre of the bottom face. A one-sided extrude goes along the sketch plane normal (`XY` +Z, `XZ` −Y, `YZ` +X); a hole modifier drills along −`n` from `p` and is through unless `through: false`.
 
 All coordinates, radii, distances, and feature parameters are in millimeters. `units` in the document summary is only the app's display preference. A plan adds features to the open document; pass `replaceBodyIds` from a previous apply result to preview and replace those bodies as one undoable edit.
 
 ## Plan shape
 
-A plan contains typed primitive bodies, sketches, CAD features, and operations. Profile sketches have a local plane (`XY`, `XZ`, or `YZ`), origin, and one closed circle, polygon, rounded rectangle, or explicit contour. A rounded rectangle uses `width`, `height`, `radius`, and an optional local `center` (default `[0, 0]`); its radius must be positive and no larger than half the shorter side. It compiles to native line and quarter-arc sketch entities. A contour is an ordered `profile.segments` list of lines (`start`, `end`), three-point arcs (`start`, `through`, `end`), and spline fit-point segments (`points`). Segment endpoints must connect and close within 0.001 mm. An open spline segment must begin and end at adjacent segment endpoints; a single spline can instead set `closed: true` and form the whole contour. Contours allow up to 64 segments and 128 input points. They compile to editable native line, arc, and spline entities. Preview delegates exact curve and face construction to the CAD kernel; MCP does not provide an independent analytic self-intersection proof for arbitrary splines. Path sketches use the same plane and origin with an ordered `segments` list of lines and three-point arcs; endpoints must connect within 0.001 mm. Sketch coordinates and all feature parameters use millimeters. Features can extrude, revolve, loft, sweep a profile along a path, or create a pipe along a path. Pipes support circle, square, or triangle sections and optional hollow walls. Sweep and pipe paths are editable native sketches, and these features support `new`, `join`, or `cut` operations. Sweep taper, twist, and edge-picked paths are not part of this input. Boolean joins/cuts can reference earlier bodies. Linear patterns use `count` as instances per side when `symmetric` is true, so count 4 creates 7 total instances. Circular patterns use `count` including the source; a partial total angle includes both endpoints, while 360 degrees spaces instances around the complete circle.
+A plan contains typed primitive bodies, sketches, CAD features, and operations. Profile sketches have a local plane (`XY`, `XZ`, or `YZ`), origin, and one closed circle, polygon, rounded rectangle, or explicit contour. A rounded rectangle uses `width`, `height`, `radius`, and an optional local `center` (default `[0, 0]`); its radius must be no larger than half the shorter side. It compiles to native line and quarter-arc sketch entities; radius 0 gives four lines. A `regularPolygon` takes `sides`, exactly one of `acrossFlats` or `circumradius`, and optional `rotation` (degrees; 0 puts a vertex on +X) and `center`; it compiles to a native line polygon. A contour is an ordered `profile.segments` list of lines (`start`, `end`), three-point arcs (`start`, `through`, `end`), and spline fit-point segments (`points`). Segment endpoints must connect and close within 0.001 mm. An open spline segment must begin and end at adjacent segment endpoints; a single spline can instead set `closed: true` and form the whole contour. Contours allow up to 64 segments and 128 input points. They compile to editable native line, arc, and spline entities. Preview delegates exact curve and face construction to the CAD kernel; MCP does not provide an independent analytic self-intersection proof for arbitrary splines. Path sketches use the same plane and origin with an ordered `segments` list of lines and three-point arcs; endpoints must connect within 0.001 mm. Sketch coordinates and all feature parameters use millimeters. Features can extrude, revolve, loft, sweep a profile along a path, or create a pipe along a path. Pipes support circle, square, or triangle sections and optional hollow walls. Sweep and pipe paths are editable native sketches, and these features support `new`, `join`, or `cut` operations. Sweep taper, twist, and edge-picked paths are not part of this input. Boolean joins/cuts can reference earlier bodies. Linear patterns use `count` as instances per side when `symmetric` is true, so count 4 creates 7 total instances. Circular patterns use `count` including the source; a partial total angle includes both endpoints, while 360 degrees spaces instances around the complete circle.
 
 `featurePattern` copies selected modifiers on exactly one body. `features` accepts stable ids from earlier modifier, boolean-feature, or hole-pattern operations, and native modifier ids returned by geometry inspection. Axes and origins are world-space; copied hole points and normals, emboss frames, and boolean tool transforms are mapped into the body's local coordinates. Supported modifiers are holes, planar embosses, and sketch-backed extrude, revolve, or sweep booleans. Unsupported feature types are rejected. Linear/circular count follows body pattern semantics, and each operation is limited to 256 generated modifier copies.
 
@@ -601,7 +603,10 @@ one groove per millimeter of circumference and is limited to 8–120. Depth
 defaults to half the groove pitch and is validated to prevent vanished grooves
 or a collapsed core. Optional bores are `round`, `hex`, or `d`; `boreSize` is a
 diameter, or across-flats for hex. The validator preserves at least 1 mm beneath
-the groove roots. These are axial grooves, not crossed diamond texture.
+the groove roots. `boreDepth` makes a blind bore from the bottom face (local
+Z=0); the closed part is a native joined extrusion of the bore profile. A D
+bore's `boreFlat` is the distance from the axis to the flat (default 0.4 ×
+`boreSize`); the flat faces +X. These are axial grooves, not crossed diamond texture.
 The groove pitch is circumference divided by groove count; pitches below
 0.8 mm are allowed but may print without a clear grip pattern on common FDM
 printers.
@@ -651,12 +656,39 @@ sweep, pipe and coil are in `plan.features`. Unknown tool or operation filters
 fail explicitly. Filtering returns schema copies and does not narrow the
 broker's actual validation contract or change `tools/list`.
 
+`schemaPaths` returns only named subschemas of one tool, by default
+`jumpstart_preview_model`, as `schemaFragments`:
+
+```json
+{ "schemaPaths": ["plan.sketches.profile.regularPolygon", "plan.operations.modifier.hole"] }
+```
+
+Paths follow `properties`, enter array items automatically and choose `oneOf`
+variants by type id. An unknown segment fails and lists the valid keys.
+Preview tools accept `includeSelectors: false` and `includeFeatureTree: false`
+to drop those per-body arrays from the response.
+
 `tools/list` publishes compact copies: the numeric `$expr` alternative is a
 shared `$defs.expr` reference, and preview tools other than
 `jumpstart_preview_model` describe `requirements` as an object that links to
-`jumpstart_get_capabilities`. Schemas returned by `jumpstart_get_capabilities`
+`jumpstart_get_capabilities`. The domain generators in `plan.operations`
+(`gridfinity`, `pocket`, `drawerLayout`, `holePattern`, `phoneCradle`, `gear`,
+`knurl`, `fastener`) are published as a type id, required field names and a
+one-line summary; read their fields with
+`{ "schemaPaths": ["plan.operations.knurl"] }`. An argument error inside an
+operation names that path. Schemas returned by `jumpstart_get_capabilities`
 use the same `$defs.expr` reference and are serialized without indentation.
 `tools/call` still validates every argument against the full schema.
+
+Every tool carries `annotations` (`readOnlyHint` for reads and previews;
+`destructiveHint`/`idempotentHint` for apply, undo, export, save and reopen;
+`openWorldHint: false`). `jumpstart_list_editors`, `jumpstart_apply_model`,
+`jumpstart_undo`, `jumpstart_save_document` and `jumpstart_export_model` declare an
+`outputSchema` and return `structuredContent` beside the JSON text; export also
+returns a `resource_link` to the written file. Rejected arguments name the failing
+field or variant, for example `modifier: unknown property dept; allowed: …` or
+`hole is a modifier.modifier.type`, and an unknown tool name is a JSON-RPC
+`-32602` error.
 
 For `jumpstart_get_document`, use `bodyIds` to return selected bodies. With
 `includeGeometry: true`, only their referenced sketches are returned, including
@@ -814,7 +846,9 @@ mutation, and reuse its preview id when appropriate.
 ### Named parameters
 
 Add `modelId`, `parameters` and optional `constraints` to a model plan. Numeric
-fields accept expression objects:
+fields accept expression objects. Expressions support `+ - * /`, parentheses and
+`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` (degrees), `sqrt`, `abs`,
+`min`, `max`, `round`, `floor` and `ceil`:
 
 ```json
 {

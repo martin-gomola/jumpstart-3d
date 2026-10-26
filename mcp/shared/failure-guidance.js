@@ -1,6 +1,11 @@
 // Categories guide recovery; they do not establish the CAD operation's underlying cause.
 export function failureGuidance(error) {
   const message = error instanceof Error ? error.message : String(error);
+  if (/^arguments[.:]/.test(message)) {
+    const type = /^arguments\.plan\.operations\[\d+\]/.test(message) && /for type (\w+)\)$/.exec(message)?.[1];
+    const path = type ? `plan.operations.${/^arguments\.plan\.operations\[\d+\]\.modifier/.test(message) ? "modifier." : ""}${type}` : "plan.operations.modifier.hole";
+    return { category: "invalid_arguments", cause: "input_rejected_before_execution", nextChecks: [`Fix the named argument; nothing was executed. Read its schema with jumpstart_get_capabilities and schemaPaths${type ? "" : ", for example"} ["${path}"].`] };
+  }
   if (/timed? out|timeout/i.test(message)) return { category: "timeout", cause: "unverified", nextChecks: ["Read the document revision and current geometry before retrying an uncertain operation.", "Reuse the same preview id for an apply retry; do not create a duplicate edit."] };
   if (/budget|exceeds? .*limit|too many|resource/i.test(message)) return { category: "resource_limit", cause: "unverified", nextChecks: ["Reduce the requested inspection, image, or geometry scope within the advertised limits.", "Inspect intermediate geometry before simplifying the design."] };
   if (/stale|changed after preview|document changed|expired/i.test(message)) return { category: "stale_state", cause: "state_changed_or_expired", nextChecks: ["Reread the target editor and document revision, then create and inspect a new preview."] };

@@ -184,7 +184,9 @@ function buildStl(app, bodies) {
   dv.setUint32(80, triangleCount, true);
   let offset = 84;
   let writtenTriangles = 0;
-  for (const { view } of items) {
+  const bodyTriangles = [];
+  for (const { body, view } of items) {
+    const bodyStart = writtenTriangles;
     const { vertices: P, triangles: T } = view.data;
     const M = view.group.matrix.elements;
     const determinant = M[0] * (M[5] * M[10] - M[9] * M[6]) - M[4] * (M[1] * M[10] - M[9] * M[2]) + M[8] * (M[1] * M[6] - M[5] * M[2]);
@@ -209,10 +211,11 @@ function buildStl(app, bodies) {
       offset += 2;
       writtenTriangles++;
     }
+    bodyTriangles.push({ id: body.id, triangles: writtenTriangles - bodyStart });
   }
   if (!writtenTriangles) throw new Error("No non-degenerate triangles are available to export");
   dv.setUint32(80, writtenTriangles, true);
-  return new Uint8Array(buffer, 0, offset);
+  return { bytes: new Uint8Array(buffer, 0, offset), bodyTriangles };
 }
 
 function readyBodies(app, bodyIds) {
@@ -692,8 +695,8 @@ export function initMcp(app) {
       return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes) };
     }
     if (format === "stl") {
-      const bytes = buildStl(app, bodies);
-      return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes) };
+      const { bytes, bodyTriangles } = buildStl(app, bodies);
+      return { format, name, ...selection, revision, byteLength: bytes.byteLength, base64: base64(bytes), bodyTriangles };
     }
     if (format === "step") {
       const resolved = bodies.map((body) => ({ node: resolveNode(body.node, store.doc), m: body.m }));

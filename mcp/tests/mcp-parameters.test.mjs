@@ -16,6 +16,15 @@ test('arithmetic precedence, unary signs, exponent notation and parentheses', ()
   assert.equal(evaluateParameterExpression('-2 * (3 + 4) + 1e2 / 2', () => 0), 36);
   assert.equal(evaluateParameterExpression('8 / 2 / 2', () => 0), 2);
 });
+test('bounded math functions use degrees and reject unknown calls', () => {
+  const near = (expression, expected, lookup = () => 0) => assert.ok(Math.abs(evaluateParameterExpression(expression, lookup) - expected) < 1e-9, expression);
+  near('flats / 2 / cos(180 / sides)', 5.5 / Math.sqrt(3), (name) => ({ flats: 5.5, sides: 6 })[name]);
+  near('sqrt(3 * 3 + 4 * 4) + max(1, min(2, 3))', 7);
+  near('atan2(1, 1) + asin(0.5) + abs(-1) + round(2.4) + floor(2.9) + ceil(0.1)', 81);
+  for (const expression of ['sqrt(-1)', 'sin(1, 2)', 'max(1)', 'exp(1)', 'constructor(1)', 'sqrt 4', 'min(1,', '(1, 2)']) {
+    assert.throws(() => evaluateParameterExpression(expression, () => 2), undefined, expression);
+  }
+});
 test('resolves dependent parameters and persisted override revisions without mutating source', () => {
   const input = template();
   const result = resolveParametricPlan(input, { diameter: 110, channels: 9 });

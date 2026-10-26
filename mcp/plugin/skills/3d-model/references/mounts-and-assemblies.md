@@ -1,5 +1,11 @@
 # Mounts and assemblies
 
+## Contents
+
+- Assemble and mount imported parts
+- Classify assembly context
+- Vehicle phone holders and the `phoneCradle` recipe
+
 ## Assemble and mount imported parts
 
 1. Describe each part's role and the intended relationship before transforming
@@ -67,9 +73,35 @@ where the lower stop sits. Resolve critical orientation before applying.
 Use `phoneCradle` for a thin contact plate, two side ribs and a lower stop. Supply
 contact width and length, angle, plate/rib thickness, stop dimensions, lower-edge
 position and `topEdgeToward`. `+Y` leans the phone top toward the dashboard and
-faces the screen toward -Y, the driver. Combine the previewed body with an
-editable tray or base as needed. Require a connected support-mesh inspection
-before apply, and compare complete driver-side, top and isometric views.
+faces the screen toward -Y, the driver. The operation makes one editable body
+with a native plate primitive and native boolean joins for the ribs and stop.
+Combine the previewed body with an editable tray or base as needed. Use it
+instead of manually rotated wedges.
+
+```json
+{
+  "name": "Angled phone cradle",
+  "operations": [{
+    "id": "cradle",
+    "type": "phoneCradle",
+    "width": 72,
+    "phoneLength": 145,
+    "angle": 50,
+    "plateThickness": 3,
+    "ribThickness": 8,
+    "stopHeight": 12,
+    "stopDepth": 8,
+    "topEdgeToward": "+Y",
+    "position": [0, -30, 5]
+  }]
+}
+```
+
+Inspect the axis-labeled top, driver-side, and isometric images. Run
+`jumpstart_inspect_geometry` with mesh validation and require the returned
+`phoneCradle.supportConnectivity.passed` check before apply. This confirms the
+generated supports form one connected mesh; it does not establish vehicle fit,
+phone-case clearance, structural strength, or printability.
 
 A charger cover describes a top outline; it does not establish the dimensions of
 the tapered cavity beneath it. Keep conceptual cavity dimensions labeled as

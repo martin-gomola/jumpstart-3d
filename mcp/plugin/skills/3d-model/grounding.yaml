@@ -82,7 +82,7 @@ rules:
     sources: [modeling-contract]
     locator: "Native and template parameter revisions"
   - instruction: "Its persisted recipe is editable mesh generation, not a sketch-based CAD feature tree."
-    skillFile: references/household-parts.md
+    skillFile: references/knobs-gears-and-turned-parts.md
     sources: [modeling-contract]
     locator: "Lathe representation"
   - instruction: "For repeated existing features, use `featurePattern` only for holes, planar embosses, and sketch-backed extrude/revolve/sweep booleans."
@@ -90,7 +90,7 @@ rules:
     sources: [server, model-plan, modeling-contract]
     locator: "Supported patternable native features"
   - instruction: "Straight bevel gears are a conical loft approximation; do not claim tooth-contact accuracy or a matched gear pair."
-    skillFile: references/household-parts.md
+    skillFile: references/knobs-gears-and-turned-parts.md
     sources: [server, modeling-contract]
     locator: "Gear limits"
   - instruction: "Use a typed `import` operation with that `assetId`; never request or invent a host path or send file bytes."
@@ -134,11 +134,11 @@ rules:
     sources: [preview-requirements, pair-contract]
     locator: "Immutable cached acceptance result and apply gate"
   - instruction: "the slicer preview and a test print remain the authority."
-    skillFile: references/fit-and-print-checks.md
+    skillFile: references/print-and-hardware.md
     sources: [printability-heuristics, preview-requirements]
     locator: "inspectPrintability limitations and printability check gating"
   - instruction: "Usable envelope: 252 × 252 × 256 mm"
-    skillFile: references/fit-and-print-checks.md
+    skillFile: references/print-and-hardware.md
     sources: [bambu-x2d-specs, bambu-a1-p2s-specs, print-area-presets]
     locator: "Build volume tables and the editor's 2 mm edge reserve"
 

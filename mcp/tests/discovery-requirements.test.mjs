@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { focusCapabilities, publishTools } from "../server/discovery.mjs";
 import { evaluateRequirements, validateRequirements, comparePreviewBodies } from "../browser/preview-requirements.js";
 import { failureGuidance } from "../shared/failure-guidance.js";
+import { validateToolInput } from "../shared/schema.js";
 import { readFile, readdir } from "node:fs/promises";
 
 const cube = { vertices: [0,0,0, 2,0,0, 2,2,0, 0,2,0, 0,0,2, 2,0,2, 2,2,2, 0,2,2], triangles: [0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,1,2,6,1,6,5,2,3,7,2,7,6,3,0,4,3,4,7] };
@@ -33,6 +34,12 @@ test("focused discovery filters copies, rejects unknown names and keeps the full
   assert.deepEqual(focusCapabilities(catalog), catalog);
   assert.throws(() => focusCapabilities(catalog, { toolNames: ["invented"] }), /Unknown/);
   assert.throws(() => focusCapabilities(catalog, { operationTypes: ["script"] }), /Unsupported/);
+  const fragments = focusCapabilities(catalog, { schemaPaths: ["plan.sketches.profile.circle", "plan.operations.modifier.hole"] });
+  assert.equal(fragments.toolSchemas, undefined);
+  assert.deepEqual(fragments.schemaFragments.map(({ tool, path, schema }) => [tool, path, schema]), [["jumpstart_preview_model", "plan.sketches.profile.circle", typed("circle")[0]], ["jumpstart_preview_model", "plan.operations.modifier.hole", typed("hole")[0]]]);
+  assert.throws(() => focusCapabilities(catalog, { schemaPaths: ["plan.operations.script"] }), /available: gear, knurl, modifier/);
+  assert.throws(() => focusCapabilities(catalog, { schemaPaths: ["plan"], operationTypes: ["knurl"] }), /one tool/);
+  assert.equal(JSON.stringify(catalog), original);
 });
 
 test("published tool schemas share $expr and point non-model previews at full requirements", () => {
@@ -54,6 +61,21 @@ test("published tool schemas share $expr and point non-model previews at full re
   assert.match(lathe.inputSchema.properties.requirements.description, /toolNames \["jumpstart_preview_lathe"\]/);
   assert.equal(lathe.inputSchema.$defs, undefined);
   assert.deepEqual(inspect.inputSchema, tools[2].inputSchema);
+});
+
+test("published preview_model defers domain generator fields to schemaPaths", () => {
+  const knurl = { type: "object", additionalProperties: false, required: ["id", "type"], properties: { id: { type: "string" }, type: { const: "knurl" }, diameter: { type: "number" } } };
+  const combine = { type: "object", additionalProperties: false, required: ["id", "type"], properties: { id: { type: "string" }, type: { const: "combine" } } };
+  const tools = [{ name: "jumpstart_preview_model", inputSchema: { type: "object", properties: { plan: { type: "object", properties: { operations: { type: "array", items: { oneOf: [knurl, combine] } } } } } } }];
+  const original = JSON.stringify(tools);
+  const [stub, kept] = publishTools(tools)[0].inputSchema.properties.plan.properties.operations.items.oneOf;
+  assert.equal(JSON.stringify(tools), original);
+  assert.deepEqual(stub.properties, { type: { const: "knurl" } });
+  assert.deepEqual(stub.required, ["id", "type"]);
+  assert.match(stub.description, /schemaPaths \["plan\.operations\.knurl"\]/);
+  assert.deepEqual(kept, combine);
+  assert.match(failureGuidance(new Error("arguments.plan.operations[0]: unknown property x; allowed: id (does not match an allowed input shape for type knurl)")).nextChecks[0], /schemaPaths \["plan\.operations\.knurl"\]/);
+  assert.match(failureGuidance(new Error("arguments.plan.operations[1].modifier: unknown property dept (does not match an allowed input shape for type hole)")).nextChecks[0], /schemaPaths \["plan\.operations\.modifier\.hole"\]/);
 });
 
 test("acceptance independently measures geometry, world bounds and component counts", () => {
@@ -90,8 +112,17 @@ test("change reports detect placement changes even when dimensions and volume ma
   assert.equal(changes.measurements[0].after.bounds.min[0], 10);
 });
 
+test("oneOf validation errors name the failing variant field or the expected types", () => {
+  const expr = { type: "object", additionalProperties: false, required: ["$expr"], properties: { $expr: { type: "string" } } };
+  const variants = { oneOf: [{ type: "object", additionalProperties: false, required: ["type", "center"], properties: { type: { const: "circle" }, center: { type: "array" }, radius: { oneOf: [{ type: "number" }, expr] } } }] };
+  assert.throws(() => validateToolInput({ type: "circle", radius: 1 }, variants, "arguments.profile"), /^Error: arguments\.profile: missing center \(does not match an allowed input shape for type circle\)$/);
+  assert.throws(() => validateToolInput({ type: "circle", center: [], radius: "1" }, variants, "arguments.profile"), /radius: does not match an allowed input shape: expected number or \{ "\$expr": "\.\.\." \}, got string/);
+  assert.throws(() => validateToolInput({ type: "square" }, variants, "arguments.profile"), /type must be one of circle$/);
+});
+
 test("failure guidance distinguishes recovery actions without claiming a geometry diagnosis", () => {
-  for (const [message, category] of [["editor timed out", "timeout"], ["inspection budget exceeded", "resource_limit"], ["document changed after preview", "stale_state"], ["operation unsupported", "unsupported"], ["Preview requirements did not pass", "acceptance"], ["CAD construction failed", "validation_or_execution"]]) {
+  for (const [message, category] of [["editor timed out", "timeout"], ["inspection budget exceeded", "resource_limit"], ["document changed after preview", "stale_state"], ["operation unsupported", "unsupported"], ["Preview requirements did not pass", "acceptance"], ["CAD construction failed", "validation_or_execution"], ["arguments.requirements.bodies[0]: unknown property x", "invalid_arguments"]]) {
+    if (category === "invalid_arguments") assert.match(failureGuidance(new Error(message)).nextChecks[0], /for example \["plan\.operations\.modifier\.hole"\]/);
     const result = failureGuidance(new Error(message));
     assert.equal(result.category, category);
     assert.ok(result.nextChecks.length);
@@ -105,7 +136,7 @@ test("the skill routes directly to focused references and packages no broken loc
   assert.ok(core.split("\n").length <= 110);
   assert.match(core, /includeSchemas:false/);
   const refs = await readdir(new URL("references/", root));
-  assert.equal(refs.length, 10);
+  assert.equal(refs.length, 12);
   for (const ref of refs) assert.ok(core.includes(`references/${ref}`), `${ref} must be discoverable directly`);
   for (const file of ["SKILL.md", ...refs.map((file) => `references/${file}`)]) {
     const contents = await readFile(new URL(file, root), "utf8");

@@ -6,8 +6,8 @@ import { createReadStream } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { gridfinityOperationSchema, pocketOperationSchema, drawerLayoutOperationSchema } from "../shared/gridfinity-contracts.js";
-import { extname, join, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, extname, join, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { validateToolInput } from "../shared/schema.js";
 import { focusCapabilities, publishTools } from "./discovery.mjs";
 import { failureGuidance } from "../shared/failure-guidance.js";
@@ -31,6 +31,7 @@ const EDITOR_STALE_MS = 15_000;
 const POLL_TIMEOUT_MS = 25_000;
 const PROTOCOL_VERSION = "2026-07-28";
 const SUPPORTED_VERSIONS = [PROTOCOL_VERSION, "2025-11-25"];
+const SERVER_INSTRUCTIONS = "Local JumpStart CAD editor; all dimensions are millimetres. Workflow: jumpstart_list_editors when more than one tab may be open; jumpstart_get_document for the current revision; jumpstart_get_capabilities with includeSchemas false for planVocabulary, then schemaPaths for the exact subschemas you need; a jumpstart_preview_* call with expectedRevision; check its errors, dimensions, images and requirements, and measure with jumpstart_inspect_geometry; jumpstart_apply_model with only previewId; jumpstart_export_model. Previews never change the document. Undo needs the current revision. Dimensions and mesh checks do not prove physical fit or printability.";
 
 const axes = ["X", "Y", "Z"];
 const commonEditor = {
@@ -52,7 +53,16 @@ const profileSchema = {
       type: "object", additionalProperties: false, required: ["type", "width", "height", "radius"],
       properties: {
         type: { const: "roundedRect" }, width: { type: "number", exclusiveMinimum: 0, maximum: 10000 },
-        height: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, radius: { type: "number", exclusiveMinimum: 0, maximum: 5000 }, center: point2,
+        height: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, radius: { type: "number", minimum: 0, maximum: 5000, description: "Corner radius; 0 gives a sharp rectangle." }, center: point2,
+      },
+    },
+    {
+      type: "object", additionalProperties: false, required: ["type", "sides"],
+      description: "Regular polygon such as a hex nut pocket. Give exactly one of acrossFlats or circumradius; rotation 0 puts a vertex on +X, so a hexagon's flats face ±Y.",
+      properties: {
+        type: { const: "regularPolygon" }, sides: { type: "integer", minimum: 3, maximum: 64 },
+        acrossFlats: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, circumradius: { type: "number", exclusiveMinimum: 0, maximum: 5000 },
+        rotation: { type: "number", minimum: -360, maximum: 360, description: "Degrees counterclockwise." }, center: point2,
       },
     },
     {
@@ -83,16 +93,16 @@ const primitiveSchema = {
       text: { type: "string", minLength: 1, maxLength: 256 }, size: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, font: { type: "string", minLength: 1, maxLength: 80 },
       points: { type: "integer", minimum: 3, maximum: 64 }, inner: { type: "number", exclusiveMinimum: 0, maximum: 1 }, turns: { type: "integer", minimum: 1, maximum: 100 }, wire: { type: "number", exclusiveMinimum: 0, maximum: 10000 },
     } },
-    position: point3, rotation: point3, hole: { type: "boolean" },
+    position: { ...point3, description: "World position of the primitive's local origin: centred on X/Y with its bottom face at Z=0." }, rotation: point3, hole: { type: "boolean" },
   },
 };
-const edgeSignatureSchema = { type: "object", additionalProperties: false, required: ["m", "n", "t"], properties: { index: { type: "integer", minimum: 0 }, a: point3, b: point3, m: point3, n: point3, t: { type: "string", maxLength: 40 } } };
+const edgeSignatureSchema = { type: "object", additionalProperties: false, required: ["m", "n", "t"], description: "Copy an edge from geometry selectors (preview or inspect_document includeGeometry): m is the body-local midpoint in mm, n the midpoint scaled to the body bounds (0 to 1 per axis), t the curve type such as LINE or CIRCLE, a and b the optional endpoints.", properties: { index: { type: "integer", minimum: 0 }, a: point3, b: point3, m: point3, n: point3, t: { type: "string", maxLength: 40 } } };
 const modifierSchema = { oneOf: [
   { type: "object", additionalProperties: false, required: ["type", "radius", "edges"], properties: { type: { const: "fillet" }, radius: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, edges: { type: "array", minItems: 1, maxItems: 512, items: edgeSignatureSchema }, chain: { type: "boolean" } } },
   { type: "object", additionalProperties: false, required: ["type", "distance", "edges"], properties: { type: { const: "chamfer" }, distance: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, edges: { type: "array", minItems: 1, maxItems: 512, items: edgeSignatureSchema }, chain: { type: "boolean" } } },
   { type: "object", additionalProperties: false, required: ["type", "distance", "faces"], properties: { type: { const: "offset" }, distance: { oneOf: [{ type: "number", exclusiveMinimum: 0, maximum: 10000 }, { type: "number", minimum: -10000, exclusiveMaximum: 0 }], description: "Signed face offset in mm. Positive adds material; negative removes material." }, faces: { type: "array", minItems: 1, maxItems: 256, items: { type: "object", additionalProperties: false, required: ["c", "t"], properties: { c: point3, t: { type: "string", enum: ["PLANE", "CYLINDRE", "SPHERE"] }, n: point3 } } } } },
   { type: "object", additionalProperties: false, required: ["type", "thickness", "faces"], properties: { type: { const: "shell" }, thickness: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, faces: { type: "array", maxItems: 256, items: { type: "object", additionalProperties: false, required: ["c"], properties: { index: { type: "integer", minimum: 0 }, c: point3, n: point3, t: { type: "string" }, r: { type: "number" }, ext: { type: "boolean" }, o: point3, d: point3, ax: point3 } } }, direction: { type: "string", enum: ["in", "out", "both"] } } },
-  { type: "object", additionalProperties: false, required: ["type", "at", "diameter"], properties: { type: { const: "hole" }, at: { type: "array", minItems: 1, maxItems: 64, items: { type: "object", additionalProperties: false, required: ["p", "n"], properties: { p: point3, n: point3 } } }, diameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, kind: { type: "string", enum: ["simple", "cbore", "csink", "tapped"] }, through: { type: "boolean" }, depth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, counterboreDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, counterboreDepth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkAngle: { type: "number", minimum: 1, maximum: 179 }, tip: { type: "boolean" }, pitch: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, clearance: { type: "number", minimum: 0, maximum: 10000 } } },
+  { type: "object", additionalProperties: false, required: ["type", "at", "diameter"], properties: { type: { const: "hole" }, at: { type: "array", minItems: 1, maxItems: 64, description: "Body-local hole positions; one modifier cuts every listed hole.", items: { type: "object", additionalProperties: false, required: ["p", "n"], properties: { p: { ...point3, description: "Point on the entry face." }, n: { ...point3, description: "Outward normal of the entry face; the hole is drilled along -n." } } } }, diameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, kind: { type: "string", enum: ["simple", "cbore", "csink", "tapped"] }, through: { type: "boolean", description: "Defaults to true, even when depth is set. Set false for a blind hole." }, depth: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Blind depth from the entry point in mm when through is false; defaults to 10." }, counterboreDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, counterboreDepth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkDiameter: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, countersinkAngle: { type: "number", minimum: 1, maximum: 179 }, tip: { type: "boolean" }, pitch: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, clearance: { type: "number", minimum: 0, maximum: 10000 } } },
   { type: "object", additionalProperties: false, required: ["type", "face", "pitch"], properties: { type: { const: "thread" }, face: { type: "object", additionalProperties: false, required: ["c", "t"], properties: { index: { type: "integer", minimum: 0 }, c: point3, t: { const: "CYLINDRE" }, n: point3, r: { type: "number" }, ext: { type: "boolean" }, o: point3, d: point3, ax: point3 } }, pitch: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, length: { type: "number", minimum: 0, maximum: 10000 }, flip: { type: "boolean" }, left: { type: "boolean" }, clearance: { type: "number", minimum: 0, maximum: 10000 } } },
   { type: "object", additionalProperties: false, required: ["type", "geo", "text", "size", "depth"], properties: { type: { const: "emboss" }, geo: { type: "object", additionalProperties: false, required: ["kind", "p", "n", "x"], properties: { kind: { const: "plane" }, p: point3, n: point3, x: point3 } }, text: { type: "string", minLength: 1, maxLength: 256 }, font: { type: "string", maxLength: 80 }, size: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, depth: { type: "number", exclusiveMinimum: 0, maximum: 10000 }, mode: { type: "string", enum: ["emboss", "deboss"] }, angle: { type: "number", minimum: -360, maximum: 360 } } },
   { type: "object", additionalProperties: false, required: ["type", "factors"], properties: { type: { const: "scale" }, factors: point3, offset: point3 } },
@@ -113,7 +123,7 @@ const planOperationSchema = { oneOf: [
   { type: "object", additionalProperties: false, required: ["id", "type", "target", "modifier"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "modifier" }, target: { type: "string", maxLength: 80 }, modifier: modifierSchema } },
   { type: "object", additionalProperties: false, required: ["id", "type", "fastenerType", "size"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "fastener" }, fastenerType: { type: "string", enum: ["bolt", "nut", "rod", "cutter"] }, size: fastenerSize, length: { type: "number", exclusiveMinimum: 0, maximum: 10000, description: "Length in mm. Required for bolt, rod, and cutter; ignored for nut." }, clearance: { type: "number", minimum: -1, maximum: 0, description: "Thread print offset in mm. Default 0; values down to -1 loosen mating printed threads." }, left: { type: "boolean" }, position: point3, rotation: point3, name: { type: "string", maxLength: 80 } } },
   { type: "object", additionalProperties: false, required: ["id", "type", "gearType", "module", "teeth", "thickness"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "gear" }, gearType: { type: "string", enum: ["spur", "rack", "bevel"] }, module: { type: "number", minimum: 0.2, maximum: 50, description: "Metric gear module in mm." }, teeth: { type: "integer", minimum: 6, maximum: 120, description: "Integer tooth count. Rack length is module × tooth count × π." }, pressureAngle: { type: "number", minimum: 14, maximum: 30, description: "Pressure angle in degrees; defaults to 20." }, thickness: { type: "number", minimum: 0.1, maximum: 10000, description: "Face width in mm. For a bevel gear this is its axial width." }, coneAngle: { type: "number", minimum: 5, maximum: 80, description: "Pitch cone angle in degrees for a straight bevel gear; defaults to 45. Teeth are an approximation lofted between scaled sampled involute sections; mating accuracy is not certified, and spiral bevel teeth are not generated." }, bore: { type: "number", minimum: 0, maximum: 10000, description: "Optional spur or bevel gear center bore diameter in mm; it must fit inside the smallest root diameter and is not supported for racks." }, baseDepth: { type: "number", minimum: 0.1, maximum: 10000, description: "Rack backing depth below the standard tooth roots in mm; defaults to twice the module and is not supported for gears." }, position: point3, rotation: point3, name: { type: "string", maxLength: 80 } } },
-  { type: "object", additionalProperties: false, required: ["id", "type"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "knurl" }, diameter: { type: "number", minimum: 6, maximum: 150, description: "Knob outside diameter in mm; defaults to 20." }, length: { type: "number", minimum: 1, maximum: 200, description: "Axial extrusion length in mm; defaults to 15." }, grooves: { type: "integer", minimum: 8, maximum: 120, description: "Number of axial V grooves; defaults to about one groove per mm of circumference. Pitch below 0.8 mm may be too fine to print clearly on common FDM printers." }, depth: { type: "number", minimum: 0.1, maximum: 75, description: "Groove depth in mm. Must be deep enough to remain visible and no deeper than half the radius; defaults to half the groove pitch." }, bore: { type: "string", enum: ["none", "round", "hex", "d"], description: "Optional editable center bore. Hex size is measured across flats; D-flat faces +X." }, boreSize: { type: "number", minimum: 1, maximum: 300, description: "Bore diameter, or hex across-flats dimension, in mm. The design validator enforces one millimeter of remaining wall under the groove roots." }, position: point3, rotation: point3, name: { type: "string", maxLength: 80 } } },
+  { type: "object", additionalProperties: false, required: ["id", "type"], properties: { id: { type: "string", maxLength: 80 }, type: { const: "knurl" }, diameter: { type: "number", minimum: 6, maximum: 150, description: "Knob outside diameter in mm; defaults to 20." }, length: { type: "number", minimum: 1, maximum: 200, description: "Axial extrusion length in mm; defaults to 15." }, grooves: { type: "integer", minimum: 8, maximum: 120, description: "Number of axial V grooves; defaults to about one groove per mm of circumference. Pitch below 0.8 mm may be too fine to print clearly on common FDM printers." }, depth: { type: "number", minimum: 0.1, maximum: 75, description: "Groove depth in mm. Must be deep enough to remain visible and no deeper than half the radius; defaults to half the groove pitch." }, bore: { type: "string", enum: ["none", "round", "hex", "d"], description: "Optional editable center bore. Hex size is measured across flats; D-flat faces +X." }, boreSize: { type: "number", minimum: 1, maximum: 300, description: "Bore diameter, or hex across-flats dimension, in mm. The design validator enforces one millimeter of remaining wall under the groove roots." }, boreDepth: { type: "number", minimum: 0.5, maximum: 200, description: "Blind bore depth in mm from the knob's bottom face (local Z=0); omit for a through bore." }, boreFlat: { type: "number", minimum: 0, maximum: 150, description: "D bore only: distance from the bore axis to the flat in mm, below half the bore size; defaults to 0.4 x boreSize. A 6 mm D shaft with a 4.5 mm flat height uses 1.5." }, position: { ...point3, description: "Centre of the knob's bottom face; the knob extends along local +Z." }, rotation: point3, name: { type: "string", maxLength: 80 } } },
   { type: "object", additionalProperties: false, required: ["id", "type", "width", "phoneLength", "angle", "plateThickness", "ribThickness", "stopHeight", "stopDepth", "topEdgeToward", "position"], properties: {
     id: { type: "string", maxLength: 80 }, type: { const: "phoneCradle" }, name: { type: "string", maxLength: 80 },
     width: { type: "number", minimum: 30, maximum: 500, description: "Phone-rest width across world X in mm." },
@@ -142,6 +152,7 @@ const planOperationSchema = { oneOf: [
 ] };
 const planSchema = {
   type: "object", additionalProperties: false, required: ["name"],
+  description: "Built in this order: planes, sketches, primitives, features, then operations in array order. A feature target may be an existing body, a primitive or an earlier new feature, not an operation result; cut an operation body with a combine operation. Body references (targets, requirements) are the id of the primitive, new feature or body-creating operation, or an existing body id; name sets the body name.",
   properties: {
     name: { type: "string", minLength: 1, maxLength: 80 },
     mode: { type: "string", enum: ["beginner", "advanced"] },
@@ -183,8 +194,8 @@ const planSchema = {
           target: { type: "string", maxLength: 80 },
           axis: { type: "string", enum: axes },
           angle: { type: "number", minimum: -60, maximum: 360, description: "Revolve angle is 1 to 360 degrees; coil taper angle is -60 to 60 degrees." },
-          distance: { type: "number", exclusiveMinimum: -10000, exclusiveMaximum: 10000 },
-          mode: { type: "string", enum: ["one", "sym", "two", "height", "pitch"], description: "For coils, choose height or pitch mode; other features use one, sym, or two." },
+          distance: { type: "number", exclusiveMinimum: -10000, exclusiveMaximum: 10000, description: "Extrude length in mm along the sketch plane normal (XY +Z, XZ -Y, YZ +X); a negative value extrudes the opposite way in mode one." },
+          mode: { type: "string", enum: ["one", "sym", "two", "height", "pitch"], description: "Extrude: one goes from the sketch plane by distance, sym centres the total distance on it, two goes distance along the normal and distance2 opposite. Coils use height or pitch." },
           distance2: { type: "number", exclusiveMinimum: 0, maximum: 10000 },
           ruled: { type: "boolean" }, closed: { type: "boolean" },
           section: { type: "string", enum: ["circle", "square", "triangle", "triangle-in"] },
@@ -237,7 +248,7 @@ const tools = extendMcpTools([
   {
     name: "jumpstart_preview_model",
     title: "Preview a parametric model plan",
-    description: "Preview a typed CAD plan using JumpStart primitives, profiles, features, patterns, mirrors, splits, fasteners, gears, native knurled knobs, phone cradles, and modifiers. Knurls are native hidden sketches plus editable extrusions with optional round, hex, or D bores. A phoneCradle uses X across width, Y front/back (+Y toward the dashboard), and Z up; its preview images include a labeled world-axis triad. Import operator-managed STL, 3MF, STEP, or STP assets by the digest id from jumpstart_list_imports; STL requires explicit units, while 3MF and STEP retain file units. Imports are native editable document assets and remain subject to preview, inspection, and explicit apply. Returns geometry errors, dimensions, volume, triangle counts, edge/face selectors, and viewport images. The preview does not modify the saved document. Coordinates and dimensions use millimeters.",
+    description: "Preview a typed CAD plan without changing the document: primitives, sketch profiles, extrude/revolve/loft/sweep/pipe/coil features, and operations (combine, patterns, mirrors, splits, fasteners, gears, knurled knobs, phone cradles, Gridfinity, operator-managed imports by id from jumpstart_list_imports, and fillet/chamfer/hole/shell/thread/emboss modifiers). Millimetres throughout; numeric fields accept {$expr} with named parameters. Returns valid, errors, per-body dimensions, volume and geometry selectors, requirement results, changes, and top, side, isometric and section images with a world-axis triad (default section: X through the middle). Next: check the result, measure with jumpstart_inspect_geometry if needed, then call jumpstart_apply_model with the previewId.",
     inputSchema: {
       type: "object", additionalProperties: false, required: ["plan"],
       properties: {
@@ -292,7 +303,7 @@ const tools = extendMcpTools([
   {
     name: "jumpstart_export_model",
     title: "Export an editable or printable model",
-    description: "Export visible design solids to STL, 3MF or STEP. Default printable scope excludes reference and hardware bodies; assembly includes design and hardware, never references. Optional bodyIds selects an eligible subset. Writes to the configured exports directory and returns the path and selected body ids. STEP preserves CAD solids when supported by the kernel.",
+    description: "Export visible design solids to STL, 3MF or STEP. Default printable scope excludes reference and hardware bodies; assembly includes design and hardware, never references. Optional bodyIds selects an eligible subset. Writes to the configured exports directory under a content-hashed name and returns the path, a file resource link, selected body ids and, for STL, meshValidation per body. STEP preserves CAD solids when supported by the kernel.",
     inputSchema: {
       type: "object", additionalProperties: false, required: ["format"],
       properties: { ...commonEditor, format: { type: "string", enum: ["stl", "step", "3mf"] }, name: { type: "string", maxLength: 80 }, scope: { type: "string", enum: ["printable", "assembly"], default: "printable" }, bodyIds: { type: "array", minItems: 1, maxItems: 128, uniqueItems: true, items: { type: "string", minLength: 1, maxLength: 80 } } },
@@ -529,7 +540,7 @@ async function handleHttpRpc(req, res) {
       protocolVersion: SUPPORTED_VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : "2025-11-25",
       capabilities: { tools: {} },
       serverInfo: { name: "jumpstart-3d", version: "0.1.0" },
-      instructions: "Use preview before apply. Model coordinates are millimeters.",
+      instructions: SERVER_INSTRUCTIONS,
     };
   } else if (method === "ping") {
     result = {};
@@ -537,9 +548,9 @@ async function handleHttpRpc(req, res) {
     result = { resultType: "complete", tools: publishedTools, cacheScope: "public", ttlMs: 300_000 };
   } else if (method === "tools/call") {
     if (typeof params.name !== "string" || !tools.some((tool) => tool.name === params.name)) {
-      result = toolError(new Error(`Unknown tool: ${params.name || ""}`));
+      return json(res, 200, { jsonrpc: "2.0", id: id ?? null, error: { code: -32602, message: `Unknown tool: ${params.name || ""}` } });
     } else {
-      try { result = toolResult(await callTool(params.name, params.arguments === undefined ? {} : params.arguments,"http")); }
+      try { result = toolResult(await callTool(params.name, params.arguments === undefined ? {} : params.arguments,"http"), params.name); }
       catch (error) { result = toolError(error); }
     }
   } else {
@@ -599,7 +610,16 @@ const server = createServer((req, res) => {
 const host = (args) => typeof args.editorId === "string" ? args.editorId : undefined;
 
 async function callTool(name,args,transport) {
-  return agentTrace.run(name,args,()=>executeTool(name,args),transport);
+  return agentTrace.run(name,args,async()=>trimPreview(name,args,await executeTool(name,args)),transport);
+}
+function trimPreview(name, args, result) {
+  if (!name.startsWith("jumpstart_preview_") || !Array.isArray(result?.bodies) || (args.includeSelectors !== false && args.includeFeatureTree !== false)) return result;
+  const bodies = result.bodies.map(({ geometrySelectors, featureTree, ...body }) => ({
+    ...body,
+    ...(args.includeSelectors === false ? {} : { geometrySelectors }),
+    ...(args.includeFeatureTree === false ? {} : { featureTree }),
+  }));
+  return { ...result, bodies };
 }
 async function executeTool(name, args) {
   const tool = tools.find((entry) => entry.name === name);
@@ -674,11 +694,21 @@ async function executeTool(name, args) {
         const count = bytes.length >= 84 ? bytes.readUInt32LE(80) : 0;
         if (!count || bytes.length !== 84 + count * 50) throw new Error("Malformed binary STL export");
         if (count <= 200000) {
-          const vertices = new Float64Array(count * 9), triangles = new Uint32Array(count * 3);
-          for (let i = 0; i < count; i++) for (let j = 0; j < 9; j++) vertices[i * 9 + j] = bytes.readFloatLE(84 + i * 50 + 12 + j * 4);
-          for (let i = 0; i < triangles.length; i++) triangles[i] = i;
-          meshValidation = inspectTriangleMesh({ vertices, triangles }, { tolerance: 0.0001 });
-          meshValidation.valid = !meshValidation.degenerateTriangles && !meshValidation.boundaryEdges && !meshValidation.nonManifoldEdges && !meshValidation.inconsistentWindingEdges;
+          const validate = (first, length) => {
+            const vertices = new Float64Array(length * 9), triangles = new Uint32Array(length * 3);
+            for (let i = 0; i < length; i++) for (let j = 0; j < 9; j++) vertices[i * 9 + j] = bytes.readFloatLE(84 + (first + i) * 50 + 12 + j * 4);
+            for (let i = 0; i < triangles.length; i++) triangles[i] = i;
+            const report = inspectTriangleMesh({ vertices, triangles }, { tolerance: 0.0001 });
+            report.valid = length > 0 && !report.degenerateTriangles && !report.boundaryEdges && !report.nonManifoldEdges && !report.inconsistentWindingEdges;
+            return report;
+          };
+          meshValidation = validate(0, count);
+          const parts = result.bodyTriangles || [];
+          if (parts.length > 1 && parts.reduce((sum, part) => sum + part.triangles, 0) === count) {
+            let first = 0;
+            const bodies = Object.fromEntries(parts.map(({ id, triangles }) => { const report = validate(first, triangles); first += triangles; return [id, report]; }));
+            meshValidation = { ...meshValidation, combinedValid: meshValidation.valid, valid: Object.values(bodies).every((report) => report.valid), bodies, scope: "valid checks each body; combinedValid checks the merged file, where touching bodies share edges" };
+          }
         } else meshValidation = { valid: null, status: "not_checked", reason: "Export exceeds the 200000 triangle inspection budget" };
       }
       await run("export_complete", { editorId: host(args), format: args.format, expectedRevision: result.revision });
@@ -695,11 +725,17 @@ function sanitizeName(value) {
 }
 
 function textContent(value) {
-  return { type: "text", text: typeof value === "string" ? value : value?.toolSchemas ? JSON.stringify(value) : JSON.stringify(value, null, 2) };
+  return { type: "text", text: typeof value === "string" ? value : value?.toolSchemas || value?.schemaFragments ? JSON.stringify(value) : JSON.stringify(value, null, 2) };
 }
 
-function toolResult(value) {
+const EXPORT_MIME = { stl: "model/stl", step: "model/step", "3mf": "model/3mf" };
+function toolResult(value, name) {
   const content = [];
+  if (tools.find((tool) => tool.name === name)?.outputSchema) {
+    content.push(textContent(value));
+    if (name === "jumpstart_export_model") content.push({ type: "resource_link", uri: pathToFileURL(value.path).href, name: basename(value.path), mimeType: EXPORT_MIME[value.format] });
+    return { resultType: "complete", content, structuredContent: value, isError: false };
+  }
   if (Array.isArray(value?.images)) {
     const { images, ...summary } = value;
     content.push(textContent({ ...summary, images: images.map(({ dataUrl, ...metadata }) => metadata) }));
@@ -735,7 +771,7 @@ async function handleMessage(message) {
         supportedVersions: SUPPORTED_VERSIONS,
         capabilities: { tools: {} },
         _meta: { "io.modelcontextprotocol/serverInfo": { name: "jumpstart-3d", version: "0.1.0" } },
-        instructions: "Use jumpstart_preview_model, inspect its geometry and image, then apply the returned previewId. Model coordinates are millimeters. Read the current document revision before undoing. STL fit is not guaranteed by dimensions alone.",
+        instructions: SERVER_INSTRUCTIONS,
         ttlMs: 300_000,
         cacheScope: "public",
       });
@@ -745,18 +781,18 @@ async function handleMessage(message) {
         protocolVersion: SUPPORTED_VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : "2025-11-25",
         capabilities: { tools: {} },
         serverInfo: { name: "jumpstart-3d", version: "0.1.0" },
-        instructions: "Use preview before apply. Model coordinates are millimeters.",
+        instructions: SERVER_INSTRUCTIONS,
       });
     }
     if (method === "ping") return response(requestId, {});
     if (method === "tools/list") return response(requestId, { resultType: "complete", tools: publishedTools, cacheScope: "public", ttlMs: 300_000 });
     if (method === "tools/call") {
       if (typeof params.name !== "string" || !tools.some((tool) => tool.name === params.name)) {
-        return response(requestId, toolError(new Error(`Unknown tool: ${params.name || ""}`)));
+        return rpcError(requestId ?? null, -32602, `Unknown tool: ${params.name || ""}`);
       }
       try {
         const args = params.arguments === undefined ? {} : params.arguments;
-        return response(requestId, toolResult(await callTool(params.name, args,"stdio")));
+        return response(requestId, toolResult(await callTool(params.name, args,"stdio"), params.name));
       }
       catch (error) { return response(requestId, toolError(error)); }
     }

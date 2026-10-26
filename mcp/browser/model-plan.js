@@ -248,11 +248,23 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
           }
         }
         normalizedProfile = { type: "polygon", points };
+      } else if (profile.type === "regularPolygon") {
+        const label = `sketches[${i}].profile`;
+        strictObject(profile, label, ["type", "sides", "acrossFlats", "circumradius", "rotation", "center"]);
+        const sides = number(profile.sides, `${label}.sides`, { min: 3, max: 64 });
+        if (!Number.isInteger(sides)) fail(`${label}.sides must be an integer`);
+        if ((profile.acrossFlats === undefined) === (profile.circumradius === undefined)) fail(`${label} needs exactly one of acrossFlats or circumradius`);
+        const radius = profile.circumradius === undefined
+          ? number(profile.acrossFlats, `${label}.acrossFlats`, { min: 0.002, max: MCP_PLAN_LIMITS.coordinate }) / 2 / Math.cos(Math.PI / sides)
+          : number(profile.circumradius, `${label}.circumradius`, { min: 0.001, max: MCP_PLAN_LIMITS.coordinate });
+        const start = number(profile.rotation ?? 0, `${label}.rotation`, { min: -360, max: 360 }) * Math.PI / 180;
+        const [cx, cy] = profile.center === undefined ? [0, 0] : pair(profile.center, `${label}.center`);
+        normalizedProfile = { type: "polygon", center: [cx, cy], points: Array.from({ length: sides }, (_, k) => [cx + radius * Math.cos(start + 2 * Math.PI * k / sides), cy + radius * Math.sin(start + 2 * Math.PI * k / sides)]) };
       } else if (profile.type === "roundedRect") {
         strictObject(profile, `sketches[${i}].profile`, ["type", "width", "height", "radius", "center"]);
         const width = number(profile.width, `sketches[${i}].profile.width`, { min: 0.001, max: MCP_PLAN_LIMITS.coordinate });
         const height = number(profile.height, `sketches[${i}].profile.height`, { min: 0.001, max: MCP_PLAN_LIMITS.coordinate });
-        const radius = number(profile.radius, `sketches[${i}].profile.radius`, { min: 0.001, max: Math.min(width, height) / 2 });
+        const radius = number(profile.radius, `sketches[${i}].profile.radius`, { min: 0, max: Math.min(width, height) / 2 });
         normalizedProfile = { type: "roundedRect", width, height, radius, center: profile.center === undefined ? [0, 0] : pair(profile.center, `sketches[${i}].profile.center`) };
       } else if (profile.type === "contour") {
         strictObject(profile, `sketches[${i}].profile`, ["type", "segments"]);
@@ -311,7 +323,7 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
         if (sampledContourArea(contourSegments) < 0.001) fail(`sketches[${i}].profile has zero area`);
         normalizedProfile = { type: "contour", segments: contourSegments };
       } else {
-        fail(`sketches[${i}].profile.type must be circle, polygon, roundedRect, or contour`);
+        fail(`sketches[${i}].profile.type must be circle, polygon, regularPolygon, roundedRect, or contour`);
       }
     }
     return { id, name: text(sketch.name, `sketches[${i}].name`, id), plane, origin, ...(isPath ? { segments } : { profile: normalizedProfile }) };
@@ -447,7 +459,7 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
 
   const seenFeatures = new Set([...existingBodyIds, ...primitiveIds]);
   for (const feature of features) {
-    if (feature.target && !seenFeatures.has(feature.target)) fail(`Feature ${feature.id} must target an earlier body`);
+    if (feature.target && !seenFeatures.has(feature.target)) fail(`Feature ${feature.id} must target an earlier body: an existing body, a primitive or an earlier new feature. Features run before operations; use a combine operation to cut an operation body`);
     if (feature.operation === "new") seenFeatures.add(feature.id);
   }
   const operations = rawOperations.map((raw, i) => {
@@ -603,7 +615,7 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
       return { type, id, gearType, module, teeth, pressureAngle, thickness, ...(bore === undefined ? {} : { bore }), ...(baseDepth === undefined ? {} : { baseDepth }), ...(coneAngle === undefined ? {} : { coneAngle }), position: triple(operation.position ?? [0, 0, 0], `operations[${i}].position`), rotation, name: text(operation.name, `operations[${i}].name`, gearType === "spur" ? `Spur gear ${teeth}T` : gearType === "bevel" ? `Straight bevel gear ${teeth}T` : `Rack ${teeth}T`) };
     }
     if (type === "knurl") {
-      strictObject(operation, `operations[${i}]`, ["id", "type", "diameter", "length", "grooves", "depth", "bore", "boreSize", "position", "rotation", "name"]);
+      strictObject(operation, `operations[${i}]`, ["id", "type", "diameter", "length", "grooves", "depth", "bore", "boreSize", "boreDepth", "boreFlat", "position", "rotation", "name"]);
       const diameter = number(operation.diameter ?? 20, `operations[${i}].diameter`, { min: 6, max: 150 });
       const length = number(operation.length ?? 15, `operations[${i}].length`, { min: 1, max: 200 });
       const grooves = number(operation.grooves ?? Math.min(MCP_PLAN_LIMITS.knurlGrooves, Math.max(8, Math.round(Math.PI * diameter))), `operations[${i}].grooves`, { min: 8, max: MCP_PLAN_LIMITS.knurlGrooves });
@@ -620,9 +632,14 @@ export function normalizeModelPlan(value, existingBodyIds = [], defaultMode) {
       const maxBore = Math.floor((bore === "hex" ? Math.sqrt(3) : 2) * (rootRadius - 1) * 1000 + 1e-6) / 1000;
       const defaultBore = bore === "hex" ? 8 : 5;
       const boreSize = bore === "none" ? undefined : number(operation.boreSize ?? defaultBore, `operations[${i}].boreSize`, { min: 1, max: Math.max(0, maxBore) });
+      if (bore === "none" && operation.boreDepth !== undefined) fail(`operations[${i}].boreDepth is only supported when a bore is selected`);
+      if (bore !== "d" && operation.boreFlat !== undefined) fail(`operations[${i}].boreFlat is only supported for a D bore`);
+      const boreDepth = operation.boreDepth === undefined ? undefined : number(operation.boreDepth, `operations[${i}].boreDepth`, { min: 0.5, max: length });
+      const boreFlat = bore === "d" ? number(operation.boreFlat ?? 0.4 * boreSize, `operations[${i}].boreFlat`, { min: 0, max: Math.floor((boreSize / 2 - 0.1) * 1000) / 1000 }) : undefined;
+      const blind = boreDepth !== undefined && boreDepth < length - 1e-9 ? { boreDepth } : {};
       const position = triple(operation.position ?? [0, 0, 0], `operations[${i}].position`);
       const rotation = triple(operation.rotation ?? [0, 0, 0], `operations[${i}].rotation`).map((v, axis) => number(v, `operations[${i}].rotation[${axis}]`, { min: -360, max: 360 }));
-      return { type, id, diameter, length, grooves, depth, bore, ...(boreSize === undefined ? {} : { boreSize }), position, rotation, name: text(operation.name, `operations[${i}].name`, `Knurled knob ${diameter} x ${length}`) };
+      return { type, id, diameter, length, grooves, depth, bore, ...(boreSize === undefined ? {} : { boreSize }), ...blind, ...(boreFlat === undefined ? {} : { boreFlat }), position, rotation, name: text(operation.name, `operations[${i}].name`, `Knurled knob ${diameter} x ${length}`) };
     }
     if (type === "holePattern") {
       strictObject(operation, `operations[${i}]`, ["id", "type", "target", "face", "layout", "hole", "shape", "width", "length", "depth"]);
@@ -763,7 +780,10 @@ function sketchFromDefinition(definition, seq, idFactory) {
     };
     const line = (start, end) => sketch.ents.push({ id: idFactory("e"), t: "line", a: pointAt(start), b: pointAt(end) });
     const arc = ({ start, end, center }) => sketch.ents.push({ id: idFactory("e"), t: "arc", c: pointAt(center), a: pointAt(start), b: pointAt(end) });
-    for (let i = 0; i < corners.length; i++) {
+    if (radius === 0) {
+      const square = [[right, bottom], [right, top], [left, top], [left, bottom]];
+      square.forEach((start, i) => line(start, square[(i + 1) % 4]));
+    } else for (let i = 0; i < corners.length; i++) {
       arc(corners[i]);
       const next = corners[(i + 1) % corners.length];
       line(corners[i].end, next.start);
@@ -791,7 +811,7 @@ function sketchFromDefinition(definition, seq, idFactory) {
     const points = definition.profile.points.map(point);
     for (let i = 0; i < points.length; i++) sketch.ents.push({ id: idFactory("e"), t: "line", a: points[i], b: points[(i + 1) % points.length] });
   }
-  const profilePoint = definition.profile?.type === "roundedRect" ? definition.profile.center : [0, 0];
+  const profilePoint = definition.profile?.type !== "circle" && definition.profile?.center || [0, 0];
   return { sketch, profileRef: { key: sketch.ents.map((entity) => entity.id).sort().join(","), pt: profilePoint } };
 }
 
@@ -1531,18 +1551,26 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
         const vertices = Array.from({ length: 6 }, (_, i) => point(cornerRadius * Math.cos(i * Math.PI / 3), cornerRadius * Math.sin(i * Math.PI / 3)));
         for (let i = 0; i < vertices.length; i++) line(vertices[i], vertices[(i + 1) % vertices.length]);
       } else if (operation.bore === "d") {
-        const boreRadius = operation.boreSize / 2, flatX = 0.4 * operation.boreSize;
+        const boreRadius = operation.boreSize / 2, flatX = operation.boreFlat;
         const y = Math.sqrt(boreRadius ** 2 - flatX ** 2), center = point(0, 0), top = point(flatX, y), bottom = point(flatX, -y);
         sketch.ents.push({ id: idFactory("e"), t: "arc", c: center, a: top, b: bottom });
         line(bottom, top);
       }
       doc.sketches.push(sketch);
       const outerEdge = sketch.ents[0]?.id;
-      const profile = findRegions(resolveSketch(sketch)).find((region) => region.ents.includes(outerEdge));
+      const regions = findRegions(resolveSketch(sketch));
+      const profile = regions.find((region) => region.ents.includes(outerEdge));
       if (!profile) fail(`Knurl ${operation.id} could not resolve its outer groove profile`);
       const profileRef = { key: profile.key, pt: profile.pt };
-      const body = addBody(operation.name, { t: "extrude", sketch: sketch.id, profiles: [profileRef], dist: operation.length, mode: "one", dist2: 0, mods: [] }, matrixForTransform(operation.position, operation.rotation));
-      body.mcpKnurl = { diameter: operation.diameter, length: operation.length, grooves: operation.grooves, pitch: Math.PI * operation.diameter / operation.grooves, depth: operation.depth, bore: operation.bore, ...(operation.boreSize === undefined ? {} : { boreSize: operation.boreSize }) };
+      const mods = [];
+      if (operation.boreDepth !== undefined) {
+        const core = regions.find((region) => !region.ents.includes(outerEdge));
+        if (!core) fail(`Knurl ${operation.id} could not resolve its bore profile`);
+        const tool = { t: "extrude", sketch: sketch.id, profiles: [{ key: core.key, pt: core.pt }], dist: operation.length - operation.boreDepth, mode: "one", dist2: 0, mods: [] };
+        mods.push({ id: idFactory("f"), seq: ++doc.seq, t: "bool", op: "join", tool, m: matrixForTransform([0, 0, operation.boreDepth]) });
+      }
+      const body = addBody(operation.name, { t: "extrude", sketch: sketch.id, profiles: [profileRef], dist: operation.length, mode: "one", dist2: 0, mods }, matrixForTransform(operation.position, operation.rotation));
+      body.mcpKnurl = { diameter: operation.diameter, length: operation.length, grooves: operation.grooves, pitch: Math.PI * operation.diameter / operation.grooves, depth: operation.depth, bore: operation.bore, ...(operation.boreSize === undefined ? {} : { boreSize: operation.boreSize }), ...(operation.boreDepth === undefined ? {} : { boreDepth: operation.boreDepth }), ...(operation.boreFlat === undefined ? {} : { boreFlat: operation.boreFlat }) };
       remember(operation.id, [body]);
     } else if (operation.type === "holePattern") {
       const targets = bodyList(operation.target);

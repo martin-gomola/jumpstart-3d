@@ -170,11 +170,26 @@ Follow-up from an over-engineering audit and agent-task benchmark; not a SOMA/te
 - [x] Rerun of the same six tasks after the follow-up (same brief plus the `reopened`
       checkpoint step): 6/6 passed; 62 calls with 1 error, against 70 calls with 8 errors
       and 0/6 before. Heat-set bosses now use the native `hole` modifier.
-- [ ] Remaining agent friction: regular-polygon (across flats) and sharp/ring rectangle
-      profiles, trig in `$expr`, documented plan order (features before operations) and
-      body references, `hole.at[].n` and extrude direction, fillet edge selection,
-      per-body validation in multi-body exports, knurl D-bore depth and flat offset,
-      optional trimming of preview `geometrySelectors`.
+- [x] Friction fixes from the rerun: `regularPolygon` profile (across flats or
+      circumradius) and `roundedRect` radius 0; `$expr` functions (trig in degrees,
+      `sqrt`, `min`, `max`, rounding); schema descriptions for plan build order, body
+      references, primitive and knurl anchors, extrude direction, hole `n`/`through`
+      defaults, edge selectors and Gridfinity-only `pocket`; knurl `boreDepth` (blind,
+      native joined fill) and D-bore `boreFlat`; per-body STL `meshValidation` with
+      `combinedValid`; `get_capabilities` `schemaPaths` fragments (5.5–9 k characters
+      against 27–65 k); preview `includeSelectors`/`includeFeatureTree` (97.6 k → 3.4 k
+      characters without images). Checked live: blind D bore adds the expected 113.7 mm³,
+      touching boxes export with both bodies valid.
+- [x] `tools/list` publishes the eight domain generators in `plan.operations` as type,
+      required names and a summary, with full fields through `schemaPaths`; argument
+      errors name the exact path. 107.1 k → 85.7 k characters; validation unchanged.
+- [x] Skill v1.15.0 splits references by task: knobs, gears and Lathe parts move to
+      `knobs-gears-and-turned-parts.md` with a checked D-shaft knob example; the phone
+      cradle recipe joins `mounts-and-assemblies.md`; printer profile, print pose and
+      hardware holes move to `print-and-hardware.md`. A knob task now loads 2.5 k
+      instead of 9.1 k characters of reference.
+- [ ] Not yet addressed: ring (hollow) rectangle profile, fillet edge selection by
+      predicate inside a plan, and a third benchmark round to measure these changes.
 
 ## 10. Photo measurement and likeness check — implement the idea independently — planned
 

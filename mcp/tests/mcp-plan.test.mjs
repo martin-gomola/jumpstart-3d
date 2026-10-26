@@ -56,6 +56,23 @@ test("rounded rectangle profile validates positive sizes, bounded radius and str
   assert.throws(() => normalizeModelPlan({ ...base, sketches: [{ ...base.sketches[0], profile: { ...base.sketches[0].profile, extra: true } }] }), /extra is not supported/);
 });
 
+test("sharp rectangles and regular polygons compile to native line profiles", () => {
+  const extrude = (profile) => buildModelPlan(doc(), { name: "Profile", sketches: [{ id: "outline", plane: "XY", origin: [0, 0, 0], profile }], features: [{ id: "body", type: "extrude", sketch: "outline", distance: 2 }] }, ids()).document;
+  const sharp = extrude({ type: "roundedRect", width: 30, height: 20, radius: 0, center: [3, -2] });
+  assert.deepEqual(sharp.sketches[0].ents.map(({ t }) => t), ["line", "line", "line", "line"]);
+  assert.deepEqual(sharp.sketches[0].pts.map(({ x, y }) => [x, y]), [[18, -12], [18, 8], [-12, 8], [-12, -12]]);
+  const hex = extrude({ type: "regularPolygon", sides: 6, acrossFlats: 5.5, center: [10, 0] });
+  const ys = hex.sketches[0].pts.map(({ y }) => y);
+  assert.equal(hex.sketches[0].ents.length, 6);
+  assert.ok(Math.abs(Math.max(...ys) - Math.min(...ys) - 5.5) < 1e-9);
+  assert.deepEqual(hex.bodies[0].node.profiles[0].pt, [10, 0]);
+  const base = { name: "Hex", sketches: [{ id: "outline", plane: "XY", origin: [0, 0, 0], profile: { type: "regularPolygon", sides: 6, acrossFlats: 5.5 } }], features: [{ id: "body", type: "extrude", sketch: "outline", distance: 2 }] };
+  const withProfile = (profile) => ({ ...base, sketches: [{ ...base.sketches[0], profile: { ...base.sketches[0].profile, ...profile } }] });
+  assert.throws(() => normalizeModelPlan(withProfile({ circumradius: 3 })), /exactly one of acrossFlats or circumradius/);
+  assert.throws(() => normalizeModelPlan(withProfile({ sides: 6.5 })), /sides must be an integer/);
+  assert.throws(() => normalizeModelPlan(withProfile({ sides: 2 })), /sides must be/);
+});
+
 test("managed imports compile to native mesh and STEP nodes and require STL units", () => {
   const assetId = "a".repeat(64);
   const current = { ...doc(), assets: {
@@ -134,6 +151,25 @@ test("knurls compile into a native editable sketch extrusion with validated groo
   assert.throws(() => normalizeModelPlan({ name: "Vanished grooves", operations: [{ id: "k", type: "knurl", diameter: 20, grooves: 8, depth: 0.1 }] }), /grooves vanish/);
   assert.throws(() => normalizeModelPlan({ name: "No wall", operations: [{ id: "k", type: "knurl", diameter: 20, depth: 5, bore: "round", boreSize: 10 }] }), /boreSize must be a finite number/);
   assert.throws(() => normalizeModelPlan({ name: "Unexpected size", operations: [{ id: "k", type: "knurl", boreSize: 4 }] }), /only supported when a bore is selected/);
+});
+
+test("knurl D bores take a flat offset and an optional blind depth from the bottom face", () => {
+  const result = buildModelPlan(doc(), { name: "Knob", operations: [{ id: "knob", type: "knurl", diameter: 24, length: 15, grooves: 24, bore: "d", boreSize: 6, boreFlat: 1.5, boreDepth: 10 }] }, ids());
+  const sketch = result.document.sketches[0], body = result.document.bodies[0];
+  const flat = sketch.ents.at(-1), xs = [flat.a, flat.b].map((id) => sketch.pts.find((p) => p.id === id).x);
+  assert.deepEqual(xs, [1.5, 1.5]);
+  assert.equal(body.node.mods.length, 1);
+  const [fill] = body.node.mods;
+  assert.deepEqual({ t: fill.t, op: fill.op, dist: fill.tool.dist, sketch: fill.tool.sketch, lift: fill.m.slice(12, 15) }, { t: "bool", op: "join", dist: 5, sketch: sketch.id, lift: [0, 0, 10] });
+  assert.notEqual(fill.tool.profiles[0].key, body.node.profiles[0].key);
+  assert.equal(body.mcpKnurl.boreDepth, 10);
+  assert.equal(body.mcpKnurl.boreFlat, 1.5);
+  const through = buildModelPlan(doc(), { name: "Knob", operations: [{ id: "knob", type: "knurl", diameter: 24, length: 15, grooves: 24, bore: "round", boreSize: 6, boreDepth: 15 }] }, ids());
+  assert.deepEqual(through.document.bodies[0].node.mods, []);
+  assert.throws(() => normalizeModelPlan({ name: "k", operations: [{ id: "k", type: "knurl", bore: "round", boreFlat: 1 }] }), /only supported for a D bore/);
+  assert.throws(() => normalizeModelPlan({ name: "k", operations: [{ id: "k", type: "knurl", boreDepth: 4 }] }), /only supported when a bore is selected/);
+  assert.throws(() => normalizeModelPlan({ name: "k", operations: [{ id: "k", type: "knurl", bore: "d", boreSize: 6, boreFlat: 3 }] }), /boreFlat must be/);
+  assert.throws(() => normalizeModelPlan({ name: "k", operations: [{ id: "k", type: "knurl", length: 10, bore: "d", boreDepth: 11 }] }), /boreDepth must be/);
 });
 
 test("phone cradle rejects invalid angles, undersized rib layouts and unsupported direction values", () => {

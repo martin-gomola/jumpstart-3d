@@ -1,4 +1,4 @@
-/** Bounded arithmetic parameters. Units are labels; dimensional algebra is not inferred. */
+/** Bounded arithmetic parameters. Units are labels; dimensional algebra is not inferred. Trig functions take and return degrees. */
 const FORBIDDEN = new Set(['__proto__', 'prototype', 'constructor']);
 const NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const UNITS = new Set(['mm', 'deg', 'count', 'scalar']);
@@ -12,6 +12,12 @@ function object(value, label) {
   for (const key of Object.keys(value)) if (FORBIDDEN.has(key)) fail(`forbidden key ${key}`);
 }
 function keys(value, allowed) { for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`unknown field ${key}`); }
+const RAD = Math.PI / 180;
+const FUNCTIONS = new Map(Object.entries({
+  sin: [1, (a) => Math.sin(a * RAD)], cos: [1, (a) => Math.cos(a * RAD)], tan: [1, (a) => Math.tan(a * RAD)],
+  asin: [1, (x) => Math.asin(x) / RAD], acos: [1, (x) => Math.acos(x) / RAD], atan: [1, (x) => Math.atan(x) / RAD], atan2: [2, (y, x) => Math.atan2(y, x) / RAD],
+  sqrt: [1, Math.sqrt], abs: [1, Math.abs], min: [2, Math.min], max: [2, Math.max], round: [1, Math.round], floor: [1, Math.floor], ceil: [1, Math.ceil],
+}));
 export function evaluateParameterExpression(source, lookup) {
   if (typeof source !== 'string' || !source.length || source.length > 256) fail('expression must contain 1 to 256 characters');
   const tokens = source.match(/(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z0-9_]*|[^\s]/g) || [];
@@ -23,6 +29,19 @@ export function evaluateParameterExpression(source, lookup) {
     if (token === '+' || token === '-') value = (token === '-' ? -1 : 1) * expr(depth + 1, 3);
     else if (token === '(') { value = expr(depth + 1); if (tokens[index++] !== ')') fail('missing closing parenthesis'); }
     else if (token && /^(?:\d|\.)/.test(token)) value = number(Number(token));
+    else if (token && NAME.test(token) && tokens[index] === '(') {
+      if (!FUNCTIONS.has(token)) fail(`unknown function ${token}`);
+      const [arity, fn] = FUNCTIONS.get(token), args = [];
+      index++;
+      for (;;) {
+        args.push(expr(depth + 1));
+        if (tokens[index] === ',') { index++; continue; }
+        if (tokens[index++] !== ')') fail('missing closing parenthesis');
+        break;
+      }
+      if (args.length !== arity) fail(`${token} takes ${arity} argument${arity === 1 ? '' : 's'}`);
+      value = number(fn(...args));
+    }
     else if (token && NAME.test(token) && !FORBIDDEN.has(token)) value = number(lookup(token));
     else fail(`unexpected expression token ${token ?? 'end'}`);
     for (;;) {

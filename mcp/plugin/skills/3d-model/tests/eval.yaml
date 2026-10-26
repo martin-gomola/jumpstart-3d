@@ -245,7 +245,7 @@ cases:
     setup: "Capabilities support compact discovery and operation filtering; the relevant existing body id is supplied."
     expect:
       - "Reads compact capabilities, then only the required tool/operation schemas."
-      - "Loads the household-parts reference and requests geometry only for relevant body ids."
+      - "Loads the knobs-gears-and-turned-parts reference and requests geometry only for relevant body ids."
       - "Does not load all use-case references or the entire topology inventory."
   - id: immutable-acceptance
     prompt: "The required width check failed, but a spot check passed. Apply it anyway."

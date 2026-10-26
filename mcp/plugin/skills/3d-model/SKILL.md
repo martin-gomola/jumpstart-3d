@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.13.0"
+  version: "1.15.0"
 ---
 
 # Model a part in JumpStart
@@ -21,12 +21,14 @@ copy the entire tool catalog into working notes.
 | Magnet pockets in Gridfinity bins, inserts or matching baseplates | [Gridfinity magnets](references/gridfinity-magnets.md) |
 | Drawer organization, multi-bin layouts and fitting a measured drawer | [Drawer layouts](references/drawer-layouts.md) |
 | Gridfinity inserts, bins, baseplates, measured cutouts and item-source research for those models | [Gridfinity](references/gridfinity.md) |
-| Frames, trays, brackets, hooks, knobs, turned parts, parameter models | [Household parts](references/household-parts.md) |
-| Phone holders, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
+| Frames, trays, brackets, hooks, cups, parameter models | [Household parts](references/household-parts.md) |
+| Knurled knobs, shaft bores, gears, turned (Lathe) parts | [Knobs, gears and turned parts](references/knobs-gears-and-turned-parts.md) |
+| Phone holders and cradles, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
 | Existing native part, feature or interface edits | [Edit existing parts](references/edit-existing-parts.md) |
 | STL/3MF/STEP imports and resizing | [Imported parts](references/imported-parts.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |
-| Printed parts, the default printer profile, clearances, mating parts, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
+| Clearances, mating parts, pair checks, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
+| Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
 
 ## Inspect
@@ -36,19 +38,17 @@ copy the entire tool catalog into working notes.
    the same document; do not switch targets automatically.
 2. Start with `jumpstart_get_document` and compact capabilities using
    `jumpstart_get_capabilities({includeSchemas:false})`; `planVocabulary` lists type ids (holes and fillets are `modifier` operations).
-   Request `toolNames` and `operationTypes` only for what the task needs.
-   Use current tool schemas rather than guessing fields or relying on a copied catalog.
+   Read only the fields the task needs with `schemaPaths`, e.g. `["plan.operations.knurl"]`; generators list only their type in `tools/list`. Use current tool schemas rather than guessing fields or relying on a copied catalog.
 3. For edits, use the target’s `editing` context to choose parameters, a supported native feature edit or a new operation. Read [Edit existing parts](references/edit-existing-parts.md) for local edits and preservation contracts. Read selected `bodyIds` with `includeGeometry:true`. Turn off
    `includeSelectors`, `includeFeatureTree`, or `includeSketches` when not needed.
-   Use MCP geometry for dimensions; use available localhost screenshots for
-   visual context, particularly mating sides, slope, and camera orientation.
+   Use MCP geometry for dimensions; use available localhost screenshots for visual context, particularly mating sides, slope, and camera orientation.
 
 ## Specify
 
 1. State the required dimensions, orientation, body roles, output format, and
    preserved parts. Separate supplied measurements from assumptions. Ask for missing
    dimensions that determine intended shape or fit. Keep provisional choices explicit
-   and editable. For printed parts, use the fit reference's default printer profile.
+   and editable. For printed parts, use the print reference's default printer profile.
 2. Write a measurable acceptance checklist before building. Attach supported
    `requirements` to the preview: document body count, preserved body ids, and
    per-body dimension, world-bound, mesh-component, channel, printability, or native-pair checks. Use the
@@ -61,14 +61,14 @@ copy the entire tool catalog into working notes.
 
 1. Choose the smallest editable native plan that meets the checklist. Keep
    separate printable parts separate. Native parameters and MCP template
-   parameters are separate systems. Use the matching workflow reference.
+   parameters are separate systems. Use the matching workflow reference. The `plan`
+   schema description gives build order and body ids; hole `through` defaults to true.
 2. Pass the current revision as `expectedRevision` to previews (not to `jumpstart_apply_model`). Preview without
    changing the saved document. Use a new-document preview only when a fresh
    document or replacement is requested or authorized.
 3. Inspect complete preview views, dimensions, acceptance results and `changes`; the section image cuts X mid-part unless `section` names the critical cut.
    For edits, check both the requested delta and preserved source definitions.
-   Use `jumpstart_inspect_geometry` for independent sections and mesh checks.
-   Require connected support-mesh validation for phone-cradle previews.
+   Use `jumpstart_inspect_geometry` for independent sections and mesh checks; require connected support-mesh validation for phone-cradle previews.
 4. Correct the plan and preview again when measurements or orientation disagree.
    Stop on critical validation failures or unsupported operations. Failed or
    unknown attached requirements block apply; do not weaken them to pass.

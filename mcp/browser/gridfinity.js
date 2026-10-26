@@ -108,7 +108,7 @@ export function normalizeGridfinity(raw, label = "operation") {
   return { type: "gridfinity", id: text(raw.id, `${label}.id`), name: text(raw.name, `${label}.name`, `Gridfinity ${kind}`), kind, columns, rows, heightUnits, floor, wall, lip, openSides, closeGaps, dividers: { x, y }, magnets: normalizeMagnetPockets(raw.magnets, `${label}.magnets`), position: triple(raw.position, `${label}.position`, -10000, 10000), rotation: triple(raw.rotation, `${label}.rotation`, -360, 360) };
 }
 
-export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
+export function buildGridfinity(operation, { document, idFactory, nextSeq, clipSlots = [] }) {
   const op = normalizeGridfinity(operation);
   const width = op.columns * 42 - (op.kind === "baseplate" ? 0 : 0.5);
   const depth = op.rows * 42 - (op.kind === "baseplate" ? 0 : 0.5);
@@ -261,10 +261,14 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
     const cutter = { t: "prim", kind: "cylinder", p: { w: op.magnets.diameter, d: op.magnets.diameter, h: pocketHeight, r: 0, c: 0 }, mods: [] };
     node.mods.push({ id: idFactory("f"), seq: seq(), t: "bool", src: "magnetPockets", op: "cut", tool: group(centers.map(([x, y]) => child(cutter, x, y, bottom))), m: IDENTITY.slice() });
   }
+  if (op.kind === "baseplate" && clipSlots.length) {
+    const slot = s => ({ t: "prim", kind: "box", p: { w: s.axis === "x" ? s.length : s.width, d: s.axis === "x" ? s.width : s.length, h: s.depth + 0.01, r: 0, c: 0 }, mods: [] });
+    node.mods.push({ id: idFactory("f"), seq: seq(), t: "bool", src: "clipSlots", op: "cut", tool: group(clipSlots.map(s => child(slot(s), s.x, s.y, -0.01))), m: IDENTITY.slice() });
+  }
   const referencedSketches = new Set();
   JSON.stringify(node, (key, value) => { if (key === "sketch" && typeof value === "string") referencedSketches.add(value); return value; });
   const sketchSignatures = Object.fromEntries([...referencedSketches].map(id => [id, JSON.stringify(document.sketches.find(sketch => sketch.id === id))]));
   const recipe = { version: 1, ...op, width: op.closeGaps ? footprint.width : width, depth: op.closeGaps ? footprint.depth : depth, topZ, protectedBaseHeight: op.kind === "baseplate" ? 0 : 7, outerRadius: op.kind === "baseplate" ? 4 : 3.75, totalHeight: op.kind === "bin" ? binTotalHeight(op) : topZ, pitch:42, heightUnit:7, sourceRevision, referenceFit: "unverified", baseplatePlacementZ:carrierHeight + 0.25,
-    ...(op.magnets ? { magnetPockets: { ...op.magnets, count: centers.length, centers, carrierHeight, carrierFloor: op.kind === "baseplate" ? MAGNET_CARRIER_FLOOR : null, opening: op.kind === "baseplate" ? "top" : "bottom" } } : {}), nodeSignature:JSON.stringify(node), sketchSignatures };
+    ...(op.magnets ? { magnetPockets: { ...op.magnets, count: centers.length, centers, carrierHeight, carrierFloor: op.kind === "baseplate" ? MAGNET_CARRIER_FLOOR : null, opening: op.kind === "baseplate" ? "top" : "bottom" } } : {}), ...(op.kind === "baseplate" && clipSlots.length ? { clipSlots: structuredClone(clipSlots) } : {}), nodeSignature:JSON.stringify(node), sketchSignatures };
   return { node, recipe };
 }

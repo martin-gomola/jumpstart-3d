@@ -4,7 +4,7 @@ import { checkPrintFit } from "../shared/print-area.js";
 
 function partEditable(body, document) {
   const saved = body.mcpDrawerLayout;
-  const signatures = body.mcpGridfinity?.sketchSignatures || body.mcpDrawerSpacer?.sketchSignatures;
+  const signatures = body.mcpGridfinity?.sketchSignatures || body.mcpDrawerSpacer?.sketchSignatures || body.mcpBaseplateClip?.sketchSignatures;
   if (!signatures || typeof signatures !== "object") return false;
   if (body.locked || body.hidden || body.hole || saved.name !== body.name || saved.nodeSignature !== JSON.stringify(body.node) || saved.matrix !== JSON.stringify(body.m)) return false;
   return Object.entries(signatures).every(([id, signature]) => signature === JSON.stringify(document.sketches.find(sketch => sketch.id === id)));
@@ -33,14 +33,27 @@ export function buildDrawerLayout(raw, { document, addBody, idFactory, nextSeq, 
   if (previous.length && !op.replaceExisting) throw new Error("Drawer layout already exists; load it and explicitly replace it after preview");
   if (previous.length && !summarizeDrawerLayouts(document).find(layout => layout.layoutId === op.layoutId)?.editable) throw new Error("Drawer parts were edited, locked or removed; keep the native edits or create a new layout");
   const oldIds = new Set(previous.map(body => body.id)), oldSketchIds = new Set();
-  for (const body of previous) for (const id of Object.keys(body.mcpGridfinity?.sketchSignatures || body.mcpDrawerSpacer?.sketchSignatures || {})) oldSketchIds.add(id);
+  for (const body of previous) for (const id of Object.keys(body.mcpGridfinity?.sketchSignatures || body.mcpDrawerSpacer?.sketchSignatures || body.mcpBaseplateClip?.sketchSignatures || {})) oldSketchIds.add(id);
   const unrelated = document.bodies.filter(body => !oldIds.has(body.id));
   const external = [unrelated.map(body => body.node), document.sketches.filter(sketch => !oldSketchIds.has(sketch.id)), document.planes || [], document.joints || []];
   if (external.some(value => [...oldIds, ...oldSketchIds].some(id => JSON.stringify(value).includes(JSON.stringify(id))))) throw new Error("Another native feature depends on this drawer; preserve it or create a new layout");
   document.bodies = unrelated;
   document.sketches = document.sketches.filter(sketch => !oldSketchIds.has(sketch.id));
   const definition = { ...op, replaceExisting: false }, created = [];
-  for (const spec of drawerParts(op)) {
+  const own = (body, spec) => {
+    body.mcpDrawerLayout = { version: 1, layoutId: op.layoutId, partId: spec.id, name: body.name, definition, nodeSignature: JSON.stringify(body.node), matrix: JSON.stringify(body.m) };
+    const old = previous.find(part => part.mcpDrawerLayout.partId === spec.id);
+    if (old?.role !== undefined) body.role = old.role;
+    if (old?.color !== undefined) body.color = old.color;
+    created.push(body);
+  };
+  for (const { clipSlots, ...spec } of drawerParts(op)) {
+    if (spec.type === "baseplateClip") {
+      const node = { t: "prim", kind: "box", p: { w: spec.axis === "x" ? spec.length : spec.width, d: spec.axis === "x" ? spec.width : spec.length, h: spec.height, r: 0, c: 0 }, mods: [] };
+      const body = addBody(spec.name, node, matrixForTransform(spec.position, [0, 0, 0]));
+      body.mcpBaseplateClip = { axis: spec.axis, joint: spec.joint, clearance: spec.clearance, width: spec.width, length: spec.length, height: spec.height, sketchSignatures: {} };
+      own(body, spec); continue;
+    }
     if (spec.type === "drawerSpacer") {
       const node = { t: "group", mods: [], children: spec.rectangles.map(rect => ({
         node: { t: "prim", kind: "box", p: { w: rect.width, d: rect.depth, h: spec.height, r: 0, c: 0 }, mods: [] },
@@ -56,7 +69,7 @@ export function buildDrawerLayout(raw, { document, addBody, idFactory, nextSeq, 
       created.push(body); continue;
     }
     const normalized = normalizeGridfinity(spec);
-    const built = buildGridfinity(normalized, { document, idFactory, nextSeq });
+    const built = buildGridfinity(normalized, { document, idFactory, nextSeq, clipSlots });
     const body = addBody(normalized.name, built.node, matrixForTransform(normalized.position, [0, 0, 0]));
     body.mcpGridfinity = built.recipe;
     if (op.printArea) body.mcpPrintFit = checkPrintFit(op.printArea, built.recipe.width, built.recipe.depth, built.recipe.totalHeight, normalized.name);

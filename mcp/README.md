@@ -140,6 +140,22 @@ Rounded drawer corners and physical retention are not certified by the preview.
 Export spacer bodies individually, or arrange them on a print bed; the assembled
 drawer preview is not an automatically packed print plate.
 
+### Baseplate clips
+
+Enable **Join baseplate tiles with clips** under Advanced construction when the
+grid is split into more than one baseplate tile. Each joint gets up to two
+separate straight clips, 2 × 15.7 × 1.85 mm, that press into 2 mm deep slots cut
+up from the bed side. At interior grid nodes a clip crosses the joint inside the
+wall between two cells; a joint only one cell long gets one clip along it, in
+the middle of the cell edge. The bin-seating profile on top is unchanged, and
+each slot removes about 37 mm³ from each tile, so clips add a small amount of
+material rather than saving it. They hold tiles together and aligned; the
+drawer floor keeps them in place.
+
+MCP plans use `drawerLayout.baseplateClips: true` or `{ "clearance": 0.15 }`
+(per side, 0.05–0.4 mm). Clips are owned layout parts with the `design` role.
+The default clearance is a starting value; print one joint and adjust it.
+
 ### Gridfinity settings
 
 Set **Printer area** to size baseplate tiles for individual printing. The supplied

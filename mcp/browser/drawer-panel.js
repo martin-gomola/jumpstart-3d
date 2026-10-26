@@ -9,6 +9,7 @@ import { magnetControls } from "./magnet-controls.js";
 import { normalizeBinLimits } from "../shared/gridfinity-limits.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "../shared/drawer-spacers.js";
 import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "../shared/print-area.js";
+import { baseplateClipLayout } from "../shared/baseplate-clips.js";
 
 const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);
@@ -69,6 +70,10 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   advancedFloor.input.min = 0.8; advancedFloor.input.max = 6; advancedWall.input.min = 0.8; advancedWall.input.max = 4;
   const construction = el("details", { class: "drawer-advanced" }, el("summary", {}, "Advanced construction"), el("div", { class: "ai-template-fields" }, advancedFloor.label, advancedWall.label));
   construction.append(baseplateField);
+  const clipToggle = el("input", { id: "drawer-baseplate-clips", type: "checkbox" });
+  const clipNote = el("p", { class: "ai-template-note", role: "status", hidden: true });
+  construction.append(el("label", { class: "ai-template-field", for: clipToggle.id }, clipToggle, el("span", {}, "Join baseplate tiles with clips")), clipNote);
+  clipToggle.onchange = () => { if (busy) return; const next = copy(draft); next.baseplateClips = clipToggle.checked; commit(next); };
   const baseMagnets = magnetControls({ id: "drawer-baseplate-magnets", label: "Baseplate magnet pockets",
     onInput: () => { invalidate(); previewButton.disabled = true; },
     onChange: value => {
@@ -209,7 +214,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     };
   }
   title.onchange = () => { const next = copy(draft); next.name = title.value; commit(next); };
-  baseplate.onchange = () => { const next = copy(draft); next.includeBaseplate = baseplate.checked; if (!next.includeBaseplate) { next.baseplateMagnets = false; next.cornerSpacers = false; spacerToggle.checked = false; baseMagnets.set(false); } commit(next); };
+  baseplate.onchange = () => { const next = copy(draft); next.includeBaseplate = baseplate.checked; if (!next.includeBaseplate) { next.baseplateMagnets = false; next.baseplateClips = false; next.cornerSpacers = false; spacerToggle.checked = false; baseMagnets.set(false); } commit(next); };
   example.onclick = () => { const next = fresh(); Object.assign(next, { width: 336, depth: 252, height: 50, name: "Example drawer" }); selectedId = null; commit(next); syncFields(); announce("Example size loaded. Replace it with your own inside measurements."); };
 
   function renderInspector() {
@@ -369,6 +374,12 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
       catch (failure) { error = failure.message; spacerNote.textContent = failure.message; }
     }
     baseMagnets.setDisabled(busy || !draft.includeBaseplate);
+    clipToggle.checked = !!draft.baseplateClips; clipToggle.disabled = busy || !draft.includeBaseplate;
+    clipNote.hidden = !draft.baseplateClips;
+    if (draft.baseplateClips && validDimensions) {
+      try { const count = baseplateClipLayout(draft, m, baseplateTileLimits(draft.printArea, m)).clips.length; clipNote.textContent = count ? `${count} separate 2 × 16 mm clips press into slots under the tile joints. Test one joint before printing them all.` : "One baseplate tile covers the grid; no clips are needed."; }
+      catch (failure) { clipNote.textContent = failure.message; }
+    }
     carrierNote.hidden = !draft.baseplateMagnets;
     if (draft.baseplateMagnets) { const lift = magnetCarrierHeight(draft.baseplateMagnets); carrierNote.textContent = `Magnet carrier adds ${lift.toFixed(1)} mm. Baseplate height: ${(5 + lift).toFixed(1)} mm. Bin seating height is included in drawer-fit checks.`; }
     previewButton.classList.toggle("ai-template-primary", !cached && continueButton.hidden);

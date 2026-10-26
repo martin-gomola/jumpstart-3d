@@ -188,6 +188,13 @@ Follow-up from an over-engineering audit and agent-task benchmark; not a SOMA/te
       cradle recipe joins `mounts-and-assemblies.md`; printer profile, print pose and
       hardware holes move to `print-and-hardware.md`. A knob task now loads 2.5 k
       instead of 9.1 k characters of reference.
+- [x] Optional `drawerLayout.baseplateClips`: straight clips under baseplate tile joints,
+      in 2 mm deep slots cut from the bed side. Idea from
+      `ostat/gridfinity_extended_openscad` connector clips (GPL-3.0, commit 94d5a3e,
+      reviewed 2026-10-26); geometry implemented independently, no code copied. Checked
+      live: each slot removes 36.8 mm³ per tile, clips keep 0.15 mm to both tiles with
+      no overlap, all meshes single-component, with and without magnet carriers.
+      Physical clip fit is not yet test-printed.
 - [ ] Not yet addressed: ring (hollow) rectangle profile, fillet edge selection by
       predicate inside a plan, and a third benchmark round to measure these changes.
 

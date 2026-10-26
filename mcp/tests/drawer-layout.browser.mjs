@@ -432,6 +432,33 @@ test("an empty drawer can preview and add only baseplates and spacers, then save
   expect(errors).toEqual([]);
 });
 
+test("baseplate clips join split tiles from below and persist through apply, save and reopen", async ({ page }, info) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  await dimensions(page, 210, 210, 40);
+  await page.getByText("Advanced construction", { exact: true }).click();
+  await page.locator("#drawer-baseplate-clips").check();
+  await expect(page.getByRole("status").filter({ hasText: "6 separate 2 × 16 mm clips" })).toBeVisible();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Preview ready", { timeout: 90_000 });
+  await page.screenshot({ path: info.outputPath("baseplate-clips.png") });
+  await page.getByRole("button", { name: "Add layout to document", exact: true }).click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const applied = await tool("jumpstart_get_document", { editorId });
+  expect(applied.bodies.filter(body => body.baseplateClip)).toHaveLength(6);
+  expect(applied.bodies.filter(body => body.gridfinity?.clipSlots).map(body => body.gridfinity.clipSlots.length).sort()).toEqual([2, 3, 3, 4]);
+  expect(applied.drawerLayouts[0].definition.baseplateClips).toEqual({ clearance: 0.15 });
+  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
+  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
+  const reopened = await tool("jumpstart_get_document", { editorId });
+  expect(reopened.bodies.filter(body => body.baseplateClip)).toHaveLength(6);
+  expect(reopened.drawerLayouts[0].editable).toBe(true);
+  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.locator("#drawer-baseplate").uncheck();
+  await expect(page.locator("#drawer-baseplate-clips")).toBeDisabled();
+  await expect(page.locator("#drawer-baseplate-clips")).not.toBeChecked();
+  expect(errors).toEqual([]);
+});
+
 test("printer settings size baseplate tiles for the selected nozzle and preserve printer-fit metadata", async ({ page }, info) => {
   const errors = watchErrors(page), editorId = await openPlanner(page);
   await dimensions(page, 230, 695, 60);

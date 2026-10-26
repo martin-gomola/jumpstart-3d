@@ -28,6 +28,11 @@ Optional `baseplateMagnets` and per-bin `magnets` add magnet pockets. A magnetic
 baseplate raises bin seating by its pocket depth +0.8 mm; usable-height checks
 include this added carrier. Use the directly linked magnet guidance for sizes.
 
+When the grid splits into several baseplate tiles, `baseplateClips: true` adds
+separate straight clips that join neighbouring tiles from below; the bin-seating
+profile is unchanged. Clips do not reduce filament; offer them for alignment and
+holding tiles together, and recommend printing one joint to check clearance.
+
 Attach supported acceptance requirements, preview, and inspect the generated
 parts for dimensions, geometry errors and connected meshes. Distinguish a planned
 arrangement from printed drawer compatibility. Apply only the successful preview

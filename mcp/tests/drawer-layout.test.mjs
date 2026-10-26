@@ -100,6 +100,32 @@ test("corner spacers occupy only drawer margins and remain editable owned native
   assert.throws(() => compileMcpModel(edited, { operations: [{ ...input, replaceExisting: true }] }), /edited/);
 });
 
+test("baseplate clips join tile joints from below and stay owned, editable native parts", () => {
+  const input = layout({ width: 9 * 42, depth: 5 * 42, bins: [], baseplateClips: true });
+  const parts = drawerParts(input), clips = parts.filter(p => p.type === "baseplateClip");
+  assert.deepEqual(clips.map(c => [c.position[0], c.position[1], c.axis]), [[-21, -63, "x"], [-21, 21, "x"], [-21, 84, "y"], [147, -63, "x"], [147, 21, "x"], [147, 84, "y"], [-147, 63, "y"], [-63, 63, "y"], [21, 63, "y"], [105, 63, "y"], [168, 63, "x"]]);
+  assert.deepEqual([clips[0].width, clips[0].length, clips[0].height, clips[0].clearance], [2, 15.7, 1.85, 0.15]);
+  const tile = parts.find(p => p.id === "baseplate-0-0");
+  assert.deepEqual(tile.clipSlots.map(s => [s.x, s.y, s.axis, s.width, s.length, s.depth]), [[84, -42, "x", 2.3, 16, 2], [84, 42, "x", 2.3, 16, 2], [-42, 84, "y", 2.3, 16, 2], [42, 84, "y", 2.3, 16, 2]]);
+  assert.equal(drawerParts(layout({ width: 4 * 42, depth: 4 * 42, bins: [], baseplateClips: true })).some(p => p.type === "baseplateClip"), false);
+  assert.deepEqual(normalizeDrawerLayout(layout({ baseplateClips: { clearance: 0.2 } })).baseplateClips, { clearance: 0.2 });
+  for (const baseplateClips of [{ clearance: 0 }, { clearance: 1 }, { size: 10 }, "yes"]) assert.throws(() => normalizeDrawerLayout(layout({ baseplateClips })));
+  assert.throws(() => normalizeDrawerLayout(layout({ includeBaseplate: false, baseplateClips: true })), /clips require/);
+  const compiled = compileMcpModel(doc(), { operations: [input] }).document;
+  const clipBodies = compiled.bodies.filter(body => body.mcpBaseplateClip);
+  assert.equal(clipBodies.length, 11);
+  assert.deepEqual(clipBodies[0].node.p, { w: 15.7, d: 2, h: 1.85, r: 0, c: 0 });
+  const slotted = compiled.bodies.find(body => body.mcpDrawerLayout?.partId === "baseplate-0-0");
+  assert.equal(slotted.node.mods.find(mod => mod.src === "clipSlots").tool.children.length, 4);
+  assert.equal(slotted.mcpGridfinity.clipSlots.length, 4);
+  assert.equal(summarizeDrawerLayouts(compiled)[0].editable, true);
+  const revised = compileMcpModel(compiled, { operations: [{ ...input, replaceExisting: true, baseplateClips: false }] }).document;
+  assert.equal(revised.bodies.filter(body => body.mcpBaseplateClip).length, 0);
+  assert.equal(revised.bodies.some(body => body.node.mods?.some(mod => mod.src === "clipSlots")), false);
+  const edited = structuredClone(compiled); edited.bodies.find(body => body.mcpBaseplateClip).node.p.h += 1;
+  assert.equal(summarizeDrawerLayouts(edited)[0].editable, false);
+});
+
 test("spacer options reject unprintably thin gaps, oversized legs and invalid dimensions; exact fits need no stops", () => {
   for (const cornerSpacers of [{ clearance: -1 }, { height: 0 }, { legLength: 100 }, { arbitrary: 1 }, { clearance: Infinity }]) assert.throws(() => normalizeDrawerLayout(layout({ cornerSpacers })));
   assert.throws(() => normalizeDrawerLayout(layout({ cornerSpacers: true, includeBaseplate: false })), /baseplate/);

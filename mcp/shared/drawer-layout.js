@@ -1,6 +1,7 @@
 import { normalizeOpenSides, normalizeCloseGaps, binFootprint, rotateOpenSides, binTotalHeight } from "./gridfinity-walls.js";
 import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "./print-area.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "./drawer-spacers.js";
+import { normalizeBaseplateClips, baseplateClipLayout } from "./baseplate-clips.js";
 import { GRIDFINITY_LIMITS, normalizeBinLimits } from "./gridfinity-limits.js";
 // Drawer planning uses grid cells; the native Gridfinity generator owns interface geometry.
 import { normalizeMagnetPockets, magnetCarrierHeight } from "./gridfinity-magnets.js";
@@ -62,7 +63,7 @@ export function firstDrawerSpace(drawer, columns = 1, rows = 1, ignoreId) {
   return null;
 }
 export function normalizeDrawerLayout(raw) {
-  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "baseplateMagnets", "floor", "wall", "bins", "replaceExisting", "binLimits", "cornerSpacers", "printArea"], "plan");
+  object(raw, ["type", "id", "layoutId", "name", "width", "depth", "height", "includeBaseplate", "baseplateMagnets", "baseplateClips", "floor", "wall", "bins", "replaceExisting", "binLimits", "cornerSpacers", "printArea"], "plan");
   if (raw.type !== "drawerLayout") fail("type must be drawerLayout");
   const id = text(raw.id, "id"), layoutId = text(raw.layoutId, "layoutId", id);
   if (!/^[a-zA-Z0-9_-]+$/.test(layoutId)) fail("layoutId must use letters, numbers, underscores or hyphens");
@@ -70,9 +71,10 @@ export function normalizeDrawerLayout(raw) {
   const height = number(raw.height, 14, 10000, "usable height");
   for (const key of ["includeBaseplate", "replaceExisting"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") fail(`${key} must be a boolean`);
   const result = { type: "drawerLayout", id, layoutId, name: text(raw.name, "name", "Drawer layout"), width, depth, height,
-    includeBaseplate: raw.includeBaseplate !== false, baseplateMagnets: normalizeMagnetPockets(raw.baseplateMagnets, "baseplateMagnets"), replaceExisting: raw.replaceExisting === true,
+    includeBaseplate: raw.includeBaseplate !== false, baseplateMagnets: normalizeMagnetPockets(raw.baseplateMagnets, "baseplateMagnets"), baseplateClips: normalizeBaseplateClips(raw.baseplateClips), replaceExisting: raw.replaceExisting === true,
     printArea: normalizePrintArea(raw.printArea), cornerSpacers: normalizeCornerSpacers(raw.cornerSpacers), binLimits: normalizeBinLimits(raw.binLimits), floor: number(raw.floor ?? 2, 0.8, 6, "floor"), wall: number(raw.wall ?? 1.2, 0.8, 4, "wall"), bins: [] };
   if (result.baseplateMagnets && !result.includeBaseplate) fail("baseplate magnet pockets require matching baseplates");
+  if (result.baseplateClips && !result.includeBaseplate) fail("baseplate clips require matching baseplates");
   if (!Array.isArray(raw.bins) || raw.bins.length > DRAWER_LIMITS.bins) fail(`use between 0 and ${DRAWER_LIMITS.bins} bins`);
   if (!raw.bins.length && !result.includeBaseplate) fail("Enable matching baseplates or add a bin before previewing.");
   const ids = new Set();
@@ -111,10 +113,12 @@ export function drawerParts(raw) {
   for (const bin of drawer.bins) parts.push(part(bin.id, bin.kind, bin.x, bin.y, bin.columns, bin.rows,
     { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, openSides: bin.openSides, closeGaps: bin.closeGaps, dividers: bin.dividers, magnets: bin.magnets }));
   const tile = drawer.includeBaseplate ? baseplateTileLimits(drawer.printArea, m) : { columns: 4, rows: 4 };
+  const clips = baseplateClipLayout(drawer, m, tile);
   if (drawer.includeBaseplate) for (let y = 0; y < m.rows; y += tile.rows) for (let x = 0; x < m.columns; x += tile.columns) {
-    parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(tile.columns, m.columns - x), Math.min(tile.rows, m.rows - y), { name: `Baseplate ${x / tile.columns + 1}, ${y / tile.rows + 1}`, magnets: drawer.baseplateMagnets }));
+    const clipSlots = clips.slots.get(`baseplate-${x}-${y}`);
+    parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(tile.columns, m.columns - x), Math.min(tile.rows, m.rows - y), { name: `Baseplate ${x / tile.columns + 1}, ${y / tile.rows + 1}`, magnets: drawer.baseplateMagnets, ...(clipSlots ? { clipSlots } : {}) }));
   }
-  parts.push(...cornerSpacerParts(drawer, m));
+  parts.push(...clips.clips, ...cornerSpacerParts(drawer, m));
   if (new Set(parts.map(part => part.id)).size !== parts.length) fail("Bin ids conflict with generated baseplate or spacer ids; rename the bin id.");
   return parts;
 }

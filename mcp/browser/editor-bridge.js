@@ -70,6 +70,7 @@ function bodyInfo(body, app, includeGeometry = false, options = {}) {
     ...(body.mcpDrawerLayout ? { drawerLayout: { layoutId: body.mcpDrawerLayout.layoutId, partId: body.mcpDrawerLayout.partId } } : {}),
     ...(body.mcpGridfinity ? { gridfinity: Object.fromEntries(Object.entries(clone(body.mcpGridfinity)).filter(([key]) => !["nodeSignature", "sketchSignatures"].includes(key))) } : {}),
     ...(body.mcpDrawerSpacer ? { drawerSpacer: Object.fromEntries(Object.entries(clone(body.mcpDrawerSpacer)).filter(([key]) => key !== "sketchSignatures")) } : {}),
+    ...(body.mcpBaseplateClip ? { baseplateClip: Object.fromEntries(Object.entries(clone(body.mcpBaseplateClip)).filter(([key]) => key !== "sketchSignatures")) } : {}),
     ...(body.mcpPrintFit ? { printFit: (() => {
       if (!size || view?.pending || !body.mcpDrawerLayout?.definition?.printArea) return { configured: true, status: "unknown", source: "current bounds" };
       try { return { ...checkPrintFit(body.mcpDrawerLayout.definition.printArea, size.x, size.y, size.z, body.name), status: "passed", source: "current bounds" }; }

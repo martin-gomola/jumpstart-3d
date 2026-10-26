@@ -1,3 +1,4 @@
+import { protectedRegionSchema, editIntentSchema } from "./edit-contracts.js";
 import { previewPairSchema } from "./pairs.js";
 // The same bounded acceptance contract is validated by the broker and browser.
 const id = { type: "string", minLength: 1, maxLength: 120 };
@@ -14,6 +15,8 @@ export const geometryCheckSchema = { oneOf: [
     expected: { ...object({ count: { type: "integer", minimum: 1, maximum: 24 }, width: positive, depth: positive, floor: positive, spacing: positive, symmetric: { type: "boolean" }, openEnds: { type: "boolean" } }, []), minProperties: 1 } }, ["id", "kind", "axis", "crossAt", "expected"]),
 ] };
 export const requirementsSchema = { description: "Acceptance contract for this preview. All attached checks must pass before apply; resubmit requirements on later revisions.", ...object({
+  intent: editIntentSchema,
+  preserveRegions: { type: "array", minItems: 1, maxItems: 8, items: protectedRegionSchema, description: "Compare baseline and candidate native material inside world AABB regions. Defaults to zero permitted changed volume. Failed or unknown blocks apply." },
   pairs: { type: "array", minItems: 1, maxItems: 8, items: previewPairSchema, description: "Native/STEP body pairs measured within this preview; each pair needs a clearance and/or overlap requirement." },
   bodyCount: { type: "integer", minimum: 0, maximum: 128, description: "Total candidate document bodies, including hidden bodies and hole tools." },
   preserveBodyIds: { type: "array", minItems: 1, maxItems: 128, items: id, description: "Existing bodies whose source definitions, resolved geometry inputs, and placements must remain unchanged. This is not an exact solid-volume comparison." },

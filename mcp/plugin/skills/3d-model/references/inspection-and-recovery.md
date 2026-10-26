@@ -1,5 +1,13 @@
 # Inspection, acceptance and recovery
 
+## Contents
+
+- Attach acceptance requirements
+- Review the proposed change
+- Preview, inspect, then apply
+- Save and hand off
+- Failure recovery
+
 ## Attach acceptance requirements
 
 Before building, write a short checklist: required dimensions and orientation,
@@ -95,3 +103,10 @@ Do not lower a required count, remove a fit requirement, or increase tolerances
 merely to turn a failed check into a pass. Return to the earliest incorrect
 assumption or feature and preview again. Report unsupported measurements as
 unverified, not passed.
+
+
+For edits within one body, use `requirements.intent` and native
+`preserveRegions` rather than treating equal volume or bounds as preservation.
+The [existing-part workflow](edit-existing-parts.md) defines the supported world
+AABB masks and before/after detail views. Keep region comparisons and physical
+fit conclusions separate. Unknown regional checks cannot permit apply.

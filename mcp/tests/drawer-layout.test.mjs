@@ -125,3 +125,32 @@ test("baseplate-only layouts support optional spacers and remain editable withou
   assert.throws(() => normalizeDrawerLayout({ ...base, includeBaseplate: false }), /baseplates or add a bin/);
   assert.throws(() => normalizeDrawerLayout({ ...base, includeBaseplate: false, cornerSpacers: true }), /baseplates/);
 });
+
+test("drawer rotation preserves parts, height and matching openings through four turns", async () => {
+  const { rotateDrawerLayout } = await import("../shared/drawer-layout.js");
+  const input = normalizeDrawerLayout(layout({ width: 230, depth: 695, height: 60, binLimits: { columns: 3, rows: 5 }, bins: [
+    bin("main", { x: 0, y: 1, columns: 2, rows: 4, dividers: { x: 1, y: 2 }, openSides: ["back"], lip: true }),
+    bin("extension", { x: 0, y: 5, columns: 2, rows: 1, openSides: ["front"] }),
+  ] }));
+  const snapshot = structuredClone(input), next = rotateDrawerLayout(input);
+  assert.deepEqual(input, snapshot);
+  assert.deepEqual([next.width, next.depth, next.height], [695, 230, 60]);
+  assert.deepEqual(next.binLimits, { columns: 5, rows: 3 });
+  assert.deepEqual(next.bins.map(b => [b.id, b.x, b.y, b.columns, b.rows, b.openSides]), [
+    ["main", 1, 3, 4, 2, ["right"]], ["extension", 5, 3, 1, 2, ["left"]],
+  ]);
+  assert.deepEqual(next.bins[0].dividers, { x: 2, y: 1 });
+  assert.equal(drawerMetrics(next).occupied, drawerMetrics(input).occupied);
+  assert.deepEqual(rotateDrawerLayout(rotateDrawerLayout(rotateDrawerLayout(next))), input);
+});
+
+test("empty drawer dimensions can be swapped before height is entered; invalid dimensions do not mutate the draft", async () => {
+  const { rotateDrawerLayout } = await import("../shared/drawer-layout.js");
+  const input = layout({ width: 230, depth: 695, height: 0, bins: [] });
+  const next = rotateDrawerLayout(input);
+  assert.deepEqual([next.width, next.depth, next.height], [695, 230, 0]);
+  for (const width of [0, NaN, Infinity, 882]) {
+    const invalid = { ...input, width }, snapshot = structuredClone(invalid);
+    assert.throws(() => rotateDrawerLayout(invalid)); assert.deepEqual(invalid, snapshot);
+  }
+});

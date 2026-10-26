@@ -1,4 +1,4 @@
-version: 4
+version: 5
 status: not-run
 baseline:
   source: "Observed spacer workflow and MCP workflow-polish work; not a controlled no-skill trial."
@@ -289,3 +289,29 @@ cases:
     expect:
       - "Clarifies the interface and process, distinguishes per-side from total clearance, and proposes an agreed small fit coupon."
       - "Keeps assumptions named and editable and does not claim a universal FDM clearance."
+
+  - id: native-feature-edit-routing
+    prompt: "Move this existing hole while preserving the mounting interface and other parts."
+    expect:
+      - "Reads editing context, current revision and geometry fingerprint; loads edit-existing-parts."
+      - "Prefers a bound parameter when available; otherwise uses an observed supported feature id."
+      - "Declares target intent and derives preserved regions from measured interfaces."
+      - "Independently probes old/new locations and inspects the final applied geometry."
+    fail_if:
+      - "Changes application code or arbitrary document JSON to perform an ordinary model edit."
+  - id: equal-volume-is-not-preservation
+    prompt: "Make a local change but keep this mating region exactly unchanged."
+    expect:
+      - "Uses native material-set region comparisons and does not substitute total volume equality."
+      - "Does not apply when a required region query is unknown or failed."
+  - id: baked-curve-is-not-a-feature
+    prompt: "Remove this corner rounding from the existing model."
+    setup: "The rounding is baked into a profile; there is no removable fillet id."
+    expect:
+      - "Inspects representation and supported edit context rather than inventing a fillet feature."
+      - "Reports the capability gap or proposes an explicitly scoped supported reconstruction."
+  - id: local-detail-and-context
+    prompt: "Edit a small interface without changing the rest of this large part."
+    expect:
+      - "Reviews complete context and before/after detail in the same world-space region."
+      - "Does not infer interface quality from whole-body minimum distance or a cropped image alone."

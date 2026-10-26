@@ -1,9 +1,9 @@
 import { el } from "../../src/util.js";
-import { BIN_SIDES, rotateOpenSides, binTotalHeight } from "../shared/gridfinity-walls.js";
+import { BIN_SIDES, rotateOpenSides, binFootprint, binTotalHeight } from "../shared/gridfinity-walls.js";
 import { wallControls } from "./wall-controls.js";
 import { iconLabel } from "./pictograms.js";
 import { dimensionGuide } from "./dimension-guide.js";
-import { drawerMetrics, normalizeDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../shared/drawer-layout.js";
+import { drawerMetrics, normalizeDrawerLayout, rotateDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../shared/drawer-layout.js";
 import { normalizeMagnetPockets, magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
 import { magnetControls } from "./magnet-controls.js";
 import { normalizeBinLimits } from "../shared/gridfinity-limits.js";
@@ -33,7 +33,9 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   const title = el("input", { id: "drawer-name", type: "text", maxlength: 80, value: draft.name });
   const nameLabel = el("label", { class: "ai-template-field", for: "drawer-name" }, el("span", {}, "Drawer name"), title);
   const width = field("width", "Inside width (mm)"), depth = field("depth", "Inside depth (mm)"), height = field("height", "Usable height (mm)");
-  const measurements = el("div", { class: "ai-template-fields" }, width.label, depth.label, height.label);
+  const swapDimensions = iconLabel(el("button", { id: "drawer-swap-dimensions", type: "button", class: "drawer-swap-dimensions", disabled: true,
+    title: "Swap width and depth, rotating the drawer and its bins 90° clockwise. Usable height stays the same." }, "Swap width & depth"), "rotate");
+  const measurements = el("div", { class: "ai-template-fields" }, width.label, depth.label, height.label, swapDimensions);
   const example = el("button", { type: "button", class: "drawer-example" }, "Try a 336 × 252 mm example");
   const fit = el("p", { id: "drawer-fit", class: "ai-template-note", "aria-live": "polite" });
   const spacerToggle = el("input", { id: "drawer-corner-spacers", type: "checkbox" });
@@ -106,6 +108,10 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   const review = el("div", { class: "ai-template-review drawer-review" }, progress,
     el("div", { class: "drawer-view-toolbar" }, el("div", { class: "ai-template-shapes", role: "group", "aria-label": "Drawer view" }, layoutTab, imageTab), binActions, el("div", { class: "ai-template-actions" }, undoButton, redoButton)), layoutView, imageArea);
   root.append(settingsShell, review);
+  const updateHeaderInset = header => settings.style.setProperty("--drawer-inspector-height", `${header.getBoundingClientRect().height}px`);
+  const headerResize = new ResizeObserver(entries => {
+    for (const entry of entries) if (entry.target.isConnected) updateHeaderInset(entry.target);
+  });
 
   function setView(next) {
     view = next;
@@ -145,6 +151,12 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     commit(next); return true;
   }
   function perform(action) { if (busy) return; try { action(); } catch (error) { announce(error.message, true); } }
+  swapDimensions.onclick = () => perform(() => {
+    if (gesture) return;
+    const open = measureDetails.open;
+    commit(rotateDrawerLayout(draft), "Width and depth swapped. Layout rotated 90° clockwise; usable height is unchanged.");
+    syncFields(); measureDetails.open = open; setView("layout");
+  });
   function addPart(rect) {
     if (draft.bins.length >= DRAWER_LIMITS.bins) throw new Error("This layout supports up to 16 bins.");
     const error = placementError(draft, rect); if (error) throw new Error(error);
@@ -156,11 +168,16 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     addPart({ ...space, columns: size, rows: size });
   });
   fill.onclick = () => perform(() => { const next = fillDrawerGaps(draft, nextBin); if (next.bins.length === draft.bins.length) return announce("The drawer grid is full."); selectedId = next.bins.at(-1).id; commit(next); revealInspector(); });
-  undoButton.onclick = () => { if (!undo.length || busy) return; redo.push(copy(draft)); draft = undo.pop(); selectedId = null; invalidate(); syncFields(); render(); announce("Layout change undone."); };
-  redoButton.onclick = () => { if (!redo.length || busy) return; undo.push(copy(draft)); draft = redo.pop(); selectedId = null; invalidate(); syncFields(); render(); announce("Layout change restored."); };
+  // Reordering the measurements or rebuilding a bin inspector can blur its control.
+  function restoreHistoryFocus(active) {
+    const target = root.contains(active) && active.getClientRects().length && !active.disabled ? active : undoButton.disabled ? redoButton : undoButton;
+    if (!target.disabled) target.focus({ preventScroll: true });
+  }
+  undoButton.onclick = () => { if (!undo.length || busy) return; const active = document.activeElement; redo.push(copy(draft)); draft = undo.pop(); selectedId = null; invalidate(); syncFields(); render(); restoreHistoryFocus(active); announce("Layout change undone."); };
+  redoButton.onclick = () => { if (!redo.length || busy) return; const active = document.activeElement; undo.push(copy(draft)); draft = redo.pop(); selectedId = null; invalidate(); syncFields(); render(); restoreHistoryFocus(active); announce("Layout change restored."); };
   root.addEventListener("keydown", event => {
     if (event.key === "Escape") return;
-    const typing = ["INPUT", "TEXTAREA"].includes(event.target.tagName);
+    const typing = event.target.tagName === "TEXTAREA" || event.target.tagName === "INPUT" && !["checkbox", "radio"].includes(event.target.type);
     if ((event.ctrlKey || event.metaKey) && !typing && ["z", "y"].includes(event.key.toLowerCase())) {
       event.preventDefault();
       if (event.key.toLowerCase() === "y" || event.shiftKey) redoButton.onclick(); else undoButton.onclick();
@@ -196,6 +213,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
   example.onclick = () => { const next = fresh(); Object.assign(next, { width: 336, depth: 252, height: 50, name: "Example drawer" }); selectedId = null; commit(next); syncFields(); announce("Example size loaded. Replace it with your own inside measurements."); };
 
   function renderInspector() {
+    headerResize.disconnect(); settings.style.removeProperty("--drawer-inspector-height");
     const active = document.activeElement;
     const focus = inspector.contains(active) ? { id: active.id, label: active.getAttribute("aria-label"), text: active.textContent, group: active.closest('[role="group"]')?.getAttribute("aria-label") } : null;
     const moreOpen = inspector.dataset.selectedBinId === selectedId && inspector.querySelector("details.drawer-advanced")?.open;
@@ -216,16 +234,17 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     const stepper = (key, title, mm) => {
       const minus = el("button", { type: "button", "aria-label": `Decrease ${title.toLowerCase()}`, disabled: busy || bin[key] <= 1 }, "−");
       let printable = true;
-      try { checkPrintFit(draft.printArea, (bin.columns + (key === "columns" ? 1 : 0)) * 42 - 0.5, (bin.rows + (key === "rows" ? 1 : 0)) * 42 - 0.5, binTotalHeight({ ...bin, floor: draft.floor }), bin.label); } catch { printable = false; }
+      const expanded = binFootprint({ ...bin, [key]: bin[key] + 1 });
+      try { checkPrintFit(draft.printArea, expanded.width, expanded.depth, binTotalHeight({ ...bin, floor: draft.floor }), bin.label); } catch { printable = false; }
       const plus = el("button", { type: "button", "aria-label": `Increase ${title.toLowerCase()}`, disabled: busy || !printable || bin[key] >= normalizeBinLimits(draft.binLimits)[key] }, "+");
       minus.onclick = () => updateBin({ [key]: bin[key] - 1 }); plus.onclick = () => updateBin({ [key]: bin[key] + 1 });
-      return el("div", { class: "drawer-stepper" }, el("span", {}, title), el("div", {}, minus, el("output", {}, `${bin[key]} cells`), plus), el("small", {}, `${mm.toFixed(1)} mm`));
+      return el("div", { class: "drawer-stepper" }, el("span", {}, title), el("div", {}, minus, el("output", {}, `${bin[key]} cells`), plus), el("small", {}, `${mm} mm`));
     };
-    inspector.append(el("div", { class: "ai-template-fields" }, stepper("columns", "Width", bin.columns * 42 - 0.5), stepper("rows", "Depth", bin.rows * 42 - 0.5)));
+    inspector.append(el("div", { class: "ai-template-fields" }, stepper("columns", "Width", binFootprint(bin).width), stepper("rows", "Depth", binFootprint(bin).depth)));
     const kinds = el("div", { class: "ai-template-shapes", role: "group", "aria-label": "Part type" });
     for (const [kind, text] of [["bin", "Storage bin"], ["insert", "Insert blank"]]) {
       const button = el("button", { type: "button", disabled: busy, "aria-pressed": String(bin.kind === kind) }, text);
-      button.onclick = () => updateBin({ kind, ...(kind === "insert" ? { dividers: { x: 0, y: 0 }, lip: false, openSides: [] } : {}) }); kinds.append(button);
+      button.onclick = () => updateBin({ kind, ...(kind === "insert" ? { dividers: { x: 0, y: 0 }, lip: false, openSides: [], closeGaps: false } : {}) }); kinds.append(button);
     }
     inspector.append(el("span", {}, "Height"));
     const heights = el("div", { class: "ai-template-shapes", role: "group", "aria-label": "Bin height" });
@@ -237,7 +256,16 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     }
     inspector.append(heights);
     if (bin.kind === "bin") {
-      const walls = wallControls({ value: bin.openSides, onChange: openSides => { if (!updateBin({ openSides })) render(); } });
+      const stackingNote = el("p", { id: "drawer-bin-stacking-note", class: "ai-template-note" },
+        bin.openSides?.length === 4 ? "All sides are open, so no stacking rim remains." : bin.lip
+          ? `The rim adds 4.4 mm. Total bin height: ${binTotalHeight({ ...bin, floor: draft.floor }).toFixed(1)} mm. Check the complete stack against the drawer height.`
+          : "Adds a 4.4 mm rim to support another Gridfinity bin.");
+      const stackable = el("input", { id: "drawer-bin-stackable", type: "checkbox", checked: bin.lip, disabled: busy, "aria-describedby": stackingNote.id });
+      stackable.onchange = () => { if (!updateBin({ lip: stackable.checked })) render(); };
+      inspector.append(el("div", { class: "ai-template-group" }, el("label", { class: "ai-template-field", for: stackable.id }, stackable, el("span", {}, "Stackable rim")), stackingNote));
+      const walls = wallControls({ id: "drawer-close-gaps", value: bin.openSides, closeGaps: bin.closeGaps,
+        onChange: (openSides, closeGaps) => { if (!updateBin({ openSides, closeGaps })) render(); },
+        onCloseGaps: closeGaps => { if (!updateBin({ closeGaps })) render(); } });
       walls.setDisabled(busy); walls.element.querySelector("h4").remove();
       const names = (bin.openSides || []).map(side => side[0].toUpperCase() + side.slice(1));
       inspector.append(el("details", { class: "drawer-wall-options", open: wallsOpen ?? names.length > 0 }, iconLabel(el("summary", {}, names.length ? `Open sides: ${names.join(", ")}` : "Open sides"), "shell"), walls.element));
@@ -270,6 +298,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     const allMagnets = el("button", { type: "button", disabled: busy || !bin.magnets }, "Use this magnet fit in all bins");
     allMagnets.onclick = () => { const next = copy(draft); next.bins.forEach(part => { part.magnets = copy(bin.magnets); }); commit(next, "Magnet pockets enabled for all current bins."); };
     inspector.append(el("details", { class: "drawer-advanced", open: moreOpen || null }, el("summary", {}, "More bin options"), kinds, binMagnets.element, allMagnets));
+    updateHeaderInset(inspectorHeader); headerResize.observe(inspectorHeader);
     if (focus) {
       const target = focus.id ? document.getElementById(focus.id) : [...inspector.querySelectorAll("button")].find(button =>
         focus.label ? button.getAttribute("aria-label") === focus.label : button.textContent === focus.text && button.closest('[role="group"]')?.getAttribute("aria-label") === focus.group);
@@ -291,6 +320,8 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
       const openSides = bin.openSides || [];
       for (const side of BIN_SIDES) button.dataset[`open${side[0].toUpperCase() + side.slice(1)}`] = String(openSides.includes(side));
       button.dataset.openSides = String(openSides.length > 0);
+      button.dataset.closeGaps = String(bin.closeGaps === true);
+      if (bin.closeGaps) { button.title += ". Flush joining ends"; button.setAttribute("aria-label", `${button.getAttribute("aria-label")} Flush joining ends.`); }
       if (openSides.length) {
         button.title += `. Open sides: ${openSides.join(", ")}.`;
         button.setAttribute("aria-label", `${button.getAttribute("aria-label")} Open sides: ${openSides.join(", ")}.`);
@@ -344,6 +375,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
     previewButton.disabled = busy || !!error || !baseMagnets.valid() || !!draft.cornerSpacers && ![...spacerFields.querySelectorAll("input")].every(input => input.validity.valid); previewButton.title = error || "";
     addBin.disabled = busy || !validDimensions || draft.bins.length >= 16; fill.disabled = busy || !validDimensions;
     undoButton.disabled = busy || !undo.length; redoButton.disabled = busy || !redo.length;
+    swapDimensions.disabled = busy || !!gesture || ![draft.width, draft.depth].every(value => Number.isFinite(value) && value >= 42 && value <= 881.99);
     const supplied = [draft.width, draft.depth, draft.height].every(value => Number.isFinite(value) && value > 0);
     if ((draft.bins.length || supplied) && error) announce(error, true);
     renderInspector(); renderBoard();
@@ -453,7 +485,7 @@ export function initDrawerPanel({ root, request, subscribe, onBusy, createPrevie
       if (draft.bins.some(bin => bin.columns > limits.columns || bin.rows > limits.rows)) throw new Error("Existing bins exceed these limits. Resize or remove them, or start a new drawer first.");
       const next = copy(draft); next.binLimits = limits; next.printArea = normalizePrintArea(printArea);
       if (next.includeBaseplate) baseplateTileLimits(next.printArea);
-      for (const bin of next.bins) checkPrintFit(next.printArea, bin.columns * 42 - 0.5, bin.rows * 42 - 0.5, bin.kind === "bin" ? binTotalHeight({ ...bin, floor: next.floor }) : bin.heightUnits * 7, bin.label);
+      for (const bin of next.bins) checkPrintFit(next.printArea, binFootprint(bin).width, binFootprint(bin).depth, bin.kind === "bin" ? binTotalHeight({ ...bin, floor: next.floor }) : bin.heightUnits * 7, bin.label);
       if (ready() && (next.bins.length || next.includeBaseplate)) normalizeDrawerLayout(next);
       commit(next, "Settings updated. Preview again before applying."); preferredBinLimits = copy(limits); preferredPrintArea = copy(next.printArea);
       try { localStorage.setItem("jumpstart.gridfinity.binLimits", JSON.stringify(limits)); localStorage.setItem("jumpstart.gridfinity.printArea", JSON.stringify(next.printArea)); return "Settings saved for this drawer and new drawers in this browser."; }

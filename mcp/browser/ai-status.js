@@ -55,6 +55,7 @@ const ACTIONS = {
   inspect_geometry: ["reading", "Inspecting geometry", "AI read"],
   select_geometry: ["reading", "Selecting geometry", "AI read"],
   preview_model: ["previewing", "Previewing model", "AI preview"],
+  preview_feature_edit: ["previewing", "Previewing feature edit", "AI preview"],
   preview_parameters: ["previewing", "Previewing changes", "AI preview"],
   preview_resize_body: ["previewing", "Previewing resize", "AI preview"],
   preview_new_document: ["previewing", "Preparing document", "AI preview"],

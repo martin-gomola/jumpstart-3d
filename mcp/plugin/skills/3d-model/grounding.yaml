@@ -133,3 +133,16 @@ rules:
     skillFile: references/fit-and-print-checks.md
     sources: [preview-requirements, pair-contract]
     locator: "Immutable cached acceptance result and apply gate"
+
+  - instruction: "Equal total volume or bounds alone cannot establish preservation."
+    skillFile: references/edit-existing-parts.md
+    sources: [native-region-diff]
+    locator: "Added and removed native material in protected AABBs"
+  - instruction: "Hole positions are body-local millimetres"
+    skillFile: references/edit-existing-parts.md
+    sources: [native-feature-edit]
+    locator: "Targeted native hole position and placement matrix readback"
+  - instruction: "The recorder cannot infer LLM tokens or hidden reasoning."
+    skillFile: references/edit-existing-parts.md
+    sources: [agent-trace]
+    locator: "Observable named tool requests, results and timing only"

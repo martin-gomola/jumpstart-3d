@@ -1,3 +1,6 @@
+import { featureEditContext, compileFeatureEdit } from "./feature-edit.js";
+import { inspectProtectedRegions } from "./region-inspection.js";
+import { validateRegionBox } from "../shared/edit-contracts.js";
 import { inspectNativePairs } from "./pair-inspection.js";
 import { bodyRole, selectExportBodies } from "../../src/bodyRoles.js";
 import { evaluatePairChecks, validatePairThresholds } from "../shared/pairs.js";
@@ -74,6 +77,8 @@ function bodyInfo(body, app, includeGeometry = false, options = {}) {
     })() } : {}),
     ...(body.mcpPockets ? { pockets: clone(body.mcpPockets) } : {}),
     feature: body.node?.t ?? "unknown",
+    ...(includeGeometry ? {placementMatrix:body.m.slice(),geometryFingerprint:fingerprint({node:resolveNode(body.node,store.view),matrix:body.m}),geometryState:view?.pending?"building":app.scene.errors.has(body.id)?"failed":view?.data?"ready":"missing"} : {}),
+    ...(includeGeometry ? { editing: featureEditContext(store.view,body) } : {}),
     ...(body.turned ? { turned: clone(body.turned) } : {}),
     ...(body.mcpLathe ? { latheRecipe: clone(body.mcpLathe.plan), latheSampling: clone(body.mcpLathe.sampling) } : {}),
     ...(body.mcpPhoneCradle ? { phoneCradle: clone(body.mcpPhoneCradle) } : {}),
@@ -139,7 +144,7 @@ function documentSummary(app, editorId, revision, includeGeometry = false, optio
     editorId,
     revision,
     document: { id: doc.id, name: doc.name, mode: doc.mode ?? app.mode },
-    units: getUnit(),
+    units: "mm", displayUnits: getUnit(),
     nativeParameters: (doc.params || []).slice(0, 256).map((parameter) => ({
       id: String(parameter.id || "").slice(0, 120), name: String(parameter.name || "").slice(0, 120),
       expression: String(parameter.expr || "").slice(0, 2000), unit: String(parameter.unit || "mm").slice(0, 30),
@@ -287,7 +292,7 @@ function imageDataUrl(app, box, coordinateFrame = {}) {
   return canvas.toDataURL("image/jpeg", 0.78);
 }
 
-function previewImages(app, box, section, coordinateFrame = { description: "World axes", orientation: "+X / +Y / +Z" }, bodyIds) {
+function previewImages(app, box, section, coordinateFrame = { description: "World axes", orientation: "+X / +Y / +Z" }, bodyIds, detail, phase) {
   const vp = app.vp;
   const visibleBodies = new Set(bodyIds);
   const visibility = new Map([...app.scene.views.values()].map(view => [view.group, view.group.visible]));
@@ -303,22 +308,23 @@ function previewImages(app, box, section, coordinateFrame = { description: "Worl
       const view = app.scene.views.get(body.id);
       if (view?.mesh) { view.applyStyle(body, { ...app.scene.styleFor(body), selected: false, hovered: false, tool: false, edgesStrong: true }); view.setFaceStates(new Map()); }
     }
-    const views = [ ["top", "top"], ["side", "front"], ["isometric", "home"] ];
+    const views = detail ? [["isometric","home"],["detail","home"]] : [ ["top", "top"], ["side", "front"], ["isometric", "home"] ];
     if (section) views.push(["section", section.axis === "X" ? "right" : section.axis === "Y" ? "front" : "top"]);
     for (const [name, view] of views) {
       try {
-        vp.setView(view, box);
+        const frameBox = name === "detail" ? box.clone().set(box.min.clone().fromArray(detail.min),box.max.clone().fromArray(detail.max)) : box;
+        vp.setView(view, frameBox);
         Object.assign(vp.view, vp.anim.to); vp.anim = null;
         vp.view.target = vp.view.target.clone();
-        const framing = fitPreviewCamera(vp, box);
+        const framing = fitPreviewCamera(vp, frameBox);
         if (name === "section") {
           if (!app.section) throw new Error("Native section rendering is unavailable");
           const n = [0, 0, 0]; n[["X", "Y", "Z"].indexOf(section.axis)] = section.axis === "Y" ? -1 : 1;
           const o = [0, 0, 0]; o[["X", "Y", "Z"].indexOf(section.axis)] = section.offset;
           app.section.set({ ref: { n, o }, d: 0, flip: section.flip === true, hatch: true });
         }
-        const viewDirection = name === "top" ? "Camera from +Z toward -Z" : name === "side" ? "Camera from -Y toward +Y" : name === "isometric" ? "Home isometric view" : `Section from ${section.axis}`;
-        images.push({ view: name, viewDirection, framing, projection: "orthographic", coordinateFrame, ...(name === "section" ? { section } : {}), dataUrl: imageDataUrl(app, box, coordinateFrame) });
+        const viewDirection = name === "top" ? "Camera from +Z toward -Z" : name === "side" ? "Camera from -Y toward +Y" : name === "isometric" ? "Home isometric view" : name === "detail" ? "Detail in the fixed world-space region" : `Section from ${section.axis}`;
+        images.push({ view: name, ...(phase?{phase}:{}), ...(name==="detail"?{focusRegion:detail}:{}), viewDirection, framing, projection: "orthographic", coordinateFrame, ...(name === "section" ? { section } : {}), dataUrl: imageDataUrl(app, frameBox, coordinateFrame) });
       } catch (error) { imageErrors.push({ view: name, error: error.message }); }
     }
   } finally {
@@ -399,7 +405,10 @@ export function initMcp(app) {
 
   async function previewCompiled(compiled, plan, includeImage, section, extra = {}) {
     const baseSnapshot = currentRevision();
-    const { requirements, ...metadata } = extra;
+    const { requirements, detail: requestedDetail, ...metadata } = extra;
+    const detail = requestedDetail || (!section ? requirements?.intent?.changeRegion : undefined);
+    if (detail) validateRegionBox(detail);
+    if (detail && section) throw new Error("Choose a detail comparison or section images in one preview, within the four-image budget");
     validateRequirements(requirements);
     const signatures = (document) => {
       const assets = new Map(Object.entries(document.assets || {}).map(([id, asset]) => [id, fingerprint(asset)]));
@@ -410,8 +419,15 @@ export function initMcp(app) {
         return [body.id, fingerprint({ body, resolved, sketches, assets: references })];
       }));
     };
+    const beforeNative = new Map(store.doc.bodies.map(body=>[body.id,{node:resolveNode(body.node,store.doc),m:body.m.slice()}]));
     const beforeSignatures = signatures(store.doc);
     const beforeBodies = new Map(store.doc.bodies.map((body) => [body.id, bodyInfo(body, app)]));
+    let beforeImages;
+    if (includeImage && detail) {
+      const ids=compiled.affectedBodyIds.filter(id=>store.doc.bodies.some(b=>b.id===id));
+      const box=app.scene.allBox(b=>ids.includes(b.id));
+      if (ids.length && !box.isEmpty()) beforeImages=previewImages(app,box,undefined,undefined,ids,detail,"before");
+    }
     let ownedPreview;
     const setCompiledPreview = () => {
       const previewDocument = clone(compiled.document);
@@ -428,7 +444,7 @@ export function initMcp(app) {
       if (store.preview !== ownedPreview || app.command || app.sketcher.active) throw new Error("Another editor command replaced the MCP preview; finish it and retry");
     };
     try {
-      const requirementTargets = [...(requirements?.bodies || []).map(({ target }) => target), ...(requirements?.pairs || []).flatMap(({ a, b }) => [a, b])];
+      const requirementTargets = [...(requirements?.bodies || []).map(({ target }) => target), ...(requirements?.pairs || []).flatMap(({ a, b }) => [a, b]), ...(requirements?.preserveRegions || []).map(r=>r.bodyId), ...(requirements?.intent?.targetBodyIds || [])];
       const requirementBodyIds = requirementTargets.flatMap((target) => {
         const bodyId = compiled.featureBodyIds?.[target] ?? target;
         return typeof bodyId === "string" && compiled.document.bodies.some((body) => body.id === bodyId) ? [bodyId] : [];
@@ -496,7 +512,12 @@ export function initMcp(app) {
         const phoneCradle = compiled.document.bodies.find((body) => body.mcpPhoneCradle)?.mcpPhoneCradle;
         const coordinateFrame = phoneCradle?.coordinateFrame || { description: "X across · Y depth · Z up", orientation: "+X / +Y / +Z" };
         if (phoneCradle) result.phoneCradle = clone(phoneCradle);
-        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, section, coordinateFrame, compiled.affectedBodyIds));
+        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, section, coordinateFrame, compiled.affectedBodyIds,detail,detail?"after":undefined));
+        if (beforeImages) {
+          result.images = [...beforeImages.images,...(result.images || [])];
+          result.imageErrors = [...beforeImages.imageErrors,...(result.imageErrors || [])];
+          result.comparison = {region:detail,views:"overview and identical world-space detail framing before/after"};
+        }
         const geometries = new Map(results.map(({ body, view }) => [body.id, {
           nativeBody: { node: resolveNode(body.node, compiled.document), m: body.m.slice() },
           mesh: { vertices: view.data.vertices, triangles: view.data.triangles, matrix: Array.from(view.group.matrix.elements) },
@@ -516,8 +537,9 @@ export function initMcp(app) {
         if (bytes > 32 * 1024 * 1024) throw new Error("Preview geometry exceeds the 32 MiB inspection cache budget");
         if (result.valid) {
           const pairResults = requirements?.pairs ? await inspectNativePairs(requirements.pairs, geometries, compiled.featureBodyIds, app.kernel) : [];
+          const regionResults = await inspectProtectedRegions(requirements?.preserveRegions || [],beforeNative,geometries,app.kernel,requirements?.intent);
           assertOwned();
-          const acceptance = evaluateRequirements(requirements, { document: compiled.document, featureBodyIds: compiled.featureBodyIds, geometries, beforeSignatures, afterSignatures, pairResults });
+          const acceptance = evaluateRequirements(requirements, { document: compiled.document, featureBodyIds: compiled.featureBodyIds, geometries, beforeSignatures, afterSignatures, pairResults, regionResults });
           if (acceptance) {
             result.acceptance = acceptance;
             result.validation.geometricRequirements = acceptance.status;
@@ -578,20 +600,20 @@ export function initMcp(app) {
     return document;
   }
 
-  async function previewModel(rawPlan, includeImage = true, replaceBodyIds = [], section, expectedRevision, importAssets = [], requirements) {
+  async function previewModel(rawPlan, includeImage = true, replaceBodyIds = [], section, expectedRevision, importAssets = [], requirements, detail) {
     assertIdle(); checkRevision(expectedRevision);
     const sourceDocument = await prepareImportDocument(rawPlan, importAssets);
     const compiled = compileMcpModel(sourceDocument, rawPlan, replaceBodyIds);
-    return previewCompiled(compiled, compiled.plan, includeImage, section, { requirements });
+    return previewCompiled(compiled, compiled.plan, includeImage, section, { requirements, detail });
   }
 
   async function previewParameters(p) {
     assertIdle(); checkRevision(p.expectedRevision);
     const compiled = reviseMcpParameters(store.doc, p.modelId, p.values);
-    return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
+    return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements, detail:p.detail });
   }
 
-  async function previewResizeBody(bodyId, size, anchor = "base", includeImage = true, section, expectedRevision, requirements) {
+  async function previewResizeBody(bodyId, size, anchor = "base", includeImage = true, section, expectedRevision, requirements, detail) {
     assertIdle(); checkRevision(expectedRevision);
     const body = store.doc.bodies.find((entry) => entry.id === bodyId);
     if (!body) throw new Error("Body does not exist in the current document");
@@ -600,7 +622,7 @@ export function initMcp(app) {
     // Resizing a generated model directly invalidates its saved template ownership.
     edit.document.mcpModels = (edit.document.mcpModels || []).filter((model) => !model.bodyIds.includes(bodyId));
     const compiled = { document: edit.document, createdBodyIds: [bodyId], featureBodyIds: { [bodyId]: bodyId }, affectedBodyIds: [bodyId] };
-    return previewCompiled(compiled, { name: `Resize ${body.name}`.slice(0, 80), mode: store.doc.mode }, includeImage, section, { bodyId, anchor, requestedLocalDimensionsMm: { ...size }, factors: edit.factors, requirements });
+    return previewCompiled(compiled, { name: `Resize ${body.name}`.slice(0, 80), mode: store.doc.mode }, includeImage, section, { bodyId, anchor, requestedLocalDimensionsMm: { ...size }, factors: edit.factors, requirements, detail });
   }
 
   function inspectionSource(p) {
@@ -683,22 +705,22 @@ export function initMcp(app) {
       case "preview_native_model": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = createNativeParametricModel(store.doc, p.plan);
-        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
+        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements, detail:p.detail });
       }
       case "preview_native_parameters": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = reviseNativeParameters(store.doc, { values: p.values });
-        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
+        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements, detail:p.detail });
       }
       case "preview_frame": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = compileFramePlan(store.doc, p.plan);
-        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements });
+        return previewCompiled(compiled, compiled.plan, p.includeImage !== false, p.section, { requirements: p.requirements, detail:p.detail });
       }
       case "preview_lathe": {
         assertIdle(); checkRevision(p.expectedRevision);
         const compiled = compileLathePlan({ document: store.doc, plan: p.plan, bodyId: p.bodyId });
-        return previewCompiled(compiled, { ...compiled.plan, mode: store.doc.mode }, p.includeImage !== false, p.section, { warnings: compiled.warnings, requirements: p.requirements });
+        return previewCompiled(compiled, { ...compiled.plan, mode: store.doc.mode }, p.includeImage !== false, p.section, { warnings: compiled.warnings, requirements: p.requirements, detail:p.detail });
       }
       case "list_editors": return { editors: [{ editorId, documentId: store.doc.id, documentName: store.doc.name, mode: app.mode, bodyCount: store.doc.bodies.length, focused: document.visibilityState === "visible" && document.hasFocus() }] };
       case "get_document": return documentSummary(app, editorId, currentRevision(), p.includeGeometry === true, p);
@@ -707,9 +729,18 @@ export function initMcp(app) {
         const document = newDoc(p.name || "Untitled", p.mode || "beginner");
         return previewCompiled({ document, createdBodyIds: [], affectedBodyIds: [], featureBodyIds: {} }, { name: document.name, mode: document.mode }, false, undefined, { newDocument: { id: document.id, name: document.name, mode: document.mode }, replacesDocument: store.doc.id, requirements: p.requirements });
       }
-      case "preview_model": return previewModel(p.plan, p.includeImage !== false, p.replaceBodyIds || [], p.section, p.expectedRevision, p.importAssets || [], p.requirements);
-      case "preview_resize_body": return previewResizeBody(p.bodyId, p.size, p.anchor || "base", p.includeImage !== false, p.section, p.expectedRevision, p.requirements);
+      case "preview_model": return previewModel(p.plan, p.includeImage !== false, p.replaceBodyIds || [], p.section, p.expectedRevision, p.importAssets || [], p.requirements,p.detail);
+      case "preview_resize_body": return previewResizeBody(p.bodyId, p.size, p.anchor || "base", p.includeImage !== false, p.section, p.expectedRevision, p.requirements,p.detail);
       case "preview_parameters": return previewParameters(p);
+      case "preview_feature_edit": {
+        assertIdle(); checkRevision(p.expectedRevision);
+        const body=store.doc.bodies.find(b=>b.id===p.edit.bodyId);
+        if (body && (!app.scene.views.get(body.id)?.data || app.scene.views.get(body.id)?.pending || app.scene.errors.has(body.id))) throw new Error("Wait for valid current geometry before a feature edit");
+        if (!body || bodyInfo(body,app,true,{includeSelectors:false,includeFeatureTree:false}).geometryFingerprint !== p.expectedFingerprint) throw new Error("Feature geometry fingerprint changed; reread the body before editing");
+        if (!p.requirements?.intent || p.requirements.intent.targetBodyIds.length !== 1 || p.requirements.intent.targetBodyIds[0] !== p.edit.bodyId) throw new Error("Feature edit requires an explicit intent for its single target body");
+        const compiled=compileFeatureEdit(store.doc,p.edit);
+        return previewCompiled(compiled,{name:`Edit ${body.name}`.slice(0,80),mode:store.doc.mode},p.includeImage!==false,p.section,{requirements:p.requirements,featureEdit:compiled.edit,detail:p.detail});
+      }
       case "inspect_geometry": {
         if (p.againstBodyId && !p.expectedRevision) throw new Error("expectedRevision is required for pair inspection");
         if (p.pairChecks && !p.againstBodyId) throw new Error("pairChecks require againstBodyId");

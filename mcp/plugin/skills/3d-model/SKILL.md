@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.8.0"
+  version: "1.9.0"
 ---
 
 # Model a part in JumpStart
@@ -23,7 +23,8 @@ copy the entire tool catalog into working notes.
 | Gridfinity inserts, bins, baseplates, measured cutouts and item-source research for those models | [Gridfinity](references/gridfinity.md) |
 | Frames, trays, brackets, hooks, knobs, turned parts, parameter models | [Household parts](references/household-parts.md) |
 | Phone holders, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
-| STL/3MF/STEP imports, resizing or existing-part edits | [Imported parts](references/imported-parts.md) |
+| Existing native part, feature or interface edits | [Edit existing parts](references/edit-existing-parts.md) |
+| STL/3MF/STEP imports and resizing | [Imported parts](references/imported-parts.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |
 | Clearances, mating parts, manufacturing assumptions, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
@@ -37,7 +38,7 @@ copy the entire tool catalog into working notes.
    `jumpstart_get_capabilities({includeSchemas:false})`. Request `toolNames` and
    `operationTypes` only for the tools and plan operations the task needs.
    Use current tool schemas rather than guessing fields or relying on a copied catalog.
-3. For edits, read selected `bodyIds` with `includeGeometry:true`. Turn off
+3. For edits, use the target’s `editing` context to choose parameters, a supported native feature edit or a new operation. Read [Edit existing parts](references/edit-existing-parts.md) for local edits and preservation contracts. Read selected `bodyIds` with `includeGeometry:true`. Turn off
    `includeSelectors`, `includeFeatureTree`, or `includeSketches` when not needed.
    Use MCP geometry for dimensions; use available localhost screenshots for
    visual context, particularly mating sides, slope, and camera orientation.

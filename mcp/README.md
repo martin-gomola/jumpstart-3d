@@ -1201,10 +1201,108 @@ For an item about 280 mm long, plan at least seven cells overall. A 5-cell main
 bin and a 2-cell extension span 293.5 mm externally; confirm the item's width and
 clearance as well. A 5+1 arrangement is only 251.5 mm externally. Each bin must
 fit the selected printer separately. The parts sit next to each other, with the
-normal seam between Gridfinity parts; no interlocking connector is generated.
+normal seam between Gridfinity parts unless flush joins are enabled; no interlocking connector is generated.
 
 Typed `gridfinity` operations and bins inside `drawerLayout` accept
 `openSides: ["right"]` (allowed values: `left`, `right`, `front`, `back`). These
 are local XY sides; left/right are -X/+X and front/back are -Y/+Y. Omission keeps
 all walls closed. Openings are bin-only and persist in editable native plans.
 Preview and inspect the generated parts before applying or exporting them.
+
+
+Use `closeGaps: true` with open-sided bins for flush joining ends. Enable it on
+both neighbours. Corners touching an open side become square and each open
+edge extends by 0.25 mm to its grid boundary, continuing straight down to the
+foot tops at Z=4.75 mm. There is no separate rounded ledge beneath the joint.
+The standard feet below that plane remain unchanged. Walls and dividers end on the joining
+plane. Closed corners stay rounded. Per-part printer checks use the enlarged
+upper-body footprint. The option is off by default and requires a bin with an
+open side. Clearing the last opening clears the option in the UI. There is no
+mechanical connector; printed fit still requires calibration.
+
+
+## General native editing and agent evidence
+
+Read a focused body with geometry before editing. `geometryState` must be ready;
+`editing` lists native feature ids, supported numeric fields and a preferred
+parameter, generator or feature-edit route. `jumpstart_preview_feature_edit`
+requires the current revision and geometry fingerprint plus an explicit
+single-body `requirements.intent`. It supports update/remove on known top-level
+fillet, chamfer, offset, shell and hole modifiers; `$base` supports distance on a
+one-sided extrusion. A single hole position is body-local. Bound/generator-owned
+models, variable-radius sets, imported/mesh nodes and linked dependents are
+rejected instead of being silently detached. Unknown topology needs rediscovery.
+
+An edit contract can include:
+
+```json
+{
+  "intent": { "goal": "Extend only the upper feature", "targetBodyIds": ["existing-part"],
+    "changeRegion": { "min": [-20,-15,10], "max": [20,15,20] } },
+  "preserveBodyIds": ["unrelated-part"],
+  "preserveRegions": [{ "id": "mount", "bodyId": "existing-part",
+    "box": { "min": [-20,-15,0], "max": [20,15,3] } }]
+}
+```
+
+These are synthetic world-mm bounds, not universal protected heights. The intent
+rejects changes to other bodies. A change region additionally compares native
+material outside the box. Protected regions compare material inside their box.
+The native worker measures baseline, candidate and common material, reporting
+added/removed/symmetric-difference volume. Equal total volume is insufficient.
+Empty/disconnected clipped material is supported; source bodies initially must
+be valid single native/STEP solids within the existing face/query budget.
+At most eight region comparisons, including outside-region checks, are allowed.
+Protected-region ids reserve the `outside:` prefix for automatic intent checks.
+The default permitted changed volume is zero with a numerical tolerance of
+0.000001 mm3. This does not certify surface tolerances or physical fit. Failed,
+missing and unknown required results block apply. Revision/idempotency/undo
+contracts and source preservation remain unchanged.
+
+Optional `detail` is a world AABB on preview tools. Existing-body edits return
+four images: overview and fixed-region detail before/after. New geometry returns
+candidate overview/detail. It is mutually exclusive with section images in that
+request; both respect the four-image budget and restore camera/section state.
+Overview fits each phase's complete affected bodies; detail framing is identical.
+
+Set `JUMPSTART_MCP_TRACE=1` in `.env` before `make up`, or in the native server
+environment, for automatic recording of normal MCP calls. Defaults stay off.
+Receipts and preview PNG/JPEG artifacts go only to managed
+`exports/agent-traces/`. Limits are 1000 calls and 32 MiB per server session,
+with a 1 MiB JSON record cap. Credentials, home paths and binary payloads are
+redacted/separated. A recording error is reported by compact capability
+`telemetry` as incomplete and must not turn an applied edit into a failed tool
+response. Recording does not collect chain-of-thought or infer model settings.
+Delete local receipts when no longer needed. No remote upload is added.
+
+```sh
+npm run benchmark:agent -- tasks
+npm run benchmark:trace -- exports/agent-traces/SESSION.jsonl
+npm run benchmark:trace -- exports/agent-traces/SESSION.jsonl edit-move-hole
+```
+
+The second form summarizes observable calls, failures, durations and serialized
+internal input/result bytes, not LLM tokens or network wire bytes. The third
+also grades a generic edit task using observed baseline/candidate/undo readbacks,
+acceptance checks, independent samples and an actual targeted STL file whose
+ids, byte count and digest match its recorded export. Initial setup calls before
+the observed task baseline are excluded from its task metrics. Missing evidence
+fails. Trace pairing completeness describes recorded calls, not a guarantee that
+an interrupted or incomplete recorder observed every later client action.
+
+The catalog adds moving an existing hole, shell thickness, fillet radius,
+protected mounting interfaces, feature removal and rejection of a floor breach.
+Task definitions contain requests and invariants, not prepared solution plans.
+Controlled trials need operator-recorded model/client configuration and identical
+starting documents. Scripted integration runs prove the tools and grader work;
+they are not empirical general-CAD agent success rates. Skill behavior evals
+remain `not-run` until such trials are actually performed.
+
+When a trace includes more than one target document/editor, grading refuses an
+ambiguous baseline. Pass its exact observed call sequence as the final CLI
+argument; keep one controlled task per run for comparable measurements.
+
+Geometry readback now separates fixed MCP `units: "mm"` from editor
+`displayUnits`, and includes a body placement matrix plus a top-level geometry
+fingerprint when geometry is requested. Numeric feature edits can use compact
+`editing` values while omitting the full feature tree and selector arrays.

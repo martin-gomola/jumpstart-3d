@@ -66,7 +66,7 @@ choosing a CAD mode closes the AI workspace.
   and show spare space per side. Example measurements must be explicitly chosen and labelled.
 - Draw and move bins directly on the grid, with keyboard and stepper alternatives.
   Reject overlap and out-of-bounds placement; keep the previous valid arrangement.
-- Reveal only the selected bin's name, footprint and height initially. Keep
+- Reveal the selected bin's name, footprint, height and Stackable rim option initially. Keep
   compartment choices in their disclosure, opening it for configured dividers. Put
   construction settings under Advanced. Show physical millimetres alongside cells.
 - Selecting a bin collapses drawer measurements and reveals the inspector near the
@@ -186,3 +186,49 @@ CAM, Voxel and CosForge before applying MCP mutations.
 The React boundary and staged rollout are recorded in
 [REACT-WORKSPACE-PLAN.md](REACT-WORKSPACE-PLAN.md). Keep the original document,
 workers and native CAD controllers while the maker workspace is ported.
+
+
+## Drawer orientation
+
+The measurement fields include a neutral **Swap width & depth** action. It rotates
+an entire drawer draft 90 degrees clockwise, keeping usable height unchanged.
+Bin positions, dimensions, dividers, open sides and directional size limits rotate
+together. IDs and other construction options stay intact. The action works before
+height is entered for an empty drawer, preserves existing bins, creates one local
+undo step and invalidates the previous preview. Applying the rotated model still
+requires a new inspected preview and explicit Add to document.
+
+Undo/Redo preserve focus across measurement and inspector reordering. If the
+previous control disappears, focus moves to an available layout history action.
+
+
+## Drawer stacking rims
+
+Selected storage bins expose **Stackable rim** directly below height. Use the
+existing native lip geometry and height validation, with local undo and preview
+invalidation. The note reports the extra 4.4 mm and actual bin height; the complete
+stack must still be checked against the drawer. Opening all sides removes every
+rim, which the note states explicitly. Insert blanks do not expose this option.
+
+The desktop settings scroller reserves the measured sticky bin-header height so
+keyboard-focused controls remain visible even when the header wraps.
+
+
+## Flush joins for open-sided bins
+
+Open sides includes **Close gaps on open sides** in both drawer and single-part
+creation. Preserve the standard rounded geometry by default for existing models.
+The opt-in mode squares only corners touching an opening and extends each open
+edge by 0.25 mm to the cell boundary, straight down to the foot tops at Z=4.75
+mm. Remove the rounded ledge previously retained between that plane and Z=7.
+Enable on both neighbours. Keep the feet below Z=4.75 unchanged; preserve rounded
+closed corners, magnet placement, dividers, stacking and layout ownership. Report actual
+enlarged dimensions and enforce their printer envelope. Clearing the last open
+side clears and disables the option. Preview changes remain explicit and undoable.
+
+## Preview dimension summary
+
+Group each measured axis label with its value in a compact definition-list pair.
+Use Width (X), Depth (Y) and Height (Z), with stronger tabular numbers. Keep the
+summary at its intrinsic width and let pairs wrap on narrow screens or enlarged
+text. Preserve the numeric value and its millimetre unit together.

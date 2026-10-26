@@ -53,7 +53,7 @@ SOFTWARE.
 import { findRegions, resolveSketch } from "../../src/regions.js";
 import { normalizeMagnetPockets, magnetCarrierHeight, magnetCenters, MAGNET_CARRIER_FLOOR } from "../shared/gridfinity-magnets.js";
 
-import { normalizeOpenSides, binTotalHeight } from "../shared/gridfinity-walls.js";
+import { normalizeOpenSides, normalizeCloseGaps, binFootprint, binTotalHeight } from "../shared/gridfinity-walls.js";
 import { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";
 export { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";
 const IDENTITY = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
@@ -82,7 +82,7 @@ function triple(value, label, min, max) {
 
 export function normalizeGridfinity(raw, label = "operation") {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail(`${label} must be an object`);
-  const allowed = new Set(["id", "type", "name", "kind", "columns", "rows", "heightUnits", "floor", "wall", "lip", "openSides", "dividers", "magnets", "position", "rotation"]);
+  const allowed = new Set(["id", "type", "name", "kind", "columns", "rows", "heightUnits", "floor", "wall", "lip", "openSides", "closeGaps", "dividers", "magnets", "position", "rotation"]);
   for (const key of Object.keys(raw)) if (!allowed.has(key)) fail(`${label}.${key} is not supported`);
   if (raw.type !== "gridfinity") fail(`${label}.type must be gridfinity`);
   const kind = raw.kind ?? "insert";
@@ -96,6 +96,7 @@ export function normalizeGridfinity(raw, label = "operation") {
   if (raw.lip !== undefined && typeof raw.lip !== "boolean") fail(`${label}.lip must be a boolean`);
   const lip = raw.lip === true;
   const openSides = normalizeOpenSides(raw.openSides, `${label}.openSides`);
+  const closeGaps = normalizeCloseGaps(raw.closeGaps, openSides, kind);
   if (kind !== "bin" && openSides.length) fail(`${label}: open sides are only supported for bins`);
   const dividers = raw.dividers ?? {};
   if (!dividers || typeof dividers !== "object" || Array.isArray(dividers) || Object.keys(dividers).some(key => !["x", "y"].includes(key))) fail(`${label}.dividers must contain only x and y counts`);
@@ -104,42 +105,51 @@ export function normalizeGridfinity(raw, label = "operation") {
   if (kind !== "bin" && (lip || x || y)) fail(`${label}: stacking lip and dividers are only supported for bins`);
   if (kind === "baseplate" && (raw.heightUnits !== undefined && heightUnits !== 3 || raw.floor !== undefined && floor !== 2 || raw.wall !== undefined && wall !== 1.2)) fail(`${label}: baseplate height is fixed at 5 mm; bin height, floor and wall overrides are unsupported`);
   if (kind === "bin" && heightUnits * 7 - 7 - floor < 1) fail(`${label}: floor leaves less than 1 mm of usable bin depth`);
-  return { type: "gridfinity", id: text(raw.id, `${label}.id`), name: text(raw.name, `${label}.name`, `Gridfinity ${kind}`), kind, columns, rows, heightUnits, floor, wall, lip, openSides, dividers: { x, y }, magnets: normalizeMagnetPockets(raw.magnets, `${label}.magnets`), position: triple(raw.position, `${label}.position`, -10000, 10000), rotation: triple(raw.rotation, `${label}.rotation`, -360, 360) };
+  return { type: "gridfinity", id: text(raw.id, `${label}.id`), name: text(raw.name, `${label}.name`, `Gridfinity ${kind}`), kind, columns, rows, heightUnits, floor, wall, lip, openSides, closeGaps, dividers: { x, y }, magnets: normalizeMagnetPockets(raw.magnets, `${label}.magnets`), position: triple(raw.position, `${label}.position`, -10000, 10000), rotation: triple(raw.rotation, `${label}.rotation`, -360, 360) };
 }
 
 export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
   const op = normalizeGridfinity(operation);
   const width = op.columns * 42 - (op.kind === "baseplate" ? 0 : 0.5);
   const depth = op.rows * 42 - (op.kind === "baseplate" ? 0 : 0.5);
+  const footprint = binFootprint(op);
   const carrierHeight = op.kind === "baseplate" ? magnetCarrierHeight(op.magnets) : 0;
   const topZ = op.kind === "baseplate" ? 5 + carrierHeight : op.heightUnits * 7;
+  const lipBottom = topZ-3.8;
+  // Shared by the rim solid and flush opening tools: z, inward offset, radius.
+  const rimProfile = [[lipBottom-0.01,op.wall,Math.max(0,3.75-op.wall)],
+    [topZ-1.2,2.6,1.15],[topZ,2.6,1.15],[topZ+0.7,1.9,1.85],
+    [topZ+2.5,1.9,1.85],[topZ+4.4,0,3.75],[topZ+4.42,0,3.75]];
   const seq = nextSeq || (() => ++document.seq);
   const child = (node, x = 0, y = 0, z = 0, hole = false) => {
     const m = IDENTITY.slice(); m[12] = x; m[13] = y; m[14] = z;
     return { node: structuredClone(node), m, hole };
   };
   const group = children => ({ t: "group", children, mods: [] });
-  const roundedSketch = (name, w, d, radius, z) => {
-    const sketch = { id: idFactory("s"), name, seq: seq(), plane: { o: [0,0,z], x: [1,0,0], n: [0,0,1] }, pts: [], ents: [], hidden: true };
+  const roundedSketch = (name, w, d, radius, z, flush = false, center = [0,0]) => {
+    const sketch = { id: idFactory("s"), name, seq: seq(), plane: { o: [center[0],center[1],z], x: [1,0,0], n: [0,0,1] }, pts: [], ents: [], hidden: true };
     const point = xy => {
       const existing = sketch.pts.find(p => Math.hypot(p.x - xy[0], p.y - xy[1]) < 1e-8);
       if (existing) return existing.id;
       const id = idFactory("p"); sketch.pts.push({ id, x: xy[0], y: xy[1] }); return id;
     };
     const line = (a, b) => sketch.ents.push({ id: idFactory("e"), t: "line", a: point(a), b: point(b) });
-    const [l,r,b,t] = [-w/2,w/2,-d/2,d/2];
+    const extend = side => flush && op.openSides.includes(side) ? 0.25 : 0;
+    const [l,r,b,t] = [-w/2-extend("left"),w/2+extend("right"),-d/2-extend("front"),d/2+extend("back")];
     if (radius <= 1e-8) {
       const corners = [[l,b],[r,b],[r,t],[l,t]];
       corners.forEach((corner, i) => line(corner, corners[(i+1)%4]));
     } else {
+      const cornerRadius = (a, b) => flush && (op.openSides.includes(a) || op.openSides.includes(b)) ? 0 : radius;
+      const br = cornerRadius("right", "front"), tr = cornerRadius("right", "back"), tl = cornerRadius("left", "back"), bl = cornerRadius("left", "front");
       const corners = [
-        { a: [r-radius,b], b: [r,b+radius], c: [r-radius,b+radius] },
-        { a: [r,t-radius], b: [r-radius,t], c: [r-radius,t-radius] },
-        { a: [l+radius,t], b: [l,t-radius], c: [l+radius,t-radius] },
-        { a: [l,b+radius], b: [l+radius,b], c: [l+radius,b+radius] },
+        { radius: br, a: [r-br,b], b: [r,b+br], c: [r-br,b+br] },
+        { radius: tr, a: [r,t-tr], b: [r-tr,t], c: [r-tr,t-tr] },
+        { radius: tl, a: [l+tl,t], b: [l,t-tl], c: [l+tl,t-tl] },
+        { radius: bl, a: [l,b+bl], b: [l+bl,b], c: [l+bl,b+bl] },
       ];
       corners.forEach((corner, i) => {
-        sketch.ents.push({ id: idFactory("e"), t: "arc", a: point(corner.a), b: point(corner.b), c: point(corner.c) });
+        if (corner.radius > 1e-8) sketch.ents.push({ id: idFactory("e"), t: "arc", a: point(corner.a), b: point(corner.b), c: point(corner.c) });
         line(corner.b, corners[(i+1)%4].a);
       });
     }
@@ -148,8 +158,8 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
     document.sketches.push(sketch);
     return { sketch: sketch.id, ref: { key: sketch.ents.map(entity => entity.id).sort().join(","), pt: [0,0] } };
   };
-  const extrude = (name, w, d, radius, z, height) => {
-    const ref = roundedSketch(name, w, d, radius, z);
+  const extrude = (name, w, d, radius, z, height, flush = false) => {
+    const ref = roundedSketch(name, w, d, radius, z, flush);
     return { t: "extrude", sketch: ref.sketch, profiles: [ref.ref], dist: height, mode: "one", dist2: 0, mods: [] };
   };
   const loft = sections => ({ t: "loft", sections, rail: null, ruled: true, closed: false, mods: [] });
@@ -175,9 +185,10 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
   } else {
     const sections = [[0,35.6,0.8],[0.8,37.2,1.6],[2.6,37.2,1.6],[4.75,41.5,3.75]].map(([z,w,r]) => roundedSketch(`Foot at ${z} mm`, w, w, r, z));
     const foot = loft(sections);
-    const outer = extrude("Outer body", width, depth, 3.75, 4.75, topZ-4.75);
+    // Carry squared open ends down to the feet instead of leaving a rounded ledge at Z=7.
+    const outer = extrude("Outer body", width, depth, 3.75, 4.75, topZ-4.75, op.closeGaps);
     if (op.kind === "bin") {
-      const cavity = extrude("Bin cavity", width-2*op.wall, depth-2*op.wall, Math.max(0,3.75-op.wall), 7+op.floor, topZ-(7+op.floor)+0.02);
+      const cavity = extrude("Bin cavity", width-2*op.wall, depth-2*op.wall, Math.max(0,3.75-op.wall), 7+op.floor, topZ-(7+op.floor)+0.02, op.closeGaps);
       outer.mods.push({ id: idFactory("f"), seq: seq(), t: "bool", op: "cut", tool: cavity, m: IDENTITY.slice() });
     }
     const solids = [...repeated(foot), child(outer)];
@@ -185,22 +196,20 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
       const h = topZ-7-op.floor;
       const box = (w,d) => ({ t: "prim", kind: "box", p: { w,d,h,r:0,c:0 }, mods: [] });
       for (let i = 1; i <= op.dividers.x; i++) {
-        const divider = child(box(op.wall,depth-2*op.wall+0.02), -width/2+op.wall+(width-2*op.wall)*i/(op.dividers.x+1), 0, 7+op.floor-0.01);
+        const lo = op.closeGaps && op.openSides.includes("front") ? footprint.minY : -depth/2+op.wall-0.01;
+        const hi = op.closeGaps && op.openSides.includes("back") ? footprint.maxY : depth/2-op.wall+0.01;
+        const divider = child(box(op.wall, op.closeGaps ? hi-lo : depth-2*op.wall+0.02), -width/2+op.wall+(width-2*op.wall)*i/(op.dividers.x+1), op.closeGaps ? (lo+hi)/2 : 0, 7+op.floor-0.01);
         solids.push(divider); dividerNodes.add(divider);
       }
       for (let i = 1; i <= op.dividers.y; i++) {
-        const divider = child(box(width-2*op.wall+0.02,op.wall), 0, -depth/2+op.wall+(depth-2*op.wall)*i/(op.dividers.y+1), 7+op.floor-0.01);
+        const lo = op.closeGaps && op.openSides.includes("left") ? footprint.minX : -width/2+op.wall-0.01;
+        const hi = op.closeGaps && op.openSides.includes("right") ? footprint.maxX : width/2-op.wall+0.01;
+        const divider = child(box(op.closeGaps ? hi-lo : width-2*op.wall+0.02,op.wall), op.closeGaps ? (lo+hi)/2 : 0, -depth/2+op.wall+(depth-2*op.wall)*i/(op.dividers.y+1), 7+op.floor-0.01);
         solids.push(divider); dividerNodes.add(divider);
       }
       if (op.lip) {
-        const lower = topZ-3.8;
-        const lipOuter = extrude("Stacking lip outside", width,depth,3.75, lower, 8.2);
-        const innerSections = [
-          [lower-0.01,width-2*op.wall,depth-2*op.wall,Math.max(0,3.75-op.wall)],
-          [topZ-1.2,width-5.2,depth-5.2,1.15], [topZ,width-5.2,depth-5.2,1.15],
-          [topZ+0.7,width-3.8,depth-3.8,1.85], [topZ+2.5,width-3.8,depth-3.8,1.85],
-          [topZ+4.4,width,depth,3.75], [topZ+4.42,width,depth,3.75],
-        ].map(([z,w,d,r]) => roundedSketch(`Stacking lip inside at ${z} mm`, w,d,r,z));
+        const lipOuter = extrude("Stacking lip outside", width,depth,3.75, lipBottom, 8.2, op.closeGaps);
+        const innerSections = rimProfile.map(([z,inset,r]) => roundedSketch(`Stacking lip inside at ${z} mm`, width-2*inset,depth-2*inset,r,z,op.closeGaps));
         lipOuter.mods.push({ id:idFactory("f"),seq:seq(),t:"bool",op:"cut",tool:loft(innerSections),m:IDENTITY.slice() });
         solids.push(child(lipOuter));
       }
@@ -211,13 +220,34 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
     // Clear the opening and shared open corners without trimming closed neighbouring walls.
     const inset = Math.max(op.wall, 3.75), bottom = 7 + op.floor;
     const height = topZ + (op.lip ? 4.4 : 0) - bottom + 0.02;
-    const minX = -width / 2 + (op.openSides.includes("left") ? -0.02 : op.wall), maxX = width / 2 - (op.openSides.includes("right") ? -0.02 : op.wall);
-    const minY = -depth / 2 + (op.openSides.includes("front") ? -0.02 : op.wall), maxY = depth / 2 - (op.openSides.includes("back") ? -0.02 : op.wall);
-    const cutters = op.openSides.map(side => {
+    const cutters = op.openSides.flatMap(side => {
       const acrossX = side === "left" || side === "right";
-      const cutter = { t: "prim", kind: "box", p: { w: acrossX ? inset + 0.02 : maxX - minX, d: acrossX ? maxY - minY : inset + 0.02, h: height, r: 0, c: 0 }, mods: [] };
       const direction = side === "left" || side === "front" ? -1 : 1;
-      return child(cutter, acrossX ? direction * (width / 2 - inset / 2) : (minX + maxX) / 2, acrossX ? (minY + maxY) / 2 : direction * (depth / 2 - inset / 2), bottom);
+      const opening = margin => {
+        const loX = footprint.minX + (op.openSides.includes("left") ? -0.02 : margin), hiX = footprint.maxX - (op.openSides.includes("right") ? -0.02 : margin);
+        const loY = footprint.minY + (op.openSides.includes("front") ? -0.02 : margin), hiY = footprint.maxY - (op.openSides.includes("back") ? -0.02 : margin);
+        return { w: acrossX ? inset+0.02 : hiX-loX, d: acrossX ? hiY-loY : inset+0.02,
+          x: acrossX ? (direction < 0 ? footprint.minX+inset/2 : footprint.maxX-inset/2) : (loX+hiX)/2,
+          y: acrossX ? (loY+hiY)/2 : (direction < 0 ? footprint.minY+inset/2 : footprint.maxY-inset/2) };
+      };
+      if (op.closeGaps && op.lip) {
+        // Follow the closed neighbours' rim profile instead of cutting a notch
+        // into their ledges at the joint. The body and upper rim meet at topZ.
+        const peak = Math.max(op.wall,rimProfile[1][1]);
+        const bodyMargin = z => {
+          const fraction = Math.max(0,Math.min(1,(z-rimProfile[0][0])/(rimProfile[1][0]-rimProfile[0][0])));
+          return Math.max(op.wall,op.wall+(rimProfile[1][1]-op.wall)*fraction);
+        };
+        const levels = [[bottom,bodyMargin(bottom)], ...rimProfile.slice(0,2).filter(([z]) => z>bottom).map(([z,inset]) => [z,Math.max(op.wall,inset)]), [topZ+0.01,peak]];
+        const upper = rimProfile.slice(2).map(([z,inset]) => [z,inset]);
+        return [levels,upper].map(stages => child(loft(stages.map(([z,margin]) => {
+          const r = opening(margin);
+          return roundedSketch(`Flush ${side} opening at ${z} mm`, r.w,r.d,0,z,false,[r.x,r.y]);
+        }))));
+      }
+      const r = opening(op.wall);
+      const cutter = { t: "prim", kind: "box", p: { w:r.w,d:r.d,h:height,r:0,c:0 }, mods: [] };
+      return [child(cutter,r.x,r.y,bottom)];
     });
     const dividers = node.children.filter(child => dividerNodes.has(child));
     node.children = node.children.filter(child => !dividerNodes.has(child));
@@ -234,7 +264,7 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq }) {
   const referencedSketches = new Set();
   JSON.stringify(node, (key, value) => { if (key === "sketch" && typeof value === "string") referencedSketches.add(value); return value; });
   const sketchSignatures = Object.fromEntries([...referencedSketches].map(id => [id, JSON.stringify(document.sketches.find(sketch => sketch.id === id))]));
-  const recipe = { version: 1, ...op, width,depth,topZ, protectedBaseHeight: op.kind === "baseplate" ? 0 : 7, outerRadius: op.kind === "baseplate" ? 4 : 3.75, totalHeight: op.kind === "bin" ? binTotalHeight(op) : topZ, pitch:42, heightUnit:7, sourceRevision, referenceFit: "unverified", baseplatePlacementZ:carrierHeight + 0.25,
+  const recipe = { version: 1, ...op, width: op.closeGaps ? footprint.width : width, depth: op.closeGaps ? footprint.depth : depth, topZ, protectedBaseHeight: op.kind === "baseplate" ? 0 : 7, outerRadius: op.kind === "baseplate" ? 4 : 3.75, totalHeight: op.kind === "bin" ? binTotalHeight(op) : topZ, pitch:42, heightUnit:7, sourceRevision, referenceFit: "unverified", baseplatePlacementZ:carrierHeight + 0.25,
     ...(op.magnets ? { magnetPockets: { ...op.magnets, count: centers.length, centers, carrierHeight, carrierFloor: op.kind === "baseplate" ? MAGNET_CARRIER_FLOOR : null, opening: op.kind === "baseplate" ? "top" : "bottom" } } : {}), nodeSignature:JSON.stringify(node), sketchSignatures };
   return { node, recipe };
 }

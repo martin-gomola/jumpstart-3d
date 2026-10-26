@@ -54,3 +54,37 @@ test("adjoining 5+2 cell bins remain separately printable, persist their opening
   assert.throws(() => normalizeDrawerLayout(layout({ bins: [{ id: "too-long", x: 0, y: 0, columns: 7, rows: 2, openSides: ["right"] }] })), /bin width/);
   assert.throws(() => normalizeDrawerLayout(layout({ bins: [{ id: "insert", x: 0, y: 0, columns: 1, rows: 1, kind: "insert", openSides: ["right"] }] })), /insert blanks/);
 });
+
+test("flush joins are strict opt-in bins and printer checks include the enlarged upper footprint", async () => {
+  const { binFootprint } = await import("../shared/gridfinity-walls.js");
+  assert.equal(normalizeGridfinity(bin()).closeGaps, false);
+  for (const changes of [{ closeGaps: "yes", openSides: ["right"] }, { closeGaps: true }, { kind: "insert", closeGaps: true, openSides: ["left"] }]) assert.throws(() => normalizeGridfinity(bin(changes)));
+  assert.deepEqual(binFootprint({ columns: 2, rows: 1, closeGaps: true, openSides: ["right"] }), { width: 83.75, depth: 41.5, minX: -41.75, maxX: 42, minY: -20.75, maxY: 20.75 });
+  const plan = { id: "drawer", type: "drawerLayout", width: 252, depth: 42, height: 50, includeBaseplate: false, binLimits: { columns: 6, rows: 6 }, printArea: { width: 251.6, depth: 42, height: 100, edgeMargin: 0 }, bins: [
+    { id: "long", x: 0, y: 0, columns: 6, rows: 1, openSides: ["right"] },
+  ] };
+  assert.doesNotThrow(() => normalizeDrawerLayout(plan));
+  assert.throws(() => normalizeDrawerLayout({ ...plan, bins: [{ ...plan.bins[0], closeGaps: true }] }), /fit|area|printer/i);
+  plan.printArea.width = 252;
+  const normalized = normalizeDrawerLayout({ ...plan, bins: [{ ...plan.bins[0], closeGaps: true }] });
+  assert.equal(drawerParts(normalized)[0].closeGaps, true);
+  const compiled = compileMcpModel(doc(), { operations: [normalized] }).document;
+  const updated = compileMcpModel(compiled, { operations: [{ ...normalized, replaceExisting: true }] }).document;
+  assert.equal(updated.bodies[0].mcpGridfinity.closeGaps, true);
+  assert.equal(updated.bodies[0].mcpGridfinity.width, 251.75);
+});
+
+
+test("legacy saved drawer metadata remains editable and flush flags survive complete layout rotation", async () => {
+  const { rotateDrawerLayout } = await import("../shared/drawer-layout.js");
+  const old = compileMcpModel(doc(), { operations: [layout()] }).document;
+  for (const body of old.bodies) {
+    if (body.mcpGridfinity) delete body.mcpGridfinity.closeGaps;
+    if (body.mcpDrawerLayout) for (const bin of body.mcpDrawerLayout.definition.bins) delete bin.closeGaps;
+  }
+  assert.equal(summarizeDrawerLayouts(old)[0].editable, true);
+  const definition = normalizeDrawerLayout(layout({ bins: layout().bins.map(b => ({ ...b, closeGaps: true })) }));
+  const rotated = rotateDrawerLayout(definition);
+  assert.equal(rotated.bins.every(b => b.closeGaps), true);
+  assert.deepEqual(rotated.bins.map(b => b.openSides), [["front"],["back"]]);
+});

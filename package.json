@@ -11,7 +11,8 @@
     "mcp:jumpstart": "node mcp/server/server.mjs",
     "test:mcp": "node --test mcp/tests/*.test.mjs",
     "test:mcp:browser": "playwright test --config=mcp/playwright.config.mjs",
-    "benchmark:spacer": "node mcp/benchmarks/spacer-runner.mjs"
+    "benchmark:spacer": "node mcp/benchmarks/spacer-runner.mjs",
+    "benchmark:trace": "node mcp/benchmarks/trace-report.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

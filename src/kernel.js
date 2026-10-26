@@ -1,4 +1,4 @@
-import { measureSolidPair, validatePairPlacement } from "./pairGeometry.js";
+import { measureSolidPair, measureRegionDifference, validatePairPlacement } from "./pairGeometry.js";
 // Geometry kernel: turns the document's node trees into OpenCascade solids
 // and meshes. Runs inside a Web Worker in the app, and directly in Node for tests.
 import * as R from "replicad";
@@ -3097,7 +3097,7 @@ export function exportStep(bodies) {
 // Isolated read-only queries use cloned evaluation results, never the editor worker's cache.
 export function inspectSolidPairs(pairs) {
   if (!Array.isArray(pairs) || pairs.length < 1 || pairs.length > 8) throw new Error("Pair inspection requires 1 to 8 pairs");
-  return pairs.map(({ id, a, b }) => {
+  return pairs.map(({ id, a, b, region }) => {
     let left, right;
     try {
       for (const body of [a, b]) {
@@ -3109,7 +3109,7 @@ export function inspectSolidPairs(pairs) {
       }
       left = transformShape(evalNode(a.node), a.m);
       right = transformShape(evalNode(b.node), b.m);
-      return { id, ...measureSolidPair(left, right, OC, R) };
+      return { id, ...(region ? measureRegionDifference(left, right, region, OC, R) : measureSolidPair(left, right, OC, R)) };
     } catch (error) {
       return { id, status: "unknown", error: error?.message || "Native pair query failed", distanceMm: null, overlapVolumeMm3: null, physicalFit: "unverified" };
     } finally { left?.delete(); right?.delete(); }

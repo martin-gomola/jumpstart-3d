@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { evaluateEditSession } from "./edit-evaluator.mjs";
 // A trace recorder for a real agent, not a scripted CAD-plan benchmark.
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve, dirname, basename, join } from "node:path";
@@ -29,7 +30,9 @@ export function inspectStl(bytes) {
 
 // Evaluates captured readbacks, never the submitted plan's asserted dimensions.
 export function evaluateSession(session) {
-  const task = agentTask(session.taskId), candidate = session.checkpoints?.candidate;
+  const task = agentTask(session.taskId);
+  if (task.kind === "edit") return evaluateEditSession(session,task);
+  const candidate = session.checkpoints?.candidate;
   const checks = [];
   const check = (name, pass, detail) => checks.push({ name, pass: !!pass, detail });
   check("candidate-captured", candidate?.document?.bodies?.length === 1, "Exactly one final model is required");
@@ -113,8 +116,9 @@ export async function main(argv) {
     const task = agentTask(args[0]);
     if (!args[1]) throw new Error("Explicit editor ID required; this runner never chooses or clears a user's editor");
     const baseline = (await request(endpoint, "jumpstart_get_document", { editorId: args[1], includeGeometry: true })).value;
-    if (task.id !== "coaster-revision" && (baseline.bodies.length || baseline.sketches.length)) throw new Error("This task requires an empty document; existing models are never overwritten automatically");
+    if (task.kind !== "edit" && task.id !== "coaster-revision" && (baseline.bodies.length || baseline.sketches.length)) throw new Error("This task requires an empty document; existing models are never overwritten automatically");
     if (task.id === "coaster-revision" && baseline.bodies.length !== 1) throw new Error("Coaster revision needs exactly one baseline model");
+    if (task.kind === "edit" && !baseline.bodies.some(b=>b.name===task.targetName)) throw new Error(`Task requires existing ${task.targetName}; the recorder does not create or overwrite a starting model`);
     session = { version: 1, taskId: task.id, request: task.request, editorId: args[1], endpoint, startedAt: new Date().toISOString(), baseline, calls: [], checkpoints: {} };
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, `${JSON.stringify(session, null, 2)}\n`, { flag: "wx" });
@@ -146,7 +150,7 @@ export async function main(argv) {
     const document = (await call("jumpstart_get_document", { includeGeometry: true })).value;
     const checkpoint = { document, capturedAt: new Date().toISOString(), traceLength: session.calls.length };
     if (args[0] === "candidate") {
-      const exported = (await call("jumpstart_export_model", { format: "stl", name: `agent-${session.taskId}` })).value;
+      const exported = (await call("jumpstart_export_model", { format: "stl", ...(agentTask(session.taskId).kind === "edit" ? {bodyIds:[document.bodies.find(b=>b.name===agentTask(session.taskId).targetName)?.id]} : {}), name: `agent-${session.taskId}` })).value;
       const bytes = await readFile(join(ROOT, "exports", basename(exported.path)));
       checkpoint.stl = inspectStl(bytes); checkpoint.export = exported;
       checkpoint.stl.sha256 = createHash("sha256").update(bytes).digest("hex");

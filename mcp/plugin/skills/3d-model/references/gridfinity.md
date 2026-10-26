@@ -116,6 +116,17 @@ facing sides. For example, a 5x2 main bin with `openSides: ["right"]` beside a
 2x2 extension with `openSides: ["left"]` spans seven cells (293.5 mm externally),
 while each part fits an example usable 246 × 246 mm bed. Measure the item’s
 width and clearance too; a 5+1 cell arrangement is insufficient for 280 mm length.
-Keep the item’s path clear of internal dividers. The normal seam remains. This
+Keep the item’s path clear of internal dividers. The default geometry retains the normal seam. This
 does not add a connector or guarantee physical fit.
 Check per-part printer fit and native connected geometry before explicit apply.
+
+
+Use `closeGaps: true` with open-sided bins for flush joining ends. Enable it on
+both neighbours. Corners touching an open side become square and each open
+edge extends by 0.25 mm to its grid boundary, continuing straight down to the
+foot tops at Z=4.75 mm. There is no separate rounded ledge beneath the joint.
+The standard feet below that plane remain unchanged. Walls and dividers end on the joining
+plane. Closed corners stay rounded. Per-part printer checks use the enlarged
+upper-body footprint. The option is off by default and requires a bin with an
+open side. Clearing the last opening clears the option in the UI. There is no
+mechanical connector; printed fit still requires calibration.

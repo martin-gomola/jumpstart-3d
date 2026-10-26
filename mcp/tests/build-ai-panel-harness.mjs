@@ -29,20 +29,34 @@ const entry = `
   new MutationObserver(() => { document.documentElement.dataset.ui = document.documentElement.dataset.theme; }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   const view = document.body.dataset.view;
   if (view === 'connection') document.getElementById('ai-connection-tab').click();
+  if (view === 'orientation') {
+    for (const [name, value] of [['width',230], ['depth',695], ['height',60]]) {
+      const input = document.getElementById('drawer-' + name); input.value = value; input.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+    document.getElementById('drawer-swap-dimensions').click();
+  }
+
   if (['part','settings'].includes(view)) document.querySelector('[data-workspace-view="' + view + '"]').click();
   if (['layout', 'open-walls'].includes(view)) {
     document.querySelector('.drawer-example').click();
     [...document.querySelectorAll('button')].find(button => button.textContent === 'Add bin').click();
   }
+  if (view === 'layout') document.getElementById('drawer-bin-stackable').click();
   if (view === 'open-walls') {
     document.querySelector('.drawer-wall-options summary').click();
     document.querySelector('[aria-label="Open right side"]').click();
-    if (matchMedia('(min-width: 64rem)').matches) document.querySelector('[aria-label="Open back side"]').focus();
+    document.getElementById('drawer-close-gaps').click();
+    if (matchMedia('(min-width: 64rem)').matches) {
+      // Keep height, stacking and the expanded edge options in the visible pane.
+      const height = document.querySelector('[aria-label="Bin height"] [aria-pressed="true"]');
+      height.scrollIntoView({ block: 'start', inline: 'nearest' });
+      height.focus({ preventScroll: true });
+    }
   }
   document.body.dataset.uiReady = "true";
 `;
 const bundle = await build({ stdin: { contents: entry, resolveDir: root }, bundle: true, format: "iife", write: false, logLevel: "silent" });
-for (const view of ["drawer", "layout", "part", "settings", "connection", "open-walls"]) {
+for (const view of ["drawer", "layout", "part", "settings", "connection", "open-walls", "orientation"]) {
   await writeFile(`${output}/harness/${view}.html`, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gridfinity ${view} UI gate</title><style>${styles}\n${AI_STATUS_CSS}\n${panelStyles}</style></head><body data-view="${view}"><header class="topbar"><div class="modeswitch">${trigger}</div></header>${panel}<script>${bundle.outputFiles[0].text}</script></body></html>`);
 }
 

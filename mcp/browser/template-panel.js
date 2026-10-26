@@ -1,6 +1,6 @@
 import { el } from "../../src/util.js";
 import { wallControls } from "./wall-controls.js";
-import { binTotalHeight } from "../shared/gridfinity-walls.js";
+import { binFootprint, binTotalHeight } from "../shared/gridfinity-walls.js";
 import { iconLabel } from "./pictograms.js";
 import { dimensionGuide } from "./dimension-guide.js";
 import { initDrawerPanel } from "./drawer-panel.js";
@@ -41,6 +41,7 @@ export function templatePlan(state) {
   }
   if (state.kind === "bin") {
     grid.openSides = state.openSides || [];
+    grid.closeGaps = state.closeGaps === true;
     grid.lip = state.lip;
     grid.dividers = { x: number("dividersX", state.dividersX, "count"), y: number("dividersY", state.dividersY, "count") };
   }
@@ -142,7 +143,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
       kind = key; cards.forEach((entry, id) => entry.setAttribute("aria-pressed", String(id === key)));
       heightFields.hidden = key === "baseplate"; constructionFields.hidden = key === "baseplate"; binFields.hidden = key !== "bin"; pocketSection.hidden = key !== "insert";
       for (const group of [heightFields, constructionFields, binFields, pocketSection]) for (const input of group.querySelectorAll("input")) input.disabled = group.hidden || input.closest("label")?.hidden === true;
-      magnets.setDisabled(false); partDescription.textContent = detail; invalidate(); updateDimensions();
+      walls.setDisabled(key !== "bin"); magnets.setDisabled(false); partDescription.textContent = detail; invalidate(); updateDimensions();
     };
     list.append(button); cards.set(key, button);
   }
@@ -169,7 +170,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const dividerFields = el("div", { class: "ai-template-fields" });
   controls.dividersX = numberField(dividerFields, "dividersX", "Width dividers", 0, 0, 6, 1);
   controls.dividersY = numberField(dividerFields, "dividersY", "Depth dividers", 0, 0, 6, 1);
-  const walls = wallControls({ onChange: () => { invalidate(); updateDimensions(); } });
+  const walls = wallControls({ onChange: () => { invalidate(); updateDimensions(); }, onCloseGaps: () => { invalidate(); updateDimensions(); } });
   binFields.append(dividerFields, walls.element);
   const magnets = magnetControls({ id: "ai-template-magnets", onChange: () => { invalidate(); updateDimensions(); } });
   const construction = el("details", { class: "ai-template-group" }, iconLabel(el("summary", {}, "Construction & magnets"), "magnet"), constructionFields, magnets.element);
@@ -177,8 +178,9 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const addPocket = el("button", { type: "button" }, "Add pocket");
   const pocketSection = el("section", { class: "ai-template-group", hidden: true }, el("h3", {}, "Pockets"), el("p", { class: "ai-template-note" }, "Clearance is per side. Suggested values need a fit test on your printer."), pockets, addPocket);
   const updateDimensions = () => {
-    const width = value(controls.columns) * 42 - (kind === "baseplate" ? 0 : 0.5);
-    const depth = value(controls.rows) * 42 - (kind === "baseplate" ? 0 : 0.5);
+    const footprint = binFootprint({ columns: value(controls.columns), rows: value(controls.rows), closeGaps: kind === "bin" && walls.getCloseGaps(), openSides: walls.get() });
+    const width = kind === "baseplate" ? value(controls.columns) * 42 : footprint.width;
+    const depth = kind === "baseplate" ? value(controls.rows) * 42 : footprint.depth;
     let magneticHeight = "";
     if (kind === "baseplate" && magnets.valid()) magneticHeight = ` Baseplate height ${(5 + magnetCarrierHeight(magnets.get())).toFixed(1)} mm.`;
     if (magnets.get() && magnets.valid()) magneticHeight += ` ${value(controls.columns) * value(controls.rows) * 4} magnet pockets, ${kind === "baseplate" ? "open from the top of the carrier" : "open underneath"}.`;
@@ -366,7 +368,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
     try { limitStatus.textContent = drawerPanel.setBinLimits({ columns: Number(limitWidth.value), rows: Number(limitDepth.value) }, readPrinterArea()); delete limitStatus.dataset.error; }
     catch (error) { limitStatus.textContent = error.message; limitStatus.dataset.error = "true"; }
   };
-  const readState = () => ({ kind, openSides: walls.get(), magnets: magnets.get(), ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
+  const readState = () => ({ kind, openSides: walls.get(), closeGaps: walls.getCloseGaps(), magnets: magnets.get(), ...Object.fromEntries(Object.entries(controls).map(([name, input]) => [name, input.type === "checkbox" ? input.checked : value(input)])), pockets: pocketForms.map(pocket => ({ shape: pocket.shape, referenceBodyId: pocket.referenceBodyId, evidenceKind: pocket.evidenceKind, sourceUnits: pocket.sourceUnits, ...Object.fromEntries(Object.entries(pocket.fields).map(([key, input]) => [key, input.type === "checkbox" ? input.checked : ["product", "url"].includes(key) ? input.value.trim() : value(input)])) })) });
   form.addEventListener("input", () => { invalidate(); updateDimensions(); });
   form.addEventListener("change", () => invalidate());
   form.onsubmit = async event => {
@@ -394,7 +396,9 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
       try { previewView = createPreviewView(preview.previewId); previewContent.append(previewView.element); }
       catch { for (const entry of preview.images || []) if (entry.view === "isometric") previewContent.append(el("img", { src: entry.dataUrl, alt: "Isometric view of the proposed Gridfinity model" })); }
       const dims = preview.bodies[0]?.dimensions;
-      if (dims) previewContent.append(el("dl", {}, ...["x", "y", "z"].flatMap(axis => [el("dt", {}, `${axis.toUpperCase()} size`), el("dd", {}, `${dims[axis].toFixed(2)} mm`)])));
+      if (dims) previewContent.append(el("dl", { class: "ai-preview-dimensions", "aria-label": "Model dimensions" },
+        ...[["x", "Width"], ["y", "Depth"], ["z", "Height"]].map(([axis, label]) =>
+          el("div", {}, el("dt", {}, `${label} (${axis.toUpperCase()})`), el("dd", {}, `${dims[axis].toFixed(2)} mm`)))));
       const footer = el("div", { class: "ai-preview-footer" }, el("p", { class: "ai-template-note" }, "Connected geometry checked. Printed fit remains unverified."), el("div", { class: "ai-template-actions" }, addButton, cancelButton));
       if (printFits.some(fit => fit.rotation === 90)) footer.prepend(el("p", { class: "ai-template-note" }, "Turn this part 90° on the print bed to fit the selected printer area."));
       previewArea.append(footer);

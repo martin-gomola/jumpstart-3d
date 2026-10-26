@@ -80,10 +80,12 @@
 .ai-preview-canvas canvas:active { cursor: grabbing; }
 .ai-preview-canvas canvas:focus-visible { outline: var(--ai-status-stroke) solid var(--focus); outline-offset: calc(-1 * var(--ai-status-stroke)); }
 .ai-template-stale { border: var(--ai-status-panelBorder) solid var(--line); border-radius: var(--r); background: var(--panel); padding: var(--ai-status-panelGap); color: var(--ink); }
-.ai-template-preview dl { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--ai-status-gap); margin: 0; }
+.ai-preview-dimensions { display: flex; flex-wrap: wrap; gap: var(--ai-status-panelGap) var(--ai-status-sectionGap); inline-size: fit-content; max-inline-size: 100%; margin: 0; }
+.ai-preview-dimensions > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ai-status-gap); }
+.ai-preview-dimensions dt { color: var(--ink-2); white-space: nowrap; }
 .ai-preview-content, .ai-preview-footer { display: grid; align-content: start; gap: var(--ai-status-panelGap); min-inline-size: 0; }
 .ai-preview-footer { flex: none; padding-block-start: var(--ai-status-gap); }
-.ai-template-preview dd { margin: 0; text-align: end; font-variant-numeric: tabular-nums; }
+.ai-preview-dimensions dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ai-setup-panel .ai-template-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .ai-template-message { line-height: var(--ai-status-panelBodyLine); overflow-wrap: anywhere; }
 .ai-template-message:empty { display: none; }
@@ -106,6 +108,7 @@
 .drawer-inspector-header { position: static; inset-block-start: 0; z-index: 1; display: grid; gap: var(--ai-status-gap); padding-block: var(--ai-status-gap); background: var(--panel); }
 .drawer-saved, .drawer-inspector, .drawer-compartments, .drawer-advanced, .drawer-measure-fields { display: grid; gap: var(--ai-status-panelGap); }
 .drawer-measurements summary { color: var(--ink); }
+.drawer-swap-dimensions { align-self: end; }
 .drawer-stepper { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--ai-status-gap); }
 .drawer-stepper > div { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; justify-content: space-between; gap: var(--ai-status-gap); }
 .drawer-stepper > small { grid-column: 2; grid-row: 1; }
@@ -136,7 +139,6 @@
 .ai-setup-client { border: 0; padding: 0; }
 .ai-setup-client h3 { font-family: var(--f-ui); letter-spacing: normal; text-transform: none; font-size: var(--ai-status-sectionTitle); }
 @media (min-width: 40rem) {
-  .ai-template-preview dl { grid-template-columns: repeat(3,minmax(0,1fr) auto); }
   .ai-setup-header { display: flex; align-items: center; }
   .ai-setup-header h2 { flex: none; }
   .ai-setup-header .ai-workspace-tabs { margin-inline-end: auto; }
@@ -144,6 +146,7 @@
 }
 @media (min-width: 64rem) {
   .drawer-inspector-header { position: sticky; }
+  .drawer-settings { scroll-padding-block-start: calc(var(--drawer-inspector-height, 0rem) + var(--ai-status-gap)); }
   .ai-setup-panel { overflow: hidden; }
   .ai-setup-panel[data-active-tab="templates"] .ai-templates { display: flex; flex-direction: column; flex: 1; min-block-size: 0; overflow: hidden; }
   .ai-single-part, .ai-drawer-mode, .ai-generator-settings { grid-template-columns: minmax(0,min(var(--ai-status-templateSettingsWidth),var(--ai-status-templateSettingsShare))) minmax(0,1fr); flex: 1; }
@@ -185,3 +188,8 @@
 .ai-setup-panel .drawer-bin[data-open-front="true"] { border-bottom-style: dashed; }
 .ai-setup-panel .drawer-bin[data-open-back="true"] { border-top-style: dashed; }
 .ai-setup-panel .drawer-bin[data-open-sides="true"][aria-pressed="true"] { outline: none; border-width: var(--ai-status-stroke); }
+
+.drawer-bin[data-close-gaps="true"]:is([data-open-left="true"],[data-open-back="true"]) { border-top-left-radius: 0; }
+.drawer-bin[data-close-gaps="true"]:is([data-open-right="true"],[data-open-back="true"]) { border-top-right-radius: 0; }
+.drawer-bin[data-close-gaps="true"]:is([data-open-left="true"],[data-open-front="true"]) { border-bottom-left-radius: 0; }
+.drawer-bin[data-close-gaps="true"]:is([data-open-right="true"],[data-open-front="true"]) { border-bottom-right-radius: 0; }

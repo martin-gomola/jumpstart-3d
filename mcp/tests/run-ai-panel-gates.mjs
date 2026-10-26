@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 const kit = resolve(process.env.CODEX_HOME || `${homedir()}/.codex`, "scripts");
 const output = resolve("exports/ai-panel"), harness = `${output}/harness`;
 await mkdir(`${output}/gates`, { recursive: true });
-const views = ["drawer", "layout", "part", "settings", "connection", "open-walls"];
+const views = ["drawer", "layout", "part", "settings", "connection", "open-walls", "orientation"];
 const browser = await chromium.launch({ channel: "chrome" });
 try {
   for (const view of views) {

@@ -174,3 +174,90 @@ test("separately printable adjoining bins clear a 280 mm item across their open 
   }
   await page.screenshot({ path: info.outputPath("adjoining-open-bins.png") });
 });
+
+test("legacy adjoining open bins retain the standard clearance and rounded floor-corner cutout", async ({ page }, info) => {
+  const doc = fixture([{ kind: "bin", openSides: ["right"] }, { kind: "bin", openSides: ["left"], position: [42, 0, 0] }]);
+  await boot(page, info); await loadDoc(page, doc);
+  const native = index => ({ node: resolveNode(doc.bodies[index].node, doc), m: doc.bodies[index].m });
+  const m = IDENTITY.slice(); m[12] = 20.9; m[13] = -20.4; m[14] = 7.5;
+  const witness = { node: { t: "prim", kind: "box", p: { w: .1, d: .1, h: 1 }, mods: [] }, m };
+  const values = await page.evaluate(pairs => window.__app.kernel.inspectPairs(pairs), [
+    { id: "seam", a: native(0), b: native(1) }, { id: "corner", a: native(0), b: witness },
+  ]);
+  expect(values.every(v => v.status === "measured"), JSON.stringify(values)).toBe(true);
+  expect(values[0].distanceMm).toBeCloseTo(.5, 5);
+  expect(values[1].overlapVolumeMm3).toBeCloseTo(0, 6);
+  console.log(JSON.stringify({ openBinGapMm: values[0].distanceMm, roundedCornerWitnessVolume: values[1].overlapVolumeMm3 }));
+});
+
+test("flush open edges continue down to the feet without a rounded ledge and retain socket clearance", async ({ page }, info) => {
+  const errors = watchErrors(page);
+  const doc = fixture([
+    { kind: "bin", openSides: ["right"], closeGaps: true, lip: true },
+    { kind: "bin", openSides: ["left"], closeGaps: true, lip: true, position: [42, 0, 0] },
+    { kind: "bin", openSides: ["right"], lip: true, position: [-100, 0, 0] },
+    { kind: "baseplate", columns: 2, rows: 1, position: [21, 0, -.25] },
+  ]);
+  await boot(page, info); await loadDoc(page, doc);
+  const { inspectGeometry } = await import("../browser/inspection.js");
+  const parts = await page.evaluate(() => window.__store.doc.bodies.map(b => {
+    const d = window.__app.scene.views.get(b.id)?.data;
+    return { error: window.__app.scene.errors.get(b.id), bbox: d?.bbox, vertices: Array.from(d?.vertices || []), triangles: Array.from(d?.triangles || []) };
+  }));
+  for (const part of parts) { expect(part.error).toBeUndefined(); expect(inspectGeometry(part, { mesh: true }).meshValidation.valid).toBe(true); }
+  expect(parts[0].bbox.max[0]).toBeCloseTo(21, 5);
+  expect(parts[1].bbox.min[0]).toBeCloseTo(-21, 5);
+  const native = (index, local = false) => ({ node: resolveNode(doc.bodies[index].node, doc), m: local ? IDENTITY : doc.bodies[index].m });
+  const probe = (w,d,h,x,y,z) => { const m = IDENTITY.slice(); m[12]=x;m[13]=y;m[14]=z;return { node: {t:"prim",kind:"box",p:{w,d,h},mods:[]},m }; };
+  const values = await page.evaluate(pairs => window.__app.kernel.inspectPairs(pairs), [
+    { id: "join", a: native(0), b: native(1) },
+    { id: "corner", a: native(0), b: probe(.1,.1,1,20.9,-20.4,7.5) },
+    { id: "closed-corner", a: native(0), b: probe(.1,.1,1,-20.4,-20.4,5.5) },
+    { id: "rim-at-join", a: native(0), b: probe(.1,.1,.2,20.9,18.8,20.6) },
+    { id: "base-flush", a: native(0,true), b: probe(45,45,4.75,0,0,0) },
+    { id: "base-original", a: native(2,true), b: probe(45,45,4.75,0,0,0) },
+    { id: "socket", a: native(0), b: native(3) },
+    { id: "lower-straight-corner", a: native(0), b: probe(.1,.1,1,20.9,-20.4,5.5) },
+  ]);
+  expect(values.every(v => v.status === "measured"), JSON.stringify(values)).toBe(true);
+  expect(values[0].distanceMm).toBeCloseTo(0, 6); expect(values[0].overlapVolumeMm3).toBeCloseTo(0, 6);
+  expect(values[1].overlapVolumeMm3).toBeCloseTo(.01, 5);
+  expect(values[2].overlapVolumeMm3).toBeCloseTo(0, 6);
+  expect(values[3].overlapVolumeMm3).toBeCloseTo(.002, 6);
+  expect(values[4].overlapVolumeMm3).toBeCloseTo(values[5].overlapVolumeMm3, 5);
+  expect(values[6].overlapVolumeMm3).toBeCloseTo(0, 5);
+  expect(values[7].overlapVolumeMm3).toBeCloseTo(.01, 5);
+  await page.screenshot({ path: "exports/ai-panel/flush-open-bin-native.png" });
+  await page.evaluate(() => {
+    const app=window.__app, box=app.scene.allBox(b=>b.id === "body-0");
+    box.min.set(14,-23,2); box.max.set(28,-18,12);
+    app.vp.setView("front",box);
+  });
+  await page.waitForFunction(()=>!window.__app.vp.anim);
+  await page.screenshot({path:"exports/ai-panel/flush-open-bin-lower-joint.png"});
+  expect(errors).toEqual([]);
+});
+
+test("flush openings build connected native solids on every axis and preserve dividers and magnet interfaces", async ({ page }, info) => {
+  const cases = [
+    { openSides: ["left"] }, { openSides: ["front"] }, { openSides: ["back"] },
+    { openSides: ["left","front"], columns: 2, rows: 2, dividers: { x: 1, y: 1 } },
+    { openSides: ["left","right"] }, { openSides: ["left","right","front","back"] },
+    { openSides: ["left","right","front","back"], dividers: { x: 1, y: 1 } },
+    { openSides: ["left","right"], columns: 6, rows: 6, magnets: true },
+    { openSides: ["right"], heightUnits: 2, wall: 4, floor: 6, dividers: { x: 6, y: 6 } },
+    { openSides: ["left","right","front","back"], heightUnits: 2, wall: 4, floor: 6 },
+  ];
+  const doc = fixture(cases.map((spec, i) => ({ kind: "bin", closeGaps: true, lip: true, position: [i*300,0,0], ...spec })));
+  const errors = watchErrors(page); await boot(page, info); await loadDoc(page, doc);
+  const { inspectGeometry } = await import("../browser/inspection.js");
+  const parts = await page.evaluate(() => window.__store.doc.bodies.map(b => { const d=window.__app.scene.views.get(b.id)?.data;return {error:window.__app.scene.errors.get(b.id),vertices:Array.from(d?.vertices||[]),triangles:Array.from(d?.triangles||[]),bbox:d?.bbox}; }));
+  for (const p of parts) { expect(p.error).toBeUndefined(); const mesh=inspectGeometry(p,{mesh:true}).meshValidation;expect(mesh.valid).toBe(true);expect(mesh.disconnectedComponents).toBe(1); }
+  for (const [index,point] of [[0,[-20.9,-20.4,-1]],[1,[20.4,-20.9,-1]],[2,[20.4,20.9,-1]]]) {
+    const result=inspectGeometry(parts[index],{samples:[{axis:"Z",point}]});
+    expect(result.samples[0].intervals[0][0]).toBeCloseTo(4.75,5);
+  }
+  expect(parts[5].bbox.max[2]).toBeCloseTo(9,5); expect(parts[6].bbox.max[2]).toBeCloseTo(20.99,5);
+  expect(parts[7].bbox.max[0]-parts[7].bbox.min[0]).toBeCloseTo(252,5);
+  expect(errors).toEqual([]);
+});

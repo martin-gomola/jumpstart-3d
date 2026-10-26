@@ -1,3 +1,4 @@
+import { featureEditSchema, regionBoxSchema } from "../shared/edit-contracts.js";
 import { pairChecksSchema } from "../shared/pairs.js";
 import { geometryCheckSchema, requirementsSchema } from "../shared/requirements.js";
 import { frameTools } from "./frame-contracts.mjs";
@@ -44,8 +45,9 @@ export function extendMcpTools(tools, basePlan) {
   ].map(([name, title, description, inputSchema]) => ({ name, title, description, inputSchema }));
   extra.find(tool => tool.name === "jumpstart_save_document").inputSchema.properties.versioned = { type: "boolean", description: "Save a new native version locally; default false. A versioned save changes the document revision." };
   extra.find(tool => tool.name === "jumpstart_inspect_geometry").inputSchema.properties.frame = { type: "object", additionalProperties: false, required: ["outerWidth", "outerDepth", "height", "wall"], properties: Object.fromEntries(["outerWidth", "outerDepth", "height", "wall"].map(name => [name, positive])) };
+  extra.push({name:"jumpstart_preview_feature_edit",title:"Preview a targeted native feature edit",description:"Update or remove a supported top-level native modifier by feature id, or change a one-sided base extrusion distance ($base). Hole positions are body-local mm. Preserves body identity, role and unrelated source definitions. Managed templates, bound features and ambiguous topology are rejected; use parameter tools first. Inspect editing context and current geometry fingerprint before editing; apply the returned preview id explicitly.",inputSchema:object({editorId,expectedRevision,expectedFingerprint:id,edit:featureEditSchema,includeImage:{type:"boolean"},section},["expectedRevision","expectedFingerprint","edit","requirements"])});
   const all = [...tools, ...extra, ...tutorialTools, ...frameTools];
-  for (const tool of all.filter(tool => tool.name.startsWith("jumpstart_preview_"))) tool.inputSchema.properties.requirements = requirementsSchema;
+  for (const tool of all.filter(tool => tool.name.startsWith("jumpstart_preview_"))) Object.assign(tool.inputSchema.properties,{requirements:requirementsSchema,detail:regionBoxSchema});
   const inspector = all.find(tool => tool.name === "jumpstart_inspect_geometry");
   Object.assign(inspector.inputSchema.properties, {
     againstBodyId: { ...id, description: "Measure a native/STEP pair against this second body in the same current document or preview. Requires expectedRevision." },

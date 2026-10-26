@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createAgentTrace } from "./agent-trace.mjs";
 
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
@@ -18,6 +19,7 @@ import { listManagedImports, resolveManagedImports, MAX_IMPORTS_PER_PLAN, MAX_IM
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const DOCS = join(ROOT, "build", "site");
 const EXPORTS = join(ROOT, "exports");
+const agentTrace = createAgentTrace({exportsDir:EXPORTS,enabled:process.env.JUMPSTART_MCP_TRACE === "1"});
 const IMPORTS = resolve(process.env.JUMPSTART_MCP_IMPORT_DIR || join(ROOT, "imports"));
 const HOST = process.env.JUMPSTART_MCP_HOST || "127.0.0.1";
 const BROWSER_HOST = "localhost";
@@ -382,7 +384,7 @@ async function dispatch(action, params) {
   const command = { id: randomUUID(), action, params: { ...params } };
   delete command.params.editorId;
 
-  const timeoutMs = action === "export_model" ? 60_000 : (action === "preview_model" || action.startsWith("preview_") && params.requirements?.pairs?.length) ? 60_000 : 30_000;
+  const timeoutMs = action === "export_model" ? 60_000 : (action === "preview_model" || action.startsWith("preview_") && (params.requirements?.pairs?.length || params.requirements?.preserveRegions?.length || params.requirements?.intent?.changeRegion)) ? 60_000 : 30_000;
   const resultPromise = new Promise((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(command.id);
@@ -536,7 +538,7 @@ async function handleHttpRpc(req, res) {
     if (typeof params.name !== "string" || !tools.some((tool) => tool.name === params.name)) {
       result = toolError(new Error(`Unknown tool: ${params.name || ""}`));
     } else {
-      try { result = toolResult(await callTool(params.name, params.arguments === undefined ? {} : params.arguments)); }
+      try { result = toolResult(await callTool(params.name, params.arguments === undefined ? {} : params.arguments,"http")); }
       catch (error) { result = toolError(error); }
     }
   } else {
@@ -595,12 +597,16 @@ const server = createServer((req, res) => {
 
 const host = (args) => typeof args.editorId === "string" ? args.editorId : undefined;
 
-async function callTool(name, args) {
+async function callTool(name,args,transport) {
+  return agentTrace.run(name,args,()=>executeTool(name,args),transport);
+}
+async function executeTool(name, args) {
   const tool = tools.find((entry) => entry.name === name);
   if (!tool) throw new Error(`Unknown tool: ${name}`);
   if (Buffer.byteLength(JSON.stringify(args)) > 262144) throw new Error("Tool input exceeds 262144 byte budget");
   validateToolInput(args, tool.inputSchema);
   if ((args.againstBodyId || args.requirements?.pairs?.length) && !args.expectedRevision) throw new Error("expectedRevision is required for pair inspection and pair requirements");
+  if ((args.requirements?.preserveRegions?.length || args.requirements?.intent) && !args.expectedRevision) throw new Error("expectedRevision is required for an edit contract");
   if (args.pairChecks && !args.againstBodyId) throw new Error("pairChecks require againstBodyId");
   presence.activity();
   const run = async (action, params) => {
@@ -610,11 +616,11 @@ async function callTool(name, args) {
   };
   switch (name) {
     case "jumpstart_get_capabilities": return focusCapabilities({
-      schemaVersion: 1, units: "mm", toolSchemas: tools,
+      schemaVersion: 1, units: "mm", telemetry:agentTrace.status(), toolSchemas: tools,
       limits: { toolInputBytes: 262144, trianglesInspected: 200000, estimatedTriangleVisits: 8000000, meshWeldToleranceMm: 0.0001, namedParameters: 64, parameterModels: 16, images: 4, requirementBodies: 16, requirementChecks: 64, geometryPairs: 8, pairOperandFaces: 2000, pairQueryTimeoutMs: 20000, importFileBytes: 24 * 1024 * 1024, importPlanBytes: 24 * 1024 * 1024, importsPerPlan: MAX_IMPORTS_PER_PLAN, importCatalogFiles: MAX_IMPORT_CATALOG_FILES },
       bodyRoles: { default: "design", values: ["design", "reference", "hardware"], assignment: "setRole native plan operation", exports: { printable: ["design"], assembly: ["design", "hardware"] } },
       operations: ["native Gridfinity bins, inserts and baseplates with optional aligned magnet pockets", "drawerLayout measured drawer planning with native bins and tiled baseplates", "setRole body metadata", "operator-managed STL/3MF/STEP/STP imports by digest id", "rectangular frame preset", "native bound rectangle/extrusion", "native parameters", "native Lathe profile/hollow/scale", "primitives", "circle/polygon/rounded-rectangle/line-arc-spline contour profiles", "line/arc path sketches", "extrude", "revolve", "loft", "sweep", "pipe", "coil", "linear/circular/path body patterns", "linear/circular patterns of editable hole, emboss, and sketch-backed boolean features", "transforms", "linked or joined body mirrors", "plane-based splitBody operation (two editable outputs)", "booleans", "native ISO/UNC fasteners", "native parametric spur, straight bevel, and rack gears (module, tooth count, pressure angle, face width, bevel cone angle, optional bore, and rack baseDepth)", "native axial knurled knobs (V-groove sketch, editable extrusion, optional round/hex/D bore)", "native phone cradle (thin angled plate, two ribs, and lower stop)", "fitted planar grid/staggered/circular round and shaped hole patterns", "fillet", "chamfer", "signed planar/cylindrical/spherical face offset", "shell", "hole", "thread", "planar emboss", "scale"],
-      inspection: ["top/side/isometric/section images with labeled world axes", "tessellated plane sections", "line/solid intervals", "dimensions", "axis-aligned parallel flat-bottom channels", "mesh edge incidence and phone-cradle support connectivity", "semantic native signature queries", "native/STEP single-solid pair distance, witness points and intersection volume"],
+      inspection: ["top/side/isometric/section images with labeled world axes", "tessellated plane sections", "line/solid intervals", "dimensions", "axis-aligned parallel flat-bottom channels", "mesh edge incidence and phone-cradle support connectivity", "semantic native signature queries", "targeted native feature edits", "native protected-region and outside-change-region material differences", "paired before/after detail images", "native/STEP single-solid pair distance, witness points and intersection volume"],
       exports: ["stl", "step", "3mf"],
       unsupported: ["interactive pedal/chisel session automation", "spiral bevel tooth geometry and automatic gear-pair placement or mating-accuracy certification", "patterning feature types other than holes, embosses, and sketch-backed extrude/revolve/sweep booleans", "Split Face (the editor cannot edit it and its kernel face selector has no distance/ambiguity guard)", "general sketch constraint solver", "independent analytic contour self-intersection checks (preview relies on CAD kernel face construction)", "sweep taper and twist", "pipe paths picked from existing body edges", "dimensional algebra", "automatic stable topological naming", "mesh-to-parametric reconstruction", "exact mesh pair queries and automatic datum mating", "minimum wall thickness everywhere", "physical fit or printability certification"],
       parameterExample: { parameters: { diameter: { value: 100, unit: "mm", min: 10, max: 500 } }, numericReference: { $expr: "diameter / 2" }, operators: ["+", "-", "*", "/", "parentheses"], lifecycle: "preview_model -> inspect_geometry(previewId) -> apply_model -> save_document -> preview_parameters; templates survive native save/reopen" },
@@ -634,9 +640,10 @@ async function callTool(name, args) {
       const imports = (args.plan.operations || []).filter((operation) => operation.type === "import").map((operation) => operation.assetId);
       if (imports.length > MAX_IMPORTS_PER_PLAN) throw new Error(`A model plan can import at most ${MAX_IMPORTS_PER_PLAN} assets`);
       const importAssets = await resolveManagedImports(IMPORTS, imports);
-      return await run("preview_model", { editorId: host(args), plan: args.plan, importAssets, replaceBodyIds: args.replaceBodyIds || [], includeImage: args.includeImage !== false, section: args.section, expectedRevision: args.expectedRevision, requirements: args.requirements });
+      return await run("preview_model", { editorId: host(args), plan: args.plan, importAssets, replaceBodyIds: args.replaceBodyIds || [], includeImage: args.includeImage !== false, section: args.section, detail: args.detail, expectedRevision: args.expectedRevision, requirements: args.requirements });
     }
-    case "jumpstart_preview_resize_body": return await run("preview_resize_body", { editorId: host(args), bodyId: args.bodyId, size: args.size, anchor: args.anchor, includeImage: args.includeImage !== false, section: args.section, expectedRevision: args.expectedRevision, requirements: args.requirements });
+    case "jumpstart_preview_resize_body": return await run("preview_resize_body", { editorId: host(args), bodyId: args.bodyId, size: args.size, anchor: args.anchor, includeImage: args.includeImage !== false, section: args.section, detail: args.detail, expectedRevision: args.expectedRevision, requirements: args.requirements });
+    case "jumpstart_preview_feature_edit": return await run("preview_feature_edit", { ...args, editorId: host(args) });
     case "jumpstart_preview_parameters": return await run("preview_parameters", { ...args, editorId: host(args) });
     case "jumpstart_inspect_geometry": return await run("inspect_geometry", { ...args, editorId: host(args) });
     case "jumpstart_select_geometry": return await run("select_geometry", { ...args, editorId: host(args) });
@@ -674,7 +681,7 @@ async function callTool(name, args) {
         } else meshValidation = { valid: null, status: "not_checked", reason: "Export exceeds the 200000 triangle inspection budget" };
       }
       await run("export_complete", { editorId: host(args), format: args.format, expectedRevision: result.revision });
-      return { format: args.format, path, scope: result.scope, bodyIds: result.bodyIds, roles: result.roles, byteLength: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), meshValidation, physicalFit: "unverified", manufacturingPerformance: "unverified" };
+      return { format: args.format, revision:result.revision, path, scope: result.scope, bodyIds: result.bodyIds, roles: result.roles, byteLength: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), meshValidation, physicalFit: "unverified", manufacturingPerformance: "unverified" };
     }
     default: throw new Error(`Unknown tool: ${name}`);
   }
@@ -697,7 +704,7 @@ function toolResult(value) {
     content.push(textContent({ ...summary, images: images.map(({ dataUrl, ...metadata }) => metadata) }));
     for (const image of images) {
       const match = /^data:image\/(png|jpeg);base64,/.exec(image.dataUrl || "");
-      if (match) { content.push(textContent({ view: image.view })); content.push({ type: "image", data: image.dataUrl.slice(match[0].length), mimeType: `image/${match[1]}` }); }
+      if (match) { content.push(textContent({ view: image.view, ...(image.phase ? {phase:image.phase}:{}), ...(image.focusRegion ? {focusRegion:image.focusRegion}:{}) })); content.push({ type: "image", data: image.dataUrl.slice(match[0].length), mimeType: `image/${match[1]}` }); }
     }
     return { resultType: "complete", content, isError: false };
   }
@@ -748,7 +755,7 @@ async function handleMessage(message) {
       }
       try {
         const args = params.arguments === undefined ? {} : params.arguments;
-        return response(requestId, toolResult(await callTool(params.name, args)));
+        return response(requestId, toolResult(await callTool(params.name, args,"stdio")));
       }
       catch (error) { return response(requestId, toolError(error)); }
     }

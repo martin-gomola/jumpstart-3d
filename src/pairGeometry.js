@@ -101,3 +101,54 @@ export function measureSolidPair(left, right, OC, R) {
     return { status: "measured", distanceMm, witnessPoints, overlapVolumeMm3, source: "native OCCT solid distance and intersection", coordinateSpace: "world", units: { distance: "mm", volume: "mm3" }, physicalFit: "unverified" };
   } finally { for (const value of owned.reverse()) value.delete(); }
 }
+
+// Compare material sets inside a world-space box. Empty clipped regions are
+// valid; equal total volume alone is not sufficient preservation evidence.
+export function measureRegionDifference(left, right, box, OC, R) {
+  if (!box || ![box.min, box.max].every(v => Array.isArray(v) && v.length === 3 && v.every(n => Number.isFinite(n) && Math.abs(n) <= 10000)) || box.min.some((v,i) => v >= box.max[i])) throw new Error("Invalid region box");
+  const owned = [], keep = v => { owned.push(v); return v; };
+  const valid = shape => { const check = new OC.BRepCheck_Analyzer(shape.wrapped, true, false); try { if (!check.IsValid()) throw new Error("Region query produced invalid native geometry"); } finally { check.delete(); } };
+  const volume = shape => {
+    valid(shape);
+    const ex = new OC.TopExp_Explorer(shape.wrapped, OC.TopAbs_ShapeEnum.TopAbs_SOLID, OC.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    let total = 0;
+    try { for (; ex.More(); ex.Next()) { const solid = keep(R.cast(OC.TopoDS.Solid(ex.Current()))), v = R.measureVolume(solid); if (!Number.isFinite(v) || v < 0) throw new Error("Invalid region solid volume"); total += v; } }
+    finally { ex.delete(); }
+    return total;
+  };
+  const copy = shape => {
+    const tr = keep(new OC.gp_Trsf()), c = keep(new OC.BRepBuilderAPI_Transform(shape.wrapped, tr, true, false));
+    if (!c.IsDone()) throw new Error("Could not isolate region operand");
+    return keep(R.cast(c.Shape()));
+  };
+  const common = (a,b) => {
+    const op = keep(new OC.BRepAlgoAPI_Common(copy(a).wrapped, copy(b).wrapped));
+    if (!op.IsDone()) throw new Error("Region intersection did not complete");
+    const shape = keep(R.cast(op.Shape())); valid(shape); return shape;
+  };
+  try {
+    for (const shape of [left,right]) {
+      valid(shape); const faces = shape.faces;
+      try { if (faces.length > MAX_PAIR_FACES) throw new Error("Region operand exceeds native face budget"); } finally { faces.forEach(f => f.delete()); }
+      const solids = new OC.TopExp_Explorer(shape.wrapped, OC.TopAbs_ShapeEnum.TopAbs_SOLID, OC.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      let count = 0; try { for (; solids.More(); solids.Next()) count++; } finally { solids.delete(); }
+      if (count !== 1) throw new Error("Region comparison requires one solid per source body");
+      if (!(volume(shape) > 0)) throw new Error("Region comparison requires positive-volume native operands");
+    }
+    const mask = keep(R.makeBox(box.min,box.max));
+    const clip = shape => {
+      if (!box.outside) return common(shape,mask);
+      const op=keep(new OC.BRepAlgoAPI_Cut(copy(shape).wrapped,copy(mask).wrapped));
+      if (!op.IsDone()) throw new Error("Outside-region comparison did not complete");
+      const result=keep(R.cast(op.Shape())); valid(result); return result;
+    };
+    const a = clip(left), b = clip(right);
+    const beforeVolumeMm3 = volume(a), afterVolumeMm3 = volume(b);
+    const intersectionVolumeMm3 = beforeVolumeMm3 && afterVolumeMm3 ? volume(common(a,b)) : 0;
+    if (intersectionVolumeMm3 > Math.min(beforeVolumeMm3,afterVolumeMm3)+0.000001) throw new Error("Region intersection volume is inconsistent with its operands");
+    const removedVolumeMm3 = Math.max(0,beforeVolumeMm3-intersectionVolumeMm3), addedVolumeMm3 = Math.max(0,afterVolumeMm3-intersectionVolumeMm3);
+    return { status: "measured", beforeVolumeMm3, afterVolumeMm3, intersectionVolumeMm3,
+      removedVolumeMm3, addedVolumeMm3, changedVolumeMm3: removedVolumeMm3+addedVolumeMm3,
+      source: "native OCCT clipped material-set comparison", coordinateSpace: "world", physicalFit: "unverified" };
+  } finally { for (const v of owned.reverse()) v.delete(); }
+}

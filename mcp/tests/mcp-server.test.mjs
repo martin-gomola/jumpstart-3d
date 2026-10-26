@@ -53,6 +53,7 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
       "jumpstart_select_geometry",
       "jumpstart_save_document",
       "jumpstart_reopen_document",
+      "jumpstart_preview_feature_edit",
       "jumpstart_preview_native_model",
       "jumpstart_preview_native_parameters",
       "jumpstart_preview_lathe",

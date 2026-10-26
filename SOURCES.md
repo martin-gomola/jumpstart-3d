@@ -109,3 +109,14 @@ checks before accepting the change.
   remain model data rather than interface branding.
 - MCP mutations require leaving the new manual workspaces. These manual tools
   do not extend the typed MCP modeling API automatically.
+
+
+## Flush joins on open Gridfinity edges
+
+`closeGaps` is a local optional extension to the native bin generator. It squares
+open-end corners and extends the body by 0.25 mm per open edge to the grid
+boundary, straight down to the foot tops at Z=4.75 mm without a rounded ledge.
+Feet below that plane, sockets and magnet positions retain
+the pinned interface profiles. Closed wall and stacking-rim profiles continue
+to the joining plane. This is not a claim of a new standard profile or verified
+physical fit; both adjoining parts must enable the option and be fit-tested.

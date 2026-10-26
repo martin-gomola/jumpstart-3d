@@ -1,4 +1,4 @@
-import { normalizeOpenSides, binTotalHeight } from "./gridfinity-walls.js";
+import { normalizeOpenSides, normalizeCloseGaps, binFootprint, rotateOpenSides, binTotalHeight } from "./gridfinity-walls.js";
 import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "./print-area.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "./drawer-spacers.js";
 import { GRIDFINITY_LIMITS, normalizeBinLimits } from "./gridfinity-limits.js";
@@ -29,13 +29,28 @@ export function drawerMetrics(drawer) {
     spareWidth: drawer.width - columns * GRID_PITCH, spareDepth: drawer.depth - rows * GRID_PITCH,
     occupied, total: columns * rows, fill: columns * rows ? Math.round(occupied / (columns * rows) * 100) : 0 };
 }
+// Rotate the complete draft clockwise, including directional bin features.
+// Empty drawers can be oriented before the usable height is entered.
+export function rotateDrawerLayout(drawer) {
+  const width = number(drawer.width, 42, 881.99, "inside width"), depth = number(drawer.depth, 42, 881.99, "inside depth");
+  if (drawer.bins.length) normalizeDrawerLayout(drawer);
+  const next = structuredClone(drawer), columns = Math.floor(width / GRID_PITCH);
+  next.width = depth; next.depth = width;
+  const limits = normalizeBinLimits(drawer.binLimits);
+  next.binLimits = { columns: limits.rows, rows: limits.columns };
+  next.bins = next.bins.map(bin => ({ ...bin, x: bin.y, y: columns - bin.x - bin.columns,
+    columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers?.y ?? 0, y: bin.dividers?.x ?? 0 }, openSides: rotateOpenSides(bin.openSides) }));
+  if (next.bins.length) normalizeDrawerLayout(next);
+  return next;
+}
 export function placementError(drawer, candidate, ignoreId) {
   const { columns, rows } = drawerMetrics(drawer);
   if (![candidate.x, candidate.y, candidate.columns, candidate.rows].every(Number.isInteger)) return "Place bins on whole grid cells.";
   const limits = normalizeBinLimits(drawer.binLimits);
   if (candidate.columns < 1 || candidate.rows < 1 || candidate.columns > limits.columns || candidate.rows > limits.rows) return `Bin exceeds the configured ${limits.columns} × ${limits.rows} cell limit. Adjust Gridfinity Settings.`;
   if (candidate.x < 0 || candidate.y < 0 || candidate.x + candidate.columns > columns || candidate.y + candidate.rows > rows) return "Keep the bin inside the drawer grid.";
-  try { checkPrintFit(drawer.printArea, candidate.columns * 42 - 0.5, candidate.rows * 42 - 0.5, candidate.kind === "insert" ? (candidate.heightUnits ?? 2) * 7 : binTotalHeight({ ...candidate, heightUnits: candidate.heightUnits ?? 2, floor: drawer.floor ?? 2 }), candidate.label || "Bin"); } catch (error) { return error.message; }
+  const footprint = binFootprint(candidate);
+  try { checkPrintFit(drawer.printArea, footprint.width, footprint.depth, candidate.kind === "insert" ? (candidate.heightUnits ?? 2) * 7 : binTotalHeight({ ...candidate, heightUnits: candidate.heightUnits ?? 2, floor: drawer.floor ?? 2 }), candidate.label || "Bin"); } catch (error) { return error.message; }
   const overlap = (drawer.bins || []).find(bin => bin.id !== ignoreId && bin.x < candidate.x + candidate.columns && bin.x + bin.columns > candidate.x && bin.y < candidate.y + candidate.rows && bin.y + bin.rows > candidate.y);
   return overlap ? `That space is occupied by ${overlap.label || "another bin"}.` : null;
 }
@@ -62,11 +77,12 @@ export function normalizeDrawerLayout(raw) {
   if (!raw.bins.length && !result.includeBaseplate) fail("Enable matching baseplates or add a bin before previewing.");
   const ids = new Set();
   for (const [i, entry] of raw.bins.entries()) {
-    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets", "openSides"], `bin ${i + 1}`);
+    object(entry, ["id", "label", "x", "y", "columns", "rows", "heightUnits", "kind", "dividers", "lip", "magnets", "openSides", "closeGaps"], `bin ${i + 1}`);
     const bin = { id: text(entry.id, `bin ${i + 1} id`), label: text(entry.label, `bin ${i + 1} label`, `Bin ${i + 1}`),
       x: number(entry.x, 0, 19, "column", true), y: number(entry.y, 0, 19, "row", true),
       columns: number(entry.columns, 1, GRIDFINITY_LIMITS.columns, "bin width", true), rows: number(entry.rows, 1, GRIDFINITY_LIMITS.rows, "bin depth", true),
       heightUnits: number(entry.heightUnits ?? 3, 2, 12, "bin height", true), kind: entry.kind ?? "bin", openSides: normalizeOpenSides(entry.openSides, `${entry.label || entry.id} openSides`), lip: entry.lip === true, magnets: normalizeMagnetPockets(entry.magnets, `${entry.label || entry.id} magnets`) };
+    bin.closeGaps = normalizeCloseGaps(entry.closeGaps, bin.openSides, bin.kind);
     if (ids.has(bin.id)) fail("bin ids must be unique"); ids.add(bin.id);
     if (!["bin", "insert"].includes(bin.kind)) fail("parts must be bins or insert blanks");
     if (bin.kind !== "bin" && bin.openSides.length) fail("insert blanks do not support open sides");
@@ -93,7 +109,7 @@ export function drawerParts(raw) {
   const part = (id, kind, x, y, columns, rows, extra = {}) => ({ id, type: "gridfinity", kind, columns, rows,
     position: [(x + columns / 2) * 42 - m.gridWidth / 2, (y + rows / 2) * 42 - m.gridDepth / 2, kind === "baseplate" ? 0 : drawerBinBaseZ(drawer)], ...extra });
   for (const bin of drawer.bins) parts.push(part(bin.id, bin.kind, bin.x, bin.y, bin.columns, bin.rows,
-    { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, openSides: bin.openSides, dividers: bin.dividers, magnets: bin.magnets }));
+    { name: bin.label, heightUnits: bin.heightUnits, floor: drawer.floor, wall: drawer.wall, lip: bin.lip, openSides: bin.openSides, closeGaps: bin.closeGaps, dividers: bin.dividers, magnets: bin.magnets }));
   const tile = drawer.includeBaseplate ? baseplateTileLimits(drawer.printArea, m) : { columns: 4, rows: 4 };
   if (drawer.includeBaseplate) for (let y = 0; y < m.rows; y += tile.rows) for (let x = 0; x < m.columns; x += tile.columns) {
     parts.push(part(`baseplate-${x}-${y}`, "baseplate", x, y, Math.min(tile.columns, m.columns - x), Math.min(tile.rows, m.rows - y), { name: `Baseplate ${x / tile.columns + 1}, ${y / tile.rows + 1}`, magnets: drawer.baseplateMagnets }));

@@ -4,7 +4,7 @@ import { AGENT_TASKS, agentTask } from "../benchmarks/agent-tasks.mjs";
 import { evaluateSession, inspectStl } from "../benchmarks/agent-runner.mjs";
 
 test("agent tasks contain requests and invariants, never prepared plans", () => {
-  assert.equal(AGENT_TASKS.length, 3);
+  assert.equal(AGENT_TASKS.length, 9);
   for (const task of AGENT_TASKS) {
     assert.equal(typeof task.request, "string");
     assert.equal(task.plan, undefined);

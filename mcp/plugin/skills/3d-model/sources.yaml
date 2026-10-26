@@ -121,3 +121,16 @@ sources:
     locator: "User's Gridfinity custom-cutout and two-tab AI-sidebar requests in this conversation."
     trust: "Requested workflow: exact item research, explicit evidence, editable inserts and shared manual/agent generation. Product images do not establish object shape or fit."
     mutable: false
+
+  - id: native-feature-edit
+    path: mcp/browser/feature-edit.js
+    trust: "Supported native feature ids, field edits, representation and ownership guards."
+    mutable: true
+  - id: native-region-diff
+    path: src/pairGeometry.js
+    trust: "Native clipped material-set comparisons; no global wall or physical-fit certification."
+    mutable: true
+  - id: agent-trace
+    path: mcp/server/agent-trace.mjs
+    trust: "Local opt-in observable tool-call evidence and bounded artifact capture, not latent reasoning scores."
+    mutable: true

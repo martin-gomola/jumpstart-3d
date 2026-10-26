@@ -351,7 +351,7 @@ apply commits a successful preview as one undoable edit.
 | `jumpstart_preview_lathe` | Preview a turned part from an axial profile, with optional hollowing and scale. |
 | `jumpstart_inspect_geometry` | Measure live/preview dimensions, sections and meshes, or native-solid pair distance and intersection volume. |
 | `jumpstart_select_geometry` | Find native edges or faces by geometric properties; reports ambiguity instead of guessing. |
-| `jumpstart_apply_model` | Apply a successful preview as one undoable edit; duplicate applies are ignored. |
+| `jumpstart_apply_model` | Apply a successful preview as one undoable edit; duplicate applies are ignored. Returns `meshValidation` for each applied body. |
 | `jumpstart_undo` | Undo one edit when the document revision still matches. |
 | `jumpstart_save_document` | Save the current document to browser-local project storage; optionally save a version. |
 | `jumpstart_reopen_document` | Reopen the current project's saved document as a recoverable edit. |
@@ -637,7 +637,10 @@ schema catalog again for every modeling step:
 ```
 
 Pass that to `jumpstart_get_capabilities` for a tool-name summary, operation
-support, limits, and unsupported geometry. Request selected schemas when needed:
+support, limits, and unsupported geometry. Its `planVocabulary` lists the valid
+primitive kinds, profile, feature, operation and modifier type ids; holes,
+fillets, chamfers and shells are `modifier` operations. Request selected
+schemas when needed:
 
 ```json
 { "toolNames": ["jumpstart_preview_model"], "operationTypes": ["knurl", "holePattern"] }
@@ -651,8 +654,9 @@ broker's actual validation contract or change `tools/list`.
 `tools/list` publishes compact copies: the numeric `$expr` alternative is a
 shared `$defs.expr` reference, and preview tools other than
 `jumpstart_preview_model` describe `requirements` as an object that links to
-`jumpstart_get_capabilities`. `tools/call` still validates every argument
-against the full schema.
+`jumpstart_get_capabilities`. Schemas returned by `jumpstart_get_capabilities`
+use the same `$defs.expr` reference and are serialized without indentation.
+`tools/call` still validates every argument against the full schema.
 
 For `jumpstart_get_document`, use `bodyIds` to return selected bodies. With
 `includeGeometry: true`, only their referenced sketches are returned, including
@@ -849,9 +853,10 @@ Direct mesh/body resizing invalidates that body's named-parameter record.
 
 ### Images, sections and measurements
 
-Preview returns labeled top, side and isometric MCP image blocks. Pass
-`section: { "axis": "X", "offset": 0 }` for an additional native section
-image. Coordinates are world millimetres. Capture uses fitted orthographic
+Preview returns labeled top, side, isometric and native section MCP image
+blocks. Without `section`, the section cuts along X through the middle of the
+proposal and is marked `default: true`; pass `section: { "axis": "X",
+"offset": 0 }` to choose the cut. Detail previews omit the section. Coordinates are world millimetres. Capture uses fitted orthographic
 views and crops to the projected model bounds. Camera, projection, selection
 appearance, grid and existing section state are restored, including on failure.
 Each failed image has an explicit `imageErrors` entry. `get_document.viewport`

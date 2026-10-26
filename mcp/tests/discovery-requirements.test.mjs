@@ -9,16 +9,26 @@ const cube = { vertices: [0,0,0, 2,0,0, 2,2,0, 0,2,0, 0,0,2, 2,0,2, 2,2,2, 0,2,2
 const state = (mesh = cube) => ({ document: { bodies: [{ id: "native" }, { id: "other" }] }, featureBodyIds: { block: "native", copies: ["native", "other"] }, geometries: new Map([["native", { mesh }]]), beforeSignatures: new Map([["other", "old"]]), afterSignatures: new Map([["other", "old"]]) });
 
 test("focused discovery filters copies, rejects unknown names and keeps the full catalog compatible", () => {
-  const variants = ["gear", "knurl"].map((type) => ({ properties: { type: { const: type } } }));
-  const catalog = { toolSchemas: [{ name: "jumpstart_preview_model", title: "Preview", inputSchema: { properties: { plan: { properties: { operations: { items: { oneOf: variants } } } } } } }, { name: "jumpstart_get_document", title: "Read" }], units: "mm" };
+  const typed = (...types) => types.map((type) => ({ properties: { type: { const: type } } }));
+  const variants = [...typed("gear", "knurl"), { properties: { type: { const: "modifier" }, modifier: { oneOf: typed("fillet", "hole") } } }];
+  const plan = { properties: { primitives: { items: { properties: { kind: { enum: ["box"] } } } }, sketches: { items: { properties: { profile: { oneOf: typed("circle") } } } }, features: { items: { properties: { type: { enum: ["extrude"] } } } }, operations: { items: { oneOf: variants } } } };
+  const catalog = { toolSchemas: [{ name: "jumpstart_preview_model", title: "Preview", inputSchema: { properties: { plan } } }, { name: "jumpstart_get_document", title: "Read", inputSchema: { properties: {} } }], units: "mm" };
   const original = JSON.stringify(catalog);
   const compact = focusCapabilities(catalog, { includeSchemas: false });
   assert.equal(compact.toolSchemas, undefined);
   assert.equal(compact.availableTools.length, 2);
+  assert.deepEqual(compact.planVocabulary, { primitiveKinds: ["box"], profileTypes: ["circle"], featureTypes: ["extrude"], operationTypes: ["gear", "knurl", "modifier"], modifierTypes: ["fillet", "hole"], guide: compact.planVocabulary.guide });
+  assert.match(compact.planVocabulary.guide, /modifier/);
   const focused = focusCapabilities(catalog, { operationTypes: ["knurl"] });
   assert.equal(focused.toolSchemas.length, 1);
   focused.toolSchemas[0].title = "Changed copy";
   assert.equal(focused.toolSchemas[0].inputSchema.properties.plan.properties.operations.items.oneOf.length, 1);
+  const expr = { type: "object", properties: { $expr: { type: "string" } } };
+  const withExpr = { toolSchemas: [{ name: "jumpstart_preview_model", inputSchema: { properties: { plan, size: { oneOf: [{ type: "number" }, expr] } } } }] };
+  const shared = focusCapabilities(withExpr, { toolNames: ["jumpstart_preview_model"] }).toolSchemas[0].inputSchema;
+  assert.deepEqual(shared.$defs, { expr });
+  assert.deepEqual(shared.properties.size.oneOf[1], { $ref: "#/$defs/expr" });
+  assert.deepEqual(focusCapabilities(withExpr).toolSchemas[0].inputSchema.$defs, { expr });
   assert.equal(JSON.stringify(catalog), original);
   assert.deepEqual(focusCapabilities(catalog), catalog);
   assert.throws(() => focusCapabilities(catalog, { toolNames: ["invented"] }), /Unknown/);

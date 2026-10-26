@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.12.0"
+  version: "1.13.0"
 ---
 
 # Model a part in JumpStart
@@ -35,8 +35,8 @@ copy the entire tool catalog into working notes.
    editor when the target is ambiguous. After a disconnect, relist and verify
    the same document; do not switch targets automatically.
 2. Start with `jumpstart_get_document` and compact capabilities using
-   `jumpstart_get_capabilities({includeSchemas:false})`. Request `toolNames` and
-   `operationTypes` only for the tools and plan operations the task needs.
+   `jumpstart_get_capabilities({includeSchemas:false})`; `planVocabulary` lists type ids (holes and fillets are `modifier` operations).
+   Request `toolNames` and `operationTypes` only for what the task needs.
    Use current tool schemas rather than guessing fields or relying on a copied catalog.
 3. For edits, use the target’s `editing` context to choose parameters, a supported native feature edit or a new operation. Read [Edit existing parts](references/edit-existing-parts.md) for local edits and preservation contracts. Read selected `bodyIds` with `includeGeometry:true`. Turn off
    `includeSelectors`, `includeFeatureTree`, or `includeSketches` when not needed.
@@ -62,10 +62,10 @@ copy the entire tool catalog into working notes.
 1. Choose the smallest editable native plan that meets the checklist. Keep
    separate printable parts separate. Native parameters and MCP template
    parameters are separate systems. Use the matching workflow reference.
-2. Read the current revision and pass `expectedRevision`. Preview without
+2. Pass the current revision as `expectedRevision` to previews (not to `jumpstart_apply_model`). Preview without
    changing the saved document. Use a new-document preview only when a fresh
    document or replacement is requested or authorized.
-3. Inspect complete preview views, dimensions, acceptance results and `changes`.
+3. Inspect complete preview views, dimensions, acceptance results and `changes`; the section image cuts X mid-part unless `section` names the critical cut.
    For edits, check both the requested delta and preserved source definitions.
    Use `jumpstart_inspect_geometry` for independent sections and mesh checks.
    Require connected support-mesh validation for phone-cradle previews.
@@ -76,8 +76,8 @@ copy the entire tool catalog into working notes.
 ## Apply and deliver
 
 1. Apply only the successful `previewId` using `jumpstart_apply_model` against the same editor.
-   Reread and preview again after a changed revision. Inspect state before
-   retrying a timeout and reuse the same preview id where appropriate.
+   If its `meshValidation` is not valid for every body, correct the plan and preview again.
+   Reread and preview again after a changed revision. Inspect state before retrying a timeout and reuse the same preview id where appropriate.
 2. Confirm the final document, measured dimensions, and intended assembly pose.
    Preserve unrelated work. Undo only the agent's intended edit using the
    current revision. Save only when requested or part of the agreed task.

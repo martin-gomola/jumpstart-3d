@@ -83,7 +83,7 @@ export function evaluateSession(session) {
   check("kernel-errors", candidate?.document?.bodies?.length > 0 && candidate.document.bodies.every((body) => !body.error && body.volume > 0), "Live kernel readback must report valid nonempty solids");
   for (const [axis, expected] of Object.entries(task.dimensions)) check(`export-dimension-${axis}`, near(candidate?.stl?.dimensions?.[axis], expected), { expected, measured: candidate?.stl?.dimensions?.[axis], tolerance: 0.15 });
   check("stl-finite-nondegenerate", candidate?.stl?.triangles > 0 && candidate.stl.degenerate === 0, candidate?.stl || "No live export captured");
-  const meshInspection = (session.calls || []).find((call) => call.name === "jumpstart_inspect_geometry" && !call.error && call.result?.revision === candidate?.document?.revision && call.result?.meshValidation);
+  const meshInspection = (session.calls || []).find((call) => ["jumpstart_inspect_geometry", "jumpstart_apply_model"].includes(call.name) && !call.error && call.result?.revision === candidate?.document?.revision && call.result?.meshValidation);
   check("mesh-topology", meshInspection?.result?.meshValidation?.valid === true, meshInspection?.result?.meshValidation || "Capture live mesh topology inspection; a finite STL alone does not establish manifoldness");
   check("editable-history", candidate?.document?.bodies?.every((body) => body.featureTree && body.featureTree.t !== "mesh"), "Native feature readback required; mesh scaling is a separate test");
   const calls = session.calls || [];

@@ -512,7 +512,8 @@ export function initMcp(app) {
         const phoneCradle = compiled.document.bodies.find((body) => body.mcpPhoneCradle)?.mcpPhoneCradle;
         const coordinateFrame = phoneCradle?.coordinateFrame || { description: "X across · Y depth · Z up", orientation: "+X / +Y / +Z" };
         if (phoneCradle) result.phoneCradle = clone(phoneCradle);
-        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, section, coordinateFrame, compiled.affectedBodyIds,detail,detail?"after":undefined));
+        const imageSection = section || (detail ? undefined : { axis: "X", offset: (box.min.x + box.max.x) / 2, default: true });
+        if (includeImage && !box.isEmpty()) Object.assign(result, previewImages(app, box, imageSection, coordinateFrame, compiled.affectedBodyIds,detail,detail?"after":undefined));
         if (beforeImages) {
           result.images = [...beforeImages.images,...(result.images || [])];
           result.imageErrors = [...beforeImages.imageErrors,...(result.imageErrors || [])];
@@ -653,6 +654,14 @@ export function initMcp(app) {
     const cradleBodyIds = preview.compiled.document.bodies.filter((body) => checkedCandidates.has(body.id) && body.mcpPhoneCradle).map((body) => body.id);
     if (cradleBodyIds.some((bodyId) => !preview.meshChecks?.has(bodyId))) throw new Error("Inspect every phone-cradle preview with mesh validation before applying it");
     if (preview.failedMesh || [...(preview.checks?.values() || [])].some((pass) => !pass)) throw new Error("Preview has failed requested geometry checks; correct the model or resolve the reported measurement before applying");
+    const bodies = {};
+    for (const bodyId of checkedCandidates) {
+      const geometry = preview.geometries.get(bodyId);
+      if (!geometry) continue;
+      try { bodies[bodyId] = inspectGeometry(geometry.mesh, {}).meshValidation; }
+      catch (error) { bodies[bodyId] = { valid: null, error: error.message }; }
+    }
+    const meshValidation = { source: "tessellation of the applied native document, built during preview", valid: Object.values(bodies).every((entry) => entry.valid === true), bodies };
     const next = clone(preview.compiled.document);
     store.update((doc) => {
       for (const key of Object.keys(doc)) delete doc[key];
@@ -660,7 +669,7 @@ export function initMcp(app) {
     }, `AI model: ${preview.plan.name}`);
     app.setMode(preview.plan.mode || "advanced");
     app.select(preview.compiled.createdBodyIds.length ? preview.compiled.createdBodyIds : preview.compiled.affectedBodyIds);
-    const result = { applied: true, previewId, revision: currentRevision(), bodyIds: preview.compiled.createdBodyIds, featureBodyIds: preview.compiled.featureBodyIds, modelId: preview.compiled.modelId, parameters: preview.compiled.parameters };
+    const result = { applied: true, previewId, revision: currentRevision(), bodyIds: preview.compiled.createdBodyIds, featureBodyIds: preview.compiled.featureBodyIds, modelId: preview.compiled.modelId, parameters: preview.compiled.parameters, meshValidation };
     previews.delete(previewId);
     applied.set(previewId, result);
     if (applied.size > 100) applied.delete(applied.keys().next().value);

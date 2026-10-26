@@ -274,7 +274,7 @@ const tools = extendMcpTools([
   {
     name: "jumpstart_apply_model",
     title: "Apply a successful preview",
-    description: "Commit a model or body edit preview as one undoable document edit. The document must not have changed since preview. Repeating the same previewId will not duplicate the edit.",
+    description: "Commit a model or body edit preview as one undoable document edit. The document must not have changed since preview. Repeating the same previewId will not duplicate the edit. Takes only previewId (the preview fixes the revision) and returns meshValidation for each applied body.",
     inputSchema: {
       type: "object", additionalProperties: false, required: ["previewId"],
       properties: { ...commonEditor, previewId: { type: "string", minLength: 1, maxLength: 100 } },
@@ -695,7 +695,7 @@ function sanitizeName(value) {
 }
 
 function textContent(value) {
-  return { type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) };
+  return { type: "text", text: typeof value === "string" ? value : value?.toolSchemas ? JSON.stringify(value) : JSON.stringify(value, null, 2) };
 }
 
 function toolResult(value) {

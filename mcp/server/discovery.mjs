@@ -7,12 +7,31 @@ function shareExpr(node, defs) {
   return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, shareExpr(value, defs)]));
 }
 
+function withSharedExpr(tool) {
+  const defs = {};
+  const inputSchema = shareExpr(tool.inputSchema, defs);
+  if (defs.expr) inputSchema.$defs = defs;
+  return { ...tool, inputSchema };
+}
+
+const constTypes = (variants) => variants.map((variant) => variant.properties.type.const);
+function planVocabulary(model) {
+  const plan = model.inputSchema.properties.plan.properties;
+  const operations = plan.operations.items.oneOf;
+  return {
+    primitiveKinds: plan.primitives.items.properties.kind.enum,
+    profileTypes: constTypes(plan.sketches.items.properties.profile.oneOf),
+    featureTypes: plan.features.items.properties.type.enum,
+    operationTypes: constTypes(operations),
+    modifierTypes: constTypes(operations.find((variant) => variant.properties.type.const === "modifier").properties.modifier.oneOf),
+    guide: "plan.primitives[].kind, plan.sketches[].profile.type, plan.features[].type (sketch-based extrude/revolve/...), plan.operations[].type. Fillet, chamfer, offset, shell, hole, thread, emboss and scale are operations of type modifier with modifier.type. The operationTypes filter accepts operationTypes only.",
+  };
+}
+
 // Compact tools/list copies; tools/call still validates against the full schemas.
 export function publishTools(tools) {
   return tools.map((tool) => {
-    const defs = {};
-    const inputSchema = shareExpr(tool.inputSchema, defs);
-    if (defs.expr) inputSchema.$defs = defs;
+    const { inputSchema } = withSharedExpr(tool);
     if (tool.name.startsWith("jumpstart_preview_") && tool.name !== "jumpstart_preview_model" && inputSchema.properties?.requirements) {
       inputSchema.properties.requirements = { type: "object", description: `Optional acceptance requirements, same shape as jumpstart_preview_model requirements. Full schema: jumpstart_get_capabilities with toolNames ["${tool.name}"]. The server validates it in full.` };
     }
@@ -33,12 +52,13 @@ export function focusCapabilities(capabilities, options = {}) {
   if (options.includeSchemas === false) {
     delete result.toolSchemas;
     result.availableTools = selected.map(({ name, title }) => ({ name, title }));
-  } else if (names || operations) {
+    result.planVocabulary = planVocabulary(model);
+  } else {
     result.toolSchemas = selected.map((tool) => {
       const copy = structuredClone(tool);
-      const plan = copy.inputSchema.properties.plan;
+      const plan = copy.inputSchema?.properties?.plan;
       if (operations && plan?.properties.operations) plan.properties.operations.items.oneOf = plan.properties.operations.items.oneOf.filter((variant) => operations.includes(variant.properties.type.const));
-      return copy;
+      return withSharedExpr(copy);
     });
   }
   if (names || operations || options.includeSchemas === false) result.discovery = { totalTools: capabilities.toolSchemas.length, returnedTools: selected.length, ...(operations ? { operationTypes: operations } : {}) };

@@ -24,7 +24,7 @@ export function evaluateEditSession(session, task) {
  if(task.removedKind)add("feature-removed",target?.featureTree?.mods?.some(m=>m.t===task.removedKind)&&!final?.featureTree?.mods?.some(m=>m.t===task.removedKind),"Remove the existing feature, not its body");
  const baselineInspections=ok("jumpstart_inspect_geometry").filter(c=>c.args.bodyId===target?.id&&c.result?.revision===baseline?.revision);
  const inspections=ok("jumpstart_inspect_geometry").filter(c=>c.args.bodyId===target?.id&&c.result?.revision===doc?.revision);
- add("independent-mesh",inspections.some(c=>c.result.meshValidation?.valid),"Inspect the actual final revision");
+ add("independent-mesh",inspections.some(c=>c.result.meshValidation?.valid)||applies.some(a=>a.result?.revision===doc?.revision&&a.result?.meshValidation?.bodies?.[target?.id]?.valid===true),"Inspect the actual final revision");
  for(const sample of [...(task.samples||[]),...(task.baselineSamples||[]).map(s=>({...s,baseline:true}))]) {
   const measured=(sample.baseline?baselineInspections:inspections).flatMap(c=>c.result.samples||[]).find(s=>!s.ambiguous && s.axis===sample.axis && s.point?.every((v,i)=>near(v,sample.point[i],.001)));
   add(`sample-${sample.id}`,measured?.intervals?.length===sample.intervals.length && measured.intervals.every((v,i)=>v.every((x,j)=>near(x,sample.intervals[i][j]))),{expected:sample,measured});

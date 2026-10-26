@@ -75,9 +75,10 @@ test("phone cradle clarifies direction, checks connected supports before apply, 
   expect(preview.valid, JSON.stringify(preview.errors)).toBe(true);
   expect(preview.bodies).toHaveLength(1);
   expect(preview.phoneCradle).toMatchObject({ topEdgeToward: "+Y", screenFacesToward: "-Y", supportRibs: 2 });
-  expect(preview.images.map((image) => image.view)).toEqual(["top", "side", "isometric"]);
+  expect(preview.images.map((image) => image.view)).toEqual(["top", "side", "isometric", "section"]);
+  expect(preview.images[3].section).toMatchObject({ axis: "X", default: true });
   expect(preview.images.every((image) => image.coordinateFrame.orientation === "+Y = dashboard")).toBe(true);
-  expect(preview.mcpImageBlocks).toBe(3);
+  expect(preview.mcpImageBlocks).toBe(4);
   expect((await get()).revision).toBe(before.revision);
 
   const prematureApply = await tool("jumpstart_apply_model", { editorId, previewId: preview.previewId }, true);

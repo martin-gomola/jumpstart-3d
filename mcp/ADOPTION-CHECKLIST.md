@@ -156,7 +156,25 @@ Follow-up from an over-engineering audit and agent-task benchmark; not a SOMA/te
       reference plan in the browser suite.
 - [x] `make claude-install` and `make cursor-install` register the MCP server and copy the
       skill, refusing to overwrite custom entries or unmanaged skills.
-- [ ] Before/after benchmark with a real agent: not run.
+- [x] Real-agent run, six printed-part tasks (nut trap, heat-set bosses, D-shaft knob,
+      friction-lid box, snap hook, phone stand), one Cursor subagent each through the
+      recorder against a local broker: geometry probes passed 6/6; 0/6 passed overall,
+      all on process checks (no post-apply mesh check, no section image; one missing
+      `reopened` checkpoint was a briefing error). Agents also hit the `operationTypes`
+      vocabulary and the skill's `expectedRevision` advice for apply.
+- [x] Follow-up: `jumpstart_apply_model` returns per-body `meshValidation`, which the
+      recorder accepts at the candidate revision; previews add a default X mid-plane
+      section image; compact capabilities return `planVocabulary`; capability schemas
+      share `$defs.expr` and are minified (`jumpstart_preview_model` schema 359 → 65 k
+      characters). Skill v1.13.0 corrects the apply/`expectedRevision` advice.
+- [x] Rerun of the same six tasks after the follow-up (same brief plus the `reopened`
+      checkpoint step): 6/6 passed; 62 calls with 1 error, against 70 calls with 8 errors
+      and 0/6 before. Heat-set bosses now use the native `hole` modifier.
+- [ ] Remaining agent friction: regular-polygon (across flats) and sharp/ring rectangle
+      profiles, trig in `$expr`, documented plan order (features before operations) and
+      body references, `hole.at[].n` and extrude direction, fillet edge selection,
+      per-body validation in multi-body exports, knurl D-bore depth and flat offset,
+      optional trimming of preview `geometrySelectors`.
 
 ## 10. Photo measurement and likeness check — implement the idea independently — planned
 

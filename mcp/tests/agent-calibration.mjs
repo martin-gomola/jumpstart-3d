@@ -70,10 +70,11 @@ export async function calibrate(page, taskId, plan) {
   const before = await tool("jumpstart_get_document", { editorId });
   const preview = await tool("jumpstart_preview_model", { editorId, expectedRevision: before.revision, plan, includeImage: false });
   expect(preview.valid, JSON.stringify(preview.errors)).toBe(true);
-  await tool("jumpstart_apply_model", { editorId, previewId: preview.previewId });
+  const applied = await tool("jumpstart_apply_model", { editorId, previewId: preview.previewId });
   const document = await tool("jumpstart_get_document", { editorId, includeGeometry: true });
   const checks = [];
   const check = (name, pass, detail) => checks.push({ name, pass: !!pass, detail });
+  check("apply-mesh-validation", applied.meshValidation?.valid === true && Object.keys(applied.meshValidation.bodies).length === document.bodies.length, applied.meshValidation);
   check("body-count", document.bodies.length === (task.bodies ?? 1), document.bodies.map(({ name }) => name));
   for (const [axis, expected] of Object.entries(task.dimensions)) {
     const i = "xyz".indexOf(axis);

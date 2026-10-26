@@ -185,7 +185,7 @@ test("frame spacer preview fits every camera and persists measured assumptions t
     proposal = result.value; expect(proposal.valid).toBe(true); expect(proposal.imageErrors).toEqual([]);
     expect(proposal.designContext.dimensionSources.wall.source).toBe("assumed");
     expect(proposal.frameInspection.passed).toBe(true); expect(proposal.frameInspection.measured.openingWidth).toBeCloseTo(76,2);
-    expect(proposal.images.length).toBe(3); expect(result.images.length).toBe(3);
+    expect(proposal.images.length).toBe(4); expect(result.images.length).toBe(4);
     for (const metadata of proposal.images) expect(metadata.framing.fullyVisible).toBe(true);
     for (const image of result.images) {
       const perimeter = await page.evaluate(async ({data,mimeType}) => {

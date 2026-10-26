@@ -187,6 +187,42 @@ export function inspectPrintability(mesh, { overhangAngle=45, minWall, baseZone=
       ...(hierarchy?['Thin walls are probed at four points per triangle along the inward normal; walls thinner than minWall between probes or measured obliquely can be missed.']:[]),'Does not certify printability, strength or slicer success.']};
 }
 
+// Column-major rotation turning unit direction d onto -Z (the bed).
+function rotationToBed(d) {
+  const c=-d[2];
+  if(c>1-1e-9)return [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+  if(c<-1+1e-9)return [1,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,1];
+  const [x,y,z]=cross(d,[0,0,-1]),k=1/(1+c);
+  const r=[[1-k*(y*y+z*z),-z+k*x*y,y+k*x*z],[z+k*x*y,1-k*(x*x+z*z),-x+k*y*z],[-y+k*x*z,x+k*y*z,1-k*(x*x+y*y)]];
+  return [r[0][0],r[1][0],r[2][0],0,r[0][1],r[1][1],r[2][1],0,r[0][2],r[1][2],r[2][2],0,0,0,0,1];
+}
+
+/** Read-only print pose candidates: the six axis directions and the largest flat faces, each laid on the bed. */
+export function rankPrintOrientations(mesh, { overhangAngle=45, baseZone=1, tolerance=1e-5, faces=6 } = {}) {
+  tolerance=toleranceOf(tolerance);
+  const validation=inspectTriangleMesh(mesh,{tolerance});
+  if(!validation.triangleCount||validation.boundaryEdges||validation.nonManifoldEdges||validation.inconsistentWindingEdges)throw new Error('Print orientation needs a closed, consistently wound mesh');
+  const {points,triangles}=prepared(mesh),outward=validation.signedVolume<0?-1:1;
+  const candidates=[[0,0,-1],[0,0,1],[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]].map(down=>({down,source:'axis'})),flats=new Map();
+  for(let i=0;i<triangles.length;i+=3){
+    const a=points[triangles[i]],n=cross(sub(points[triangles[i+1]],a),sub(points[triangles[i+2]],a)),length=Math.hypot(...n);
+    if(length<=tolerance*tolerance)continue;
+    const normal=n.map(v=>v*outward/length),key=normal.map(v=>Math.round(v*50)).join(),entry=flats.get(key)||{normal,area:0};
+    entry.area+=length/2;flats.set(key,entry);
+  }
+  for(const {normal,area} of [...flats.values()].sort((p,q)=>q.area-p.area).slice(0,faces))
+    if(!candidates.some(({down})=>dot(down,normal)>0.999))candidates.push({down:normal,source:'flat face',faceArea:area});
+  const vertices=points.flat();
+  const ranked=candidates.map(({down,source,faceArea})=>{
+    const matrix=rotationToBed(down),measured=inspectPrintability({vertices,triangles,matrix},{overhangAngle,baseZone,tolerance});
+    const heights=points.map(p=>matrix[2]*p[0]+matrix[6]*p[1]+matrix[10]*p[2]);
+    return {down,source,...(faceArea?{faceArea}:{}),rotation:matrix,current:dot(down,[0,0,-1])>0.999,overhangArea:measured.overhangArea,baseOverhangArea:measured.baseOverhangArea,
+      bedContactArea:measured.bedContactArea,height:Math.max(...heights)-Math.min(...heights),slenderness:measured.slenderness};
+  }).sort((p,q)=>p.overhangArea-q.overhangArea||q.bedContactArea-p.bedContactArea||p.height-q.height);
+  return {source:'generated triangle mesh',overhangAngle,baseZone,candidates:ranked,
+    limitations:['Ranks by unsupported overhang area, then bed contact, then height; strength along layers, surface finish and support removal are not scored.','rotation is a column-major matrix about the world origin; the candidate is evaluated as if dropped onto the bed and does not change the document.','Thin walls are not re-probed per orientation.']};
+}
+
 /** Native signatures are body-local. This helper deliberately accepts data predicates only. */
 export function selectGeometry(selectors, { kind, predicate={}, expectedFingerprint, currentFingerprint } = {}) {
   if(!expectedFingerprint||expectedFingerprint!==currentFingerprint)throw new Error('Stale or missing geometry fingerprint');

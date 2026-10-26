@@ -6,8 +6,8 @@ text-to-cad `2f793659fb7bab537e2f00836e06448fc4087cb2`.
 
 Paths below resolve from the repository root.
 
-The current implementation covers items 1–3 and 9; items 6 and 8 are partly
-covered by item 9. Items 4–8 and 10 remain an ordered backlog, not claims of
+The current implementation covers items 1–3, 6 and 9; item 7 is partly covered
+by skill guidance and item 8 partly by item 9. Items 4, 5, 7, 8 and 10 remain an ordered backlog, not claims of
 implemented functionality. Keep this file updated with
 actual evidence. Existing local work must be preserved; no upstream push or PR.
 
@@ -88,19 +88,27 @@ Source ideas: text-to-cad positioning/native-joint examples; our `src/simulate.j
 - [ ] Preserve native transforms/joint editability; defer a general assembly constraint solver.
 - [ ] Acceptance: two mounting faces align with the requested orientation and measured gap.
 
-## 6. Read-only print-orientation advice — reuse our existing implementation
+## 6. Read-only print-orientation advice — reuse our existing implementation — complete
 
 Source: our `src/printsim.js`; compare SOMA/text-to-cad orientation workflows.
 
-- [ ] Extract bounded calculations from UI/simulation state without entering simLock.
-- [ ] Return candidate transforms, overhang area, bed contact and height with assumptions.
-- [ ] Acceptance: advice leaves the installed assembly pose/document unchanged.
+- [x] Reimplement the candidate search on the inspected mesh in `mcp/shared/geometry.js`
+      (`rankPrintOrientations`), outside UI and simulation state; `src/printsim.js` is unchanged.
+      Candidates: six axis directions plus the six largest flat-face normal groups.
+- [x] Return per-candidate rotation matrix, overhang and base overhang area, bed contact,
+      height and slenderness, ranked in that order, with limitations. Exposed as the
+      `printOrientations` option of `jumpstart_inspect_geometry`; counted in its pass budget.
+- [x] Acceptance: advice is read-only; it inspects tessellation and never applies a pose.
+      Unit tests cover the ranking, rotations onto the bed and open-mesh rejection.
 
 ## 7. Hardware interfaces — implement the idea independently
 
 Source ideas: SOMA fasteners/clearance holes/nut traps/heat-set inserts (GPL implementation).
 Its bd_warehouse dimension tables have separate Apache-2.0 provenance and known suspect entries.
 
+- [x] Partial, skill only: `fit-and-print-checks.md` (skill v1.12.0) has an M2–M8 table of
+      ISO 273 clearance holes, ISO 4032 nuts with printed pocket radius and depth, and
+      vendor heat-set insert holes, as starting values for a fit coupon.
 - [ ] Add native reusable washers, nut pockets, insert pockets and seating/counterbore geometry.
 - [ ] Validate vendor dimensions, hole depth, floor/wall requirements and inconsistent table entries.
 - [ ] Keep hardware placement referenced to functional seats rather than guessed origins.
@@ -134,9 +142,21 @@ reviewed 2026-10-26). Both inspired the checks; no code was copied.
 - [x] Reject open or inconsistently wound meshes and incomplete checks as unknown.
 - [x] Skill: default Bambu Lab X2D profile and slicer handoff, dimension
       provenance with unknowns, and image review even when checks pass.
-- [ ] Item 6 remains open for candidate orientations; this check reports only
-      the current pose. Item 8 remains open for neighbor-aware sampling,
-      coverage statistics and overlays.
+- [x] Candidate orientations are covered by item 6; this check reports the current pose.
+- [ ] Item 8 remains open for neighbor-aware sampling, coverage statistics and overlays.
+
+## Agent tooling — 2026-10-26
+
+Follow-up from an over-engineering audit and agent-task benchmark; not a SOMA/text-to-cad item.
+
+- [x] `tools/list` publishes compact schemas (shared `$defs.expr`, requirement stubs on
+      non-model previews); `tools/call` and `jumpstart_get_capabilities` keep full schemas.
+- [x] Agent benchmark: 24 tasks, including 13 printed parts graded by hidden measurement
+      probes and native-feature checks; each grader is calibrated against a scripted
+      reference plan in the browser suite.
+- [x] `make claude-install` and `make cursor-install` register the MCP server and copy the
+      skill, refusing to overwrite custom entries or unmanaged skills.
+- [ ] Before/after benchmark with a real agent: not run.
 
 ## 10. Photo measurement and likeness check — implement the idea independently — planned
 

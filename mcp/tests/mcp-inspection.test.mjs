@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inspectGeometry, measureParallelChannels } from '../browser/inspection.js';
-import { inspectPrintability } from '../shared/geometry.js';
+import { inspectPrintability, rankPrintOrientations } from '../shared/geometry.js';
 
 // Independently construct a stepped solid from exposed grid-cell faces, without CAD plans.
 function groovedMesh() {
@@ -55,6 +55,20 @@ test('printability measures downward overhangs above the bed and thin walls from
  const inverted=boxes([[0,0,0],[10,10,1]],[[20,0,5],[30,10,6]]);
  for(let i=0;i<inverted.triangles.length;i+=3)[inverted.triangles[i+1],inverted.triangles[i+2]]=[inverted.triangles[i+2],inverted.triangles[i+1]];
  assert.ok(Math.abs(inspectPrintability(inverted,{minWall:2}).overhangArea-100)<1e-9);
+});
+test('print orientations lay each candidate on the bed and rank by overhang, bed contact and height',()=>{
+ const brick=rankPrintOrientations(boxes([[0,0,0],[10,20,30]]));
+ assert.equal(brick.candidates.length,6);
+ assert.ok(brick.candidates.every(c=>c.overhangArea===0));
+ assert.deepEqual(brick.candidates[0].down.map(Math.abs),[1,0,0]);
+ assert.ok(Math.abs(brick.candidates[0].bedContactArea-600)<1e-9);assert.ok(Math.abs(brick.candidates[0].height-10)<1e-9);
+ const upright=brick.candidates.find(c=>c.current);assert.ok(Math.abs(upright.height-30)<1e-9);
+ for(const {down,rotation:m} of brick.candidates){const z=[m[2]*down[0]+m[6]*down[1]+m[10]*down[2]];assert.ok(Math.abs(z[0]+1)<1e-9);}
+ const tee=rankPrintOrientations(boxes([[4,4,0],[8,8,10]],[[0,0,10],[12,12,12]]));
+ const best=tee.candidates[0],current=tee.candidates.find(c=>c.current);
+ assert.deepEqual(best.down,[0,0,1]);
+ assert.ok(Math.abs(current.overhangArea-144)<1e-9);assert.ok(Math.abs(best.overhangArea-16)<1e-9);
+ assert.throws(()=>rankPrintOrientations({vertices:[0,0,0,1,0,0,0,1,0],triangles:[0,1,2]}),/closed/);
 });
 test('printability separates base overhangs and measures bed contact and proportions',()=>{
  const base=inspectPrintability(boxes([[0,0,0],[10,10,5]],[[20,0,0.3],[22,2,0.8]]));

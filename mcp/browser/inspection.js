@@ -1,6 +1,6 @@
 import { failureGuidance } from "../shared/failure-guidance.js";
 import { inspectRectangularFrame } from "./frame-plan.js";
-import { inspectPrintability, inspectTriangleMesh, sectionTriangleMesh, sampleSolidIntervals } from "../shared/geometry.js";
+import { inspectPrintability, inspectTriangleMesh, rankPrintOrientations, sectionTriangleMesh, sampleSolidIntervals } from "../shared/geometry.js";
 
 // Estimated triangle passes per check; printability also enforces its own ray-test budget.
 export const checkPasses = (check) => check.kind === "channels" ? 104 : check.kind === "printability" ? 4 : 2;
@@ -77,7 +77,7 @@ export function measureParallelChannels(mesh, { axis = "Y", crossAt = 0, toleran
 
 export function inspectGeometry(mesh, options = {}) {
   const tolerance = options.tolerance ?? 0.0001;
-  const estimatedPasses = 1 + (options.frame ? 8 : 0) + (options.samples?.length || 0) * 2 + (options.section ? 2 : 0) + (options.checks || []).reduce((sum, check) => sum + checkPasses(check), 0);
+  const estimatedPasses = 1 + (options.frame ? 8 : 0) + (options.printOrientations ? 40 : 0) + (options.samples?.length || 0) * 2 + (options.section ? 2 : 0) + (options.checks || []).reduce((sum, check) => sum + checkPasses(check), 0);
   if (mesh.triangles.length / 3 * estimatedPasses > 8000000) throw new Error("Inspection exceeds the 8 million triangle-visit budget; inspect fewer checks or use a coarser tessellation");
   const meshValidation = options.mesh === false ? undefined : inspectTriangleMesh(mesh, { tolerance });
   if (meshValidation) meshValidation.valid = meshValidation.triangleCount > 0 && !meshValidation.degenerateTriangles && !meshValidation.boundaryEdges && !meshValidation.nonManifoldEdges && !meshValidation.inconsistentWindingEdges && meshValidation.disconnectedComponents === 1;
@@ -115,7 +115,12 @@ export function inspectGeometry(mesh, options = {}) {
       throw new Error("Unsupported geometry check");
     } catch (error) { return { id: check.id, kind: check.kind, expected: check.expected, pass: null, error: error.message, guidance: failureGuidance(error) }; }
   });
-  return { coordinateSpace: "world", units: "mm", meshValidation, section, samples, checks, ...(options.frame ? { frame: inspectRectangularFrame(mesh, options.frame, tolerance) } : {}),
+  let printOrientations;
+  if (options.printOrientations) {
+    try { printOrientations = rankPrintOrientations(mesh, { ...options.printOrientations, tolerance }); }
+    catch (error) { printOrientations = { error: error.message, guidance: failureGuidance(error) }; }
+  }
+  return { coordinateSpace: "world", units: "mm", meshValidation, section, samples, checks, ...(printOrientations ? { printOrientations } : {}), ...(options.frame ? { frame: inspectRectangularFrame(mesh, options.frame, tolerance) } : {}),
     geometricRequirements: checks.length ? checks.every((check) => check.pass === true) ? "passed" : checks.some((check) => check.pass === false) ? "failed" : "unknown" : "not_requested",
     physicalFit: "unverified", manufacturingPerformance: "unverified" };
 }

@@ -865,6 +865,10 @@ inspect cached preview geometry without applying it. Optional arguments include:
   and solid intervals, for measuring floors, walls, gaps and clearances along an axis.
 - `checks: [{ "id": "width", "kind": "dimension", "axis": "X", "expected": 110,
   "tolerance": 0.05 }]`: expected versus measured tessellation dimensions.
+- `printOrientations: { "overhangAngle": 45 }`: read-only print pose advice.
+  The six axis directions and the largest flat faces are each laid on the bed
+  and ranked by overhang area, bed contact and height, with a rotation matrix
+  per candidate. The document is unchanged; strength along layers is not scored.
 - A `channels` check with `axis: "Y"`, `crossAt: 0`, and
   `expected: { "count": 9, "width": 4, "depth": 3, "floor": 3,
   "spacing": 11.75, "symmetric": true, "openEnds": true }`.

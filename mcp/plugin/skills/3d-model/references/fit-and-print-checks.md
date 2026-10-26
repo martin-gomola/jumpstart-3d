@@ -11,6 +11,7 @@ requesting measurements.
 - Attach pair acceptance before building
 - Choose the manufacturing assumptions
 - Review installation and print poses separately
+- Hardware holes and pockets
 - Hand off to the slicer (default printer profile)
 
 ## Establish the functional interface
@@ -103,6 +104,38 @@ Inspect the assembled installation pose from complete views, especially the
 mating side and insertion path. Do not rotate the reference assembly to hide a
 placement error. Preview a separate print layout only when that is part of the
 requested handoff, and retain the intended final pose.
+
+When the request does not fix the print pose, call `jumpstart_inspect_geometry`
+with `printOrientations: {}` (optionally `overhangAngle`) on the body. It lays
+the six axis directions and the largest flat faces on the bed and ranks them by
+overhang area, then bed contact, then height; `current: true` marks the modeled
+pose. It does not change the document and does not score layer-direction
+strength, finish or support removal. Name the chosen pose and why in the report;
+reject a top-ranked pose that puts load across layers or a cosmetic face on the
+bed.
+
+## Hardware holes and pockets
+
+Starting values for metric hardware, sized for the default X2D 0.4 mm profile.
+Confirm critical fits with a coupon. Clearance holes are ISO 273 medium; nuts
+are ISO 4032. The nut pocket adds 0.3 mm to the width across flats; its hex
+radius is the circumradius (across flats ÷ √3) for a six-sided polygon.
+
+| Size | Clearance hole | Nut across flats | Nut height | Nut pocket hex radius | Pocket depth | Heat-set insert hole |
+| --- | --- | --- | --- | --- | --- | --- |
+| M2 | 2.4 | 4.0 | 1.6 | 2.48 | 1.8 | 3.2 |
+| M2.5 | 2.9 | 5.0 | 2.0 | 3.06 | 2.2 | datasheet |
+| M3 | 3.4 | 5.5 | 2.4 | 3.35 | 2.6 | 4.0 |
+| M4 | 4.5 | 7.0 | 3.2 | 4.21 | 3.4 | 5.6 |
+| M5 | 5.5 | 8.0 | 4.7 | 4.79 | 4.9 | 6.4 |
+| M6 | 6.6 | 10.0 | 5.2 | 5.95 | 5.4 | 8.0 |
+| M8 | 9.0 | 13.0 | 6.8 | 7.68 | 7.0 | datasheet |
+
+All values are mm. Insert holes are for standard-length inserts of one common
+vendor type; use the supplied insert's datasheet when it differs. Make an
+insert hole at least the insert length plus 1 mm deep and keep 1.5 mm or more
+of wall around it. Orient a hex pocket with a flat parallel to the bed, or add
+a sacrificial bridge layer, when it prints face-down above the bed.
 
 ## Hand off to the slicer
 

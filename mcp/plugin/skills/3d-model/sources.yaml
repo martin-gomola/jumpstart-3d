@@ -71,7 +71,15 @@ sources:
     mutable: true
   - id: printability-heuristics
     path: mcp/shared/geometry.js
-    trust: "Overhang area and inward-normal thin-wall probes for a +Z build; heuristic, not slicer output or print certification."
+    trust: "Overhang area and inward-normal thin-wall probes for a +Z build, and read-only print orientation ranking over axis and largest-flat-face poses (approach adapted from the editor's src/printsim.js); heuristic, not slicer output or print certification."
+    mutable: true
+  - id: metric-hardware
+    url: https://www.iso.org/standard/56693.html
+    trust: "ISO 4032 hex nut widths across flats and heights, and ISO 273 medium clearance holes. Printed pocket allowances in the skill are starting values for a fit coupon, not standard values."
+    mutable: false
+  - id: heat-set-inserts
+    url: https://cnckitchen.store/
+    trust: "Vendor hole diameters for standard-length threaded heat-set inserts. Other inserts need their own datasheet."
     mutable: true
   - id: bambu-x2d-specs
     url: https://bambulab.com/en-eu/x2d/specs

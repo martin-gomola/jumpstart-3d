@@ -1,4 +1,25 @@
 // Filter copies only: discovery must never alter the schemas used for validation.
+const isExpr = (node) => node?.type === "object" && node.properties?.$expr && Object.keys(node.properties).length === 1;
+function shareExpr(node, defs) {
+  if (Array.isArray(node)) return node.map((entry) => shareExpr(entry, defs));
+  if (!node || typeof node !== "object") return node;
+  if (isExpr(node)) { defs.expr = node; return { $ref: "#/$defs/expr" }; }
+  return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, shareExpr(value, defs)]));
+}
+
+// Compact tools/list copies; tools/call still validates against the full schemas.
+export function publishTools(tools) {
+  return tools.map((tool) => {
+    const defs = {};
+    const inputSchema = shareExpr(tool.inputSchema, defs);
+    if (defs.expr) inputSchema.$defs = defs;
+    if (tool.name.startsWith("jumpstart_preview_") && tool.name !== "jumpstart_preview_model" && inputSchema.properties?.requirements) {
+      inputSchema.properties.requirements = { type: "object", description: `Optional acceptance requirements, same shape as jumpstart_preview_model requirements. Full schema: jumpstart_get_capabilities with toolNames ["${tool.name}"]. The server validates it in full.` };
+    }
+    return { ...tool, inputSchema };
+  });
+}
+
 export function focusCapabilities(capabilities, options = {}) {
   const names = options.toolNames;
   for (const name of names || []) if (!capabilities.toolSchemas.some((tool) => tool.name === name)) throw new Error(`Unknown capability tool: ${name}`);

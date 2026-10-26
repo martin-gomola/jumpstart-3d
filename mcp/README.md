@@ -639,6 +639,12 @@ sweep, pipe and coil are in `plan.features`. Unknown tool or operation filters
 fail explicitly. Filtering returns schema copies and does not narrow the
 broker's actual validation contract or change `tools/list`.
 
+`tools/list` publishes compact copies: the numeric `$expr` alternative is a
+shared `$defs.expr` reference, and preview tools other than
+`jumpstart_preview_model` describe `requirements` as an object that links to
+`jumpstart_get_capabilities`. `tools/call` still validates every argument
+against the full schema.
+
 For `jumpstart_get_document`, use `bodyIds` to return selected bodies. With
 `includeGeometry: true`, only their referenced sketches are returned, including
 sketches used through linked mirrors. `includeSketches: false` omits sketches;

@@ -93,6 +93,13 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.deepEqual(phoneCradleSchema.properties.topEdgeToward.enum, ["+Y", "-Y"]);
     assert.match(phoneCradleSchema.properties.topEdgeToward.description, /\+Y means.*toward the dashboard/);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_resize_body").inputSchema.properties.size.additionalProperties, false);
+    assert.ok(JSON.stringify(listing.result.tools).length < 100_000, "tools/list should stay compact");
+    assert.ok(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.$defs.expr);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.requirements.additionalProperties, false);
+    assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_lathe").inputSchema.properties.requirements.properties, undefined);
+    const fullRequirements = await send({ jsonrpc: "2.0", id: 19, method: "tools/call", params: { name: "jumpstart_preview_lathe", arguments: { expectedRevision: "r1", requirements: { script: "bad" }, plan: {} } } });
+    assert.equal(fullRequirements.result.isError, true);
+    assert.match(JSON.parse(fullRequirements.result.content[0].text).error, /requirements/);
     const invalid = await send({ jsonrpc: "2.0", id: 20, method: "tools/call", params: { name: "jumpstart_preview_parameters", arguments: { modelId: "x", values: { diameter: -1 }, arbitraryCode: "bad" } } });
     assert.equal(invalid.result.isError, true);
     const capabilities = await send({ jsonrpc: "2.0", id: 21, method: "tools/call", params: { name: "jumpstart_get_capabilities", arguments: {} } });

@@ -9,7 +9,7 @@ import { gridfinityOperationSchema, pocketOperationSchema, drawerLayoutOperation
 import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateToolInput } from "../shared/schema.js";
-import { focusCapabilities } from "./discovery.mjs";
+import { focusCapabilities, publishTools } from "./discovery.mjs";
 import { failureGuidance } from "../shared/failure-guidance.js";
 import { extendMcpTools } from "./tool-contracts.mjs";
 import { inspectTriangleMesh } from "../shared/geometry.js";
@@ -299,6 +299,7 @@ const tools = extendMcpTools([
     },
   },
 ], planSchema);
+const publishedTools = publishTools(tools);
 
 const editors = new Map();
 const queues = new Map();
@@ -533,7 +534,7 @@ async function handleHttpRpc(req, res) {
   } else if (method === "ping") {
     result = {};
   } else if (method === "tools/list") {
-    result = { resultType: "complete", tools, cacheScope: "public", ttlMs: 300_000 };
+    result = { resultType: "complete", tools: publishedTools, cacheScope: "public", ttlMs: 300_000 };
   } else if (method === "tools/call") {
     if (typeof params.name !== "string" || !tools.some((tool) => tool.name === params.name)) {
       result = toolError(new Error(`Unknown tool: ${params.name || ""}`));
@@ -748,7 +749,7 @@ async function handleMessage(message) {
       });
     }
     if (method === "ping") return response(requestId, {});
-    if (method === "tools/list") return response(requestId, { resultType: "complete", tools, cacheScope: "public", ttlMs: 300_000 });
+    if (method === "tools/list") return response(requestId, { resultType: "complete", tools: publishedTools, cacheScope: "public", ttlMs: 300_000 });
     if (method === "tools/call") {
       if (typeof params.name !== "string" || !tools.some((tool) => tool.name === params.name)) {
         return response(requestId, toolError(new Error(`Unknown tool: ${params.name || ""}`)));

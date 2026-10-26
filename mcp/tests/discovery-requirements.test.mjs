@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { focusCapabilities } from "../server/discovery.mjs";
+import { focusCapabilities, publishTools } from "../server/discovery.mjs";
 import { evaluateRequirements, validateRequirements, comparePreviewBodies } from "../browser/preview-requirements.js";
 import { failureGuidance } from "../shared/failure-guidance.js";
 import { readFile, readdir } from "node:fs/promises";
@@ -23,6 +23,27 @@ test("focused discovery filters copies, rejects unknown names and keeps the full
   assert.deepEqual(focusCapabilities(catalog), catalog);
   assert.throws(() => focusCapabilities(catalog, { toolNames: ["invented"] }), /Unknown/);
   assert.throws(() => focusCapabilities(catalog, { operationTypes: ["script"] }), /Unsupported/);
+});
+
+test("published tool schemas share $expr and point non-model previews at full requirements", () => {
+  const expr = { type: "object", additionalProperties: false, properties: { $expr: { type: "string" } }, required: ["$expr"] };
+  const number = { oneOf: [{ type: "number" }, expr] };
+  const requirements = { type: "object", additionalProperties: false, properties: { bodyCount: { type: "integer" } } };
+  const tools = [
+    { name: "jumpstart_preview_model", inputSchema: { type: "object", properties: { plan: { type: "object", properties: { a: number, b: { type: "array", items: number } } }, requirements } } },
+    { name: "jumpstart_preview_lathe", inputSchema: { type: "object", properties: { requirements } } },
+    { name: "jumpstart_inspect_geometry", inputSchema: { type: "object", properties: { requirements } } },
+  ];
+  const original = JSON.stringify(tools);
+  const [model, lathe, inspect] = publishTools(tools);
+  assert.equal(JSON.stringify(tools), original);
+  assert.deepEqual(model.inputSchema.$defs, { expr });
+  assert.deepEqual(model.inputSchema.properties.plan.properties.a.oneOf[1], { $ref: "#/$defs/expr" });
+  const inline = (node) => node?.$ref ? expr : Array.isArray(node) ? node.map(inline) : node && typeof node === "object" ? Object.fromEntries(Object.entries(node).filter(([key]) => key !== "$defs").map(([key, value]) => [key, inline(value)])) : node;
+  assert.deepEqual(inline(model.inputSchema), tools[0].inputSchema);
+  assert.match(lathe.inputSchema.properties.requirements.description, /toolNames \["jumpstart_preview_lathe"\]/);
+  assert.equal(lathe.inputSchema.$defs, undefined);
+  assert.deepEqual(inspect.inputSchema, tools[2].inputSchema);
 });
 
 test("acceptance independently measures geometry, world bounds and component counts", () => {

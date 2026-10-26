@@ -9,7 +9,11 @@ JumpStart setup does not require a model API key.
 Requirements: Docker Compose and Make. Node.js 22 or newer is needed on the host
 for clients that launch the stdio proxy.
 
+Copy `.env.example` to `.env` and set `JUMPSTART_DATA_DIR` to a persistent
+directory outside the repository. Exports and imports are stored there.
+
 ```sh
+cp .env.example .env
 make up
 ```
 
@@ -24,7 +28,7 @@ register the host proxy described in [the MCP guide](mcp/README.md).
 ## Editor version
 
 The editor includes the adapted 2.7.4 source: Architect, CAM Studio, CosForge,
-Voxel Studio, face patterns, sketch styles and expanded beginner tools. Existing
+Voxel Studio, face patterns, sketch styles, and expanded beginner tools. Existing
 Gridfinity generators and local MCP contracts remain available. Manual tool
 features do not automatically become MCP operations. The source identity and
 local adaptations are recorded in [SOURCES.md](SOURCES.md).

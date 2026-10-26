@@ -69,6 +69,22 @@ sources:
     path: mcp/browser/preview-requirements.js
     trust: "Independent generated-geometry acceptance checks and source-preservation comparison; not physical fit certification."
     mutable: true
+  - id: printability-heuristics
+    path: mcp/shared/geometry.js
+    trust: "Overhang area and inward-normal thin-wall probes for a +Z build; heuristic, not slicer output or print certification."
+    mutable: true
+  - id: bambu-x2d-specs
+    url: https://bambulab.com/en-eu/x2d/specs
+    trust: "Manufacturer build volumes: main nozzle 256 × 256 × 260 mm, auxiliary and dual nozzle 235.5 × 256 × 256 mm."
+    mutable: true
+  - id: bambu-a1-p2s-specs
+    url: https://bambulab.com/en-us/p2s/specs
+    trust: "Manufacturer build volume 256 × 256 × 256 mm for P2S; the A1 page (https://bambulab.com/en-us/a1/tech-specs) lists the same."
+    mutable: true
+  - id: print-area-presets
+    path: mcp/shared/print-area.js
+    trust: "Editor print-area presets and the default 2 mm edge reserve used by printer-bound checks."
+    mutable: true
   - id: focused-discovery
     path: mcp/server/discovery.mjs
     trust: "Capability filtering implementation; original schemas remain unchanged."

@@ -2,7 +2,7 @@ import { validateRegionBox } from "../shared/edit-contracts.js";
 import { evaluatePairChecks, validatePairThresholds } from "../shared/pairs.js";
 import { validateToolInput } from "../shared/schema.js";
 import { requirementsSchema } from "../shared/requirements.js";
-import { inspectGeometry } from "./inspection.js";
+import { checkPasses, inspectGeometry } from "./inspection.js";
 
 export function validateRequirements(requirements) {
   if (requirements === undefined) return;
@@ -64,7 +64,7 @@ export function evaluateRequirements(requirements, { document, featureBodyIds = 
       checks.push({ id: `target:${target}`, target, pass: null, error: "Requirement target has no single inspectable preview body" });
       continue;
     }
-    triangleVisits += geometry.mesh.triangles.length / 3 * (1 + requested.reduce((sum, check) => sum + (check.kind === "channels" ? 104 : 2), 0));
+    triangleVisits += geometry.mesh.triangles.length / 3 * (1 + requested.reduce((sum, check) => sum + checkPasses(check), 0));
     if (triangleVisits > 8000000) {
       checks.push({ id: `budget:${target}`, target, pass: null, error: "Requirements exceed the 8 million triangle-visit budget" });
       continue;

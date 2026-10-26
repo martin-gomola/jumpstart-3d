@@ -13,6 +13,11 @@ export const geometryCheckSchema = { oneOf: [
   object({ id, kind: { const: "components" }, expected: { type: "integer", minimum: 1, maximum: 128 } }, ["id", "kind", "expected"]),
   object({ id, kind: { const: "channels" }, axis: { type: "string", enum: ["X", "Y"] }, crossAt: number, tolerance,
     expected: { ...object({ count: { type: "integer", minimum: 1, maximum: 24 }, width: positive, depth: positive, floor: positive, spacing: positive, symmetric: { type: "boolean" }, openEnds: { type: "boolean" } }, []), minProperties: 1 } }, ["id", "kind", "axis", "crossAt", "expected"]),
+  { description: "Heuristic print check along world +Z, bed at the body's lowest Z. Give maxOverhangArea and/or minWall.", ...object({ id, kind: { const: "printability" },
+    overhangAngle: { type: "number", minimum: 0, maximum: 89, description: "Degrees from vertical a downward face may lean without support; default 45." },
+    maxOverhangArea: { type: "number", minimum: 0, maximum: 100000000, description: "Allowed unsupported downward area in mm²." },
+    minWall: { type: "number", exclusiveMinimum: 0, maximum: 100, description: "Thinnest acceptable wall in mm, probed along inward normals." },
+    maxThinWallArea: { type: "number", minimum: 0, maximum: 100000000, description: "Allowed surface area over walls thinner than minWall in mm²; default 0." } }, ["id", "kind"]) },
 ] };
 export const requirementsSchema = { description: "Acceptance contract for this preview. All attached checks must pass before apply; resubmit requirements on later revisions.", ...object({
   intent: editIntentSchema,

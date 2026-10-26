@@ -34,9 +34,15 @@ All preview tools accept optional `requirements` alongside the plan or edit:
 Targets resolve to plan references or existing body ids and must identify one
 body. Dimensions and `bound` checks use world axes; a bound adds `side: "min"`
 or `"max"`. `components` counts mesh components. `channels` checks support straight
-axis-aligned parallel channels with a shared flat floor. Native pair queries also measure distance and intersection volume for supported
+axis-aligned parallel channels with a shared flat floor. `printability` checks
+a closed body in its current pose as if printed along world +Z with the bed at
+its lowest Z: `maxOverhangArea` (mm²) limits downward faces steeper than
+`overhangAngle` (default 45° from vertical), and `minWall` with optional
+`maxThinWallArea` (default 0) limits surface over walls thinner than `minWall`.
+Use `overhangBounds`, `thinWallBounds` and `thinnestSamples` to locate a failure.
+Native pair queries also measure distance and intersection volume for supported
 single CAD/STEP solids. These checks do not recognize arbitrary holes or pockets,
-measure wall thickness everywhere, or certify continuous-motion interference.
+measure exact wall thickness everywhere, or certify continuous-motion interference.
 Read the focused schema before requesting a check. Requirements belong to one preview; resubmit them on every later revision.
 Unknown or failed attached requirements block apply. A later optional inspection cannot replace them.
 

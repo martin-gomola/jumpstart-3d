@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inspectGeometry, measureParallelChannels } from '../browser/inspection.js';
+import { inspectPrintability } from '../shared/geometry.js';
 
 // Independently construct a stepped solid from exposed grid-cell faces, without CAD plans.
 function groovedMesh() {
@@ -32,4 +33,39 @@ test('unsupported sections fail explicitly rather than trusting submitted dimens
  assert.equal(result.checks[0].pass,null);assert.equal(result.geometricRequirements,'unknown');assert.equal(result.physicalFit,'unverified');
  const mesh=groovedMesh();
  assert.throws(()=>inspectGeometry({...mesh,triangles:Array.from({length:600000},()=>0)},{checks:[{kind:'channels'}]}),/budget/);
+});
+// Outward-wound closed boxes, each [[x0,y0,z0],[x1,y1,z1]].
+function boxes(...extents) {
+ const vertices=[],triangles=[];
+ const quad=(points)=>{const at=vertices.length/3;vertices.push(...points.flat());triangles.push(at,at+1,at+2,at,at+2,at+3);};
+ for(const [[a,c,e],[b,d,f]] of extents) {
+  quad([[a,c,e],[a,d,e],[b,d,e],[b,c,e]]);quad([[a,c,f],[b,c,f],[b,d,f],[a,d,f]]);
+  quad([[a,c,e],[b,c,e],[b,c,f],[a,c,f]]);quad([[a,d,e],[a,d,f],[b,d,f],[b,d,e]]);
+  quad([[a,c,e],[a,c,f],[a,d,f],[a,d,e]]);quad([[b,c,e],[b,d,e],[b,d,f],[b,c,f]]);
+ }
+ return {vertices,triangles};
+}
+test('printability measures downward overhangs above the bed and thin walls from the mesh',()=>{
+ const grounded=boxes([[0,0,0],[10,10,10]]);
+ assert.equal(inspectPrintability(grounded).overhangArea,0);
+ const floating=inspectPrintability(boxes([[0,0,0],[10,10,1]],[[20,0,5],[30,10,6]]),{minWall:2});
+ assert.ok(Math.abs(floating.overhangArea-100)<1e-9);assert.deepEqual(floating.overhangBounds,{min:[20,0,5],max:[30,10,5]});
+ assert.ok(Math.abs(floating.thinWallArea-400)<1e-9);assert.ok(Math.abs(floating.thinnestWall-1)<1e-9);
+ assert.equal(inspectPrintability(grounded,{minWall:2}).thinWallArea,0);
+ const inverted=boxes([[0,0,0],[10,10,1]],[[20,0,5],[30,10,6]]);
+ for(let i=0;i<inverted.triangles.length;i+=3)[inverted.triangles[i+1],inverted.triangles[i+2]]=[inverted.triangles[i+2],inverted.triangles[i+1]];
+ assert.ok(Math.abs(inspectPrintability(inverted,{minWall:2}).overhangArea-100)<1e-9);
+});
+test('printability checks gate on thresholds and report unknown for unsupported input',()=>{
+ const mesh=boxes([[0,0,0],[10,10,1]],[[20,0,5],[30,10,6]]);
+ const run=(check)=>inspectGeometry(mesh,{checks:[{id:'print',kind:'printability',...check}]}).checks[0];
+ assert.equal(run({maxOverhangArea:100}).pass,true);
+ assert.equal(run({maxOverhangArea:50}).pass,false);
+ assert.equal(run({overhangAngle:89,maxOverhangArea:0}).pass,false);
+ assert.equal(run({minWall:0.5}).pass,true);
+ const thin=run({minWall:2,maxThinWallArea:10});assert.equal(thin.pass,false);assert.match(thin.errors[0],/thinner than 2 mm/);
+ assert.equal(run({}).pass,null);assert.equal(run({maxThinWallArea:1}).pass,null);
+ const open={vertices:mesh.vertices,triangles:mesh.triangles.slice(6)};
+ const result=inspectGeometry(open,{checks:[{id:'print',kind:'printability',maxOverhangArea:0}]});
+ assert.equal(result.checks[0].pass,null);assert.match(result.checks[0].error,/closed/);assert.equal(result.geometricRequirements,'unknown');
 });

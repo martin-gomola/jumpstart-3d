@@ -91,6 +91,91 @@ export function sampleSolidIntervals(mesh, { axis='z', point, tolerance=1e-5 } =
   return {axis,point,tolerance,crossings,intervals:ambiguous?[]:crossings.filter((_,i)=>i%2===0).map((v,i)=>[v,crossings[i*2+1]]),ambiguous,limitations:['Assumes a closed mesh with non-tangent intersections; a tangent or boundary sample may be ambiguous.','Intervals use even-odd pairing and do not establish solid validity.']};
 }
 
+// Möller–Trumbore against a triangle stored as corner a and edges u, v; written out to avoid allocation in the ray loop.
+function rayTriangle(o,d,{a,u,v}) {
+  const h0=d[1]*v[2]-d[2]*v[1],h1=d[2]*v[0]-d[0]*v[2],h2=d[0]*v[1]-d[1]*v[0],det=u[0]*h0+u[1]*h1+u[2]*h2;if(Math.abs(det)<1e-12)return -1;
+  const s0=o[0]-a[0],s1=o[1]-a[1],s2=o[2]-a[2],w=(s0*h0+s1*h1+s2*h2)/det;if(w< -1e-10||w>1+1e-10)return -1;
+  const q0=s1*u[2]-s2*u[1],q1=s2*u[0]-s0*u[2],q2=s0*u[1]-s1*u[0],r=(d[0]*q0+d[1]*q1+d[2]*q2)/det;if(r< -1e-10||w+r>1+1e-10)return -1;
+  return (v[0]*q0+v[1]*q1+v[2]*q2)/det;
+}
+function boundingHierarchy(corners) {
+  const tris=corners.map(([a,b,c])=>({a,u:sub(b,a),v:sub(c,a)}));
+  const order=Uint32Array.from(corners.keys()), centers=corners.map(([a,b,c])=>a.map((x,i)=>(x+b[i]+c[i])/3));
+  const build=(start,end)=>{
+    const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+    for(let i=start;i<end;i++)for(const p of corners[order[i]])for(let k=0;k<3;k++){min[k]=Math.min(min[k],p[k]);max[k]=Math.max(max[k],p[k]);}
+    if(end-start<=2)return {min,max,start,end};
+    const extent=max.map((v,k)=>v-min[k]),k=extent.indexOf(Math.max(...extent)),mid=(start+end)>>1;
+    order.subarray(start,end).sort((i,j)=>centers[i][k]-centers[j][k]);
+    return {min,max,left:build(start,mid),right:build(mid,end)};
+  };
+  return {root:build(0,tris.length),order,tris};
+}
+function boxEntry(node,o,inv,maxT,eps) {
+  let near=0,far=maxT;
+  for(let k=0;k<3&&near<=far;k++){const t1=(node.min[k]-eps-o[k])*inv[k],t2=(node.max[k]+eps-o[k])*inv[k];near=Math.max(near,Math.min(t1,t2));far=Math.min(far,Math.max(t1,t2));}
+  return near<=far?near:Infinity;
+}
+// Nearest hit along a unit ray within maxT, ignoring hits closer than eps (the starting surface).
+function nearestHit({root,order,tris},o,d,maxT,eps,budget) {
+  const inv=d.map(v=>1/(Math.abs(v)<1e-12?1e-12:v));let best=maxT+eps;const stack=[root],entries=[0];
+  if(boxEntry(root,o,inv,best,eps)===Infinity)return null;
+  while(stack.length){
+    const node=stack.pop();if(entries.pop()>best)continue;
+    if(node.left){
+      const l=boxEntry(node.left,o,inv,best,eps),r=boxEntry(node.right,o,inv,best,eps);
+      if(l<=r){if(r!==Infinity){stack.push(node.right);entries.push(r);}if(l!==Infinity){stack.push(node.left);entries.push(l);}}
+      else{if(l!==Infinity){stack.push(node.left);entries.push(l);}stack.push(node.right);entries.push(r);}
+      continue;
+    }
+    for(let i=node.start;i<node.end;i++){if(--budget.tests<0)throw new Error('Printability ray-test budget exceeded; inspect a coarser tessellation');const t=rayTriangle(o,d,tris[order[i]]);if(t>eps&&t<best)best=t;}
+  }
+  return best<=maxT?best:null;
+}
+
+/** Overhangs and thin walls for printing along world +Z with the bed at the lowest Z.
+ * A triangle overhangs when it faces down more than overhangAngle from vertical and is not on the bed.
+ * With minWall, four points per triangle are probed along the inward normal; material that ends
+ * within minWall marks that share of the triangle as thin wall. Heuristic, not a print certification.
+ */
+export function inspectPrintability(mesh, { overhangAngle=45, minWall, tolerance=1e-5, maxRayTests=20000000 } = {}) {
+  tolerance=toleranceOf(tolerance);
+  if(!Number.isFinite(overhangAngle)||overhangAngle<0||overhangAngle>89)throw new Error('overhangAngle must be between 0 and 89 degrees');
+  if(minWall!==undefined&&(!Number.isFinite(minWall)||minWall<=0||minWall>100))throw new Error('minWall must be between 0 and 100 mm');
+  const validation=inspectTriangleMesh(mesh,{tolerance});
+  if(!validation.triangleCount||validation.boundaryEdges||validation.nonManifoldEdges||validation.inconsistentWindingEdges)throw new Error('Printability needs a closed, consistently wound mesh');
+  const {points,triangles}=prepared(mesh),outward=validation.signedVolume<0?-1:1,bed=validation.bounds.min[2],eps=tolerance*10;
+  // 0.1° of slack: a tessellated face at exactly the limit (a 45° chamfer or teardrop) is not an overhang.
+  const limit=-Math.sin((overhangAngle+0.1)*Math.PI/180), tris=[], faces=[];
+  for(let i=0;i<triangles.length;i+=3){
+    const tri=[points[triangles[i]],points[triangles[i+1]],points[triangles[i+2]]],n=cross(sub(tri[1],tri[0]),sub(tri[2],tri[0])),length=Math.hypot(...n);
+    if(length<=tolerance*tolerance)continue;
+    tris.push(tri);faces.push({tri,area:length/2,normal:n.map(v=>v*outward/length)});
+  }
+  const grow=(box,tri)=>{for(const p of tri)for(let k=0;k<3;k++){box.min[k]=Math.min(box.min[k],p[k]);box.max[k]=Math.max(box.max[k],p[k]);}};
+  const emptyBox=()=>({min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]});
+  let surfaceArea=0,overhangArea=0,overhangTriangles=0,thinWallArea=0,thinWallTriangles=0,thinnestWall=null;
+  const overhangBox=emptyBox(),thinBox=emptyBox(),thinSamples=[],budget={tests:maxRayTests};
+  const hierarchy=minWall===undefined?null:boundingHierarchy(tris);
+  for(const {tri,area,normal} of faces){
+    surfaceArea+=area;
+    if(normal[2]<limit&&!tri.every(p=>p[2]-bed<=eps)){overhangArea+=area;overhangTriangles++;grow(overhangBox,tri);}
+    if(!hierarchy)continue;
+    const center=tri[0].map((v,k)=>(v+tri[1][k]+tri[2][k])/3),inward=normal.map(v=>-v);let hits=0;
+    for(const point of [center,...tri.map(p=>p.map((v,k)=>(v+center[k])/2))]){
+      const thickness=nearestHit(hierarchy,point,inward,minWall,eps,budget);
+      if(thickness===null)continue;
+      hits++;thinnestWall=Math.min(thinnestWall??Infinity,thickness);thinSamples.push({point,thickness});
+    }
+    if(hits){thinWallArea+=area*hits/4;grow(thinBox,tri);if(hits>=2)thinWallTriangles++;}
+  }
+  thinSamples.sort((a,b)=>a.thickness-b.thickness);
+  return {source:'generated triangle mesh',buildDirection:'+Z',bedZ:bed,overhangAngle,surfaceArea,overhangArea,overhangTriangles,overhangBounds:overhangTriangles?overhangBox:null,
+    ...(hierarchy?{minWall,thinWallArea,thinWallTriangles,thinnestWall,thinWallBounds:thinWallArea?thinBox:null,thinnestSamples:thinSamples.slice(0,5),rayTests:maxRayTests-budget.tests}:{}),
+    limitations:['Assumes printing along world +Z with the bed at the lowest Z; inspect the intended print pose.','Overhangs use per-triangle normals; bridges, chamfered support and slicer settings are not modelled.',
+      ...(hierarchy?['Thin walls are probed at four points per triangle along the inward normal; walls thinner than minWall between probes or measured obliquely can be missed.']:[]),'Does not certify printability, strength or slicer success.']};
+}
+
 /** Native signatures are body-local. This helper deliberately accepts data predicates only. */
 export function selectGeometry(selectors, { kind, predicate={}, expectedFingerprint, currentFingerprint } = {}) {
   if(!expectedFingerprint||expectedFingerprint!==currentFingerprint)throw new Error('Stale or missing geometry fingerprint');

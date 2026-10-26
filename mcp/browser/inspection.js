@@ -1,6 +1,9 @@
 import { failureGuidance } from "../shared/failure-guidance.js";
 import { inspectRectangularFrame } from "./frame-plan.js";
-import { inspectTriangleMesh, sectionTriangleMesh, sampleSolidIntervals } from "../shared/geometry.js";
+import { inspectPrintability, inspectTriangleMesh, sectionTriangleMesh, sampleSolidIntervals } from "../shared/geometry.js";
+
+// Estimated triangle passes per check; printability also enforces its own ray-test budget.
+export const checkPasses = (check) => check.kind === "channels" ? 104 : check.kind === "printability" ? 4 : 2;
 
 // Parallel flat-bottom channels only. Results are inferred from tessellation sections,
 // never from primitive parameters or the expected values supplied by the agent.
@@ -47,7 +50,7 @@ export function measureParallelChannels(mesh, { axis = "Y", crossAt = 0, toleran
 
 export function inspectGeometry(mesh, options = {}) {
   const tolerance = options.tolerance ?? 0.0001;
-  const estimatedPasses = 1 + (options.frame ? 8 : 0) + (options.samples?.length || 0) * 2 + (options.section ? 2 : 0) + (options.checks || []).reduce((sum, check) => sum + (check.kind === "channels" ? 104 : 2), 0);
+  const estimatedPasses = 1 + (options.frame ? 8 : 0) + (options.samples?.length || 0) * 2 + (options.section ? 2 : 0) + (options.checks || []).reduce((sum, check) => sum + checkPasses(check), 0);
   if (mesh.triangles.length / 3 * estimatedPasses > 8000000) throw new Error("Inspection exceeds the 8 million triangle-visit budget; inspect fewer checks or use a coarser tessellation");
   const meshValidation = options.mesh === false ? undefined : inspectTriangleMesh(mesh, { tolerance });
   if (meshValidation) meshValidation.valid = meshValidation.triangleCount > 0 && !meshValidation.degenerateTriangles && !meshValidation.boundaryEdges && !meshValidation.nonManifoldEdges && !meshValidation.inconsistentWindingEdges && meshValidation.disconnectedComponents === 1;
@@ -71,6 +74,16 @@ export function inspectGeometry(mesh, options = {}) {
           if (!pass) errors.push(`${key} does not match expected ${expected}`);
         }
         return { id: check.id, kind: check.kind, expected: check.expected, measured, tolerance: threshold, pass: !errors.length, errors };
+      }
+      if (check.kind === "printability") {
+        if (check.maxOverhangArea === undefined && check.minWall === undefined) throw new Error("Printability check needs maxOverhangArea and/or minWall");
+        if (check.maxThinWallArea !== undefined && check.minWall === undefined) throw new Error("maxThinWallArea requires minWall");
+        const measured = inspectPrintability(mesh, { overhangAngle: check.overhangAngle, minWall: check.minWall, tolerance });
+        const expected = { overhangAngle: measured.overhangAngle, maxOverhangArea: check.maxOverhangArea, minWall: check.minWall, maxThinWallArea: check.minWall === undefined ? undefined : check.maxThinWallArea ?? 0 };
+        const errors = [];
+        if (expected.maxOverhangArea !== undefined && measured.overhangArea > expected.maxOverhangArea + 1e-9) errors.push(`overhang area ${measured.overhangArea.toFixed(2)} mm² exceeds ${expected.maxOverhangArea} mm²`);
+        if (expected.minWall !== undefined && measured.thinWallArea > expected.maxThinWallArea + 1e-9) errors.push(`surface over walls thinner than ${expected.minWall} mm is ${measured.thinWallArea.toFixed(2)} mm², above ${expected.maxThinWallArea} mm²`);
+        return { id: check.id, kind: check.kind, expected, measured, pass: !errors.length, errors };
       }
       throw new Error("Unsupported geometry check");
     } catch (error) { return { id: check.id, kind: check.kind, expected: check.expected, pass: null, error: error.message, guidance: failureGuidance(error) }; }

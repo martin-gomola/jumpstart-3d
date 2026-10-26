@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.9.0"
+  version: "1.10.0"
 ---
 
 # Model a part in JumpStart
@@ -26,7 +26,7 @@ copy the entire tool catalog into working notes.
 | Existing native part, feature or interface edits | [Edit existing parts](references/edit-existing-parts.md) |
 | STL/3MF/STEP imports and resizing | [Imported parts](references/imported-parts.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |
-| Clearances, mating parts, manufacturing assumptions, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
+| Printed parts, the default printer profile, clearances, mating parts, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
 
 ## Inspect
@@ -46,12 +46,12 @@ copy the entire tool catalog into working notes.
 ## Specify
 
 1. State the required dimensions, orientation, body roles, output format, and
-   preserved parts. Separate supplied measurements from assumptions. Ask for
-   missing dimensions that determine intended shape or fit. Keep provisional
-   choices explicit and editable.
+   preserved parts. Separate supplied measurements from assumptions. Ask for missing
+   dimensions that determine intended shape or fit. Keep provisional choices explicit
+   and editable. For printed parts, use the fit reference's default printer profile.
 2. Write a measurable acceptance checklist before building. Attach supported
    `requirements` to the preview: document body count, preserved body ids, and
-   per-body dimension, world-bound, mesh-component, channel, or native-pair checks. Use the
+   per-body dimension, world-bound, mesh-component, channel, printability, or native-pair checks. Use the
    inspection reference for the schema and unsupported checks.
 3. For mounts, establish mating faces, insertion direction, and the side facing
    the user before transforms. For vehicles use X across, +Y toward dashboard,

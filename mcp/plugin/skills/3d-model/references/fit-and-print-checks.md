@@ -1,7 +1,8 @@
 # Fit and print checks
 
-Use this reference when parts must meet, slide, mount, or print with a specified
-clearance. Read the current inspection schema before requesting measurements.
+Use this reference for printed parts and when parts must meet, slide, mount, or
+print with a specified clearance. Read the current inspection schema before
+requesting measurements.
 
 ## Contents
 
@@ -10,6 +11,7 @@ clearance. Read the current inspection schema before requesting measurements.
 - Attach pair acceptance before building
 - Choose the manufacturing assumptions
 - Review installation and print poses separately
+- Hand off to the slicer (default printer profile)
 
 ## Establish the functional interface
 
@@ -101,6 +103,40 @@ Inspect the assembled installation pose from complete views, especially the
 mating side and insertion path. Do not rotate the reference assembly to hide a
 placement error. Preview a separate print layout only when that is part of the
 requested handoff, and retain the intended final pose.
+
+## Hand off to the slicer
+
+Supports, bridges, layer settings and material profiles stay in the slicer.
+Do not ask about the printer each time. Use this default profile unless the
+request names another printer, nozzle or material:
+
+- Printer: Bambu Lab X2D, sliced in Bambu Studio, 0.4 mm nozzle, PLA, printed
+  with one nozzle (no support material from the auxiliary nozzle).
+- Usable envelope: 252 × 252 × 256 mm (256 × 256 × 260 mm main-nozzle
+  volume less the 2 mm edge reserve and the dual-nozzle height); with two
+  nozzles, 231.5 × 252 × 256 mm. Split a larger part.
+- The same envelope fits a Bambu Lab A1 or P2S (256 × 256 × 256 mm).
+
+Ask only when the answer changes the design: a part larger than the
+envelope, a material other than PLA (ABS/ASA warps on the open A1), or
+soft and rigid zones that suggest PLA with TPU on the X2D's two nozzles.
+
+- Use `printability` limits of `minWall` 0.9 mm (about two perimeters) and
+  `overhangAngle` 45°. When the user prints supports from the auxiliary
+  nozzle, report overhangs without reshaping the part to remove them.
+- Model parts in different materials as separate bodies so each can take its
+  own filament in the slicer.
+- Run the check on each body in its print pose and fix flagged areas in the
+  CAD model while it is still editable: thicken walls, chamfer downward edges,
+  or reorient the part.
+- Export 3MF so separate parts stay separate objects in Bambu Studio or
+  PrusaSlicer; use STL only when requested.
+- In the report, name the print orientation, the printer profile and limits
+  used, and what to inspect in the slicer preview, such as remaining
+  overhangs needing supports.
+
+A passing check means no flagged overhang or thin-wall area in the
+tessellation; the slicer preview and a test print remain the authority.
 
 Report measured CAD clearance, overlap, source geometry and unverified physical
 fit separately. A valid solid or passing pair check does not establish printed

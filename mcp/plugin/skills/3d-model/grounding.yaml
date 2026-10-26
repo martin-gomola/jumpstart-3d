@@ -133,6 +133,14 @@ rules:
     skillFile: references/fit-and-print-checks.md
     sources: [preview-requirements, pair-contract]
     locator: "Immutable cached acceptance result and apply gate"
+  - instruction: "the slicer preview and a test print remain the authority."
+    skillFile: references/fit-and-print-checks.md
+    sources: [printability-heuristics, preview-requirements]
+    locator: "inspectPrintability limitations and printability check gating"
+  - instruction: "Usable envelope: 252 × 252 × 256 mm"
+    skillFile: references/fit-and-print-checks.md
+    sources: [bambu-x2d-specs, bambu-a1-p2s-specs, print-area-presets]
+    locator: "Build volume tables and the editor's 2 mm edge reserve"
 
   - instruction: "Equal total volume or bounds alone cannot establish preservation."
     skillFile: references/edit-existing-parts.md

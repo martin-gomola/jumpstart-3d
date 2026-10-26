@@ -256,8 +256,15 @@ CLI on PATH. It installs the MCP proxy and modeling skill as a
 Docker rebuild does not terminate its stdio connection. Older custom registrations,
 including `docker exec`, require explicit migration before installing.
 
+For Claude Code, run `make claude-install`; for Cursor, run `make cursor-install`.
+Each registers the same host proxy at user level and copies the 3d-model skill
+into `~/.claude/skills/3d-model` or `~/.cursor/skills/3d-model`. Rerun the
+target after pulling to refresh the skill. A custom `jumpstart` server entry or
+a `3d-model` skill that this installer did not create stops the install without
+changes.
+
 For clients that use TOML, run `make mcp-config` to print a host-proxy entry.
-Claude Code and Antigravity CLI setup is covered below. The proxy communicates
+Manual Claude Code and Antigravity CLI setup is covered below. The proxy communicates
 with the app at `http://127.0.0.1:3210/__mcp/rpc`. Override
 `JUMPSTART_MCP_HTTP_URL` when the app uses another local port.
 
@@ -294,7 +301,9 @@ client.
 Requirements: host Node.js 22 or newer. Replace the example path with the
 absolute path to this checkout.
 
-**Claude Code** — add JumpStart to your user-level MCP config:
+**Claude Code** — `make claude-install` does this with the absolute Node path
+and also installs the skill. To add only the MCP server to your user-level
+config:
 
 ```sh
 claude mcp add --scope user --transport stdio jumpstart -- node /absolute/path/to/jumpstart-3d/mcp/server/stdio-proxy.mjs
@@ -919,8 +928,19 @@ new browser bridge. A running old tab cannot execute newly added tools.
 
 The deterministic tutorial benchmark below tests tool execution. The separate
 agent task catalog contains requests and invariants, without prepared plans.
-It covers the coaster revision, an unequal-compartment parts tray, and an
-impossible-depth request followed by a valid correction.
+It covers the coaster revision, an unequal-compartment parts tray, an
+impossible-depth request followed by a valid correction, eight edits of
+existing parts, and 13 printed parts for the default X2D profile: a shelf
+bracket, a box with a friction-fit lid, a snap hook, a Gridfinity bin, a cable
+clip, a D-shaft knob, a leg cap, a phone stand, a print-in-place hinge,
+heat-set insert bosses, a name plate, a nut-trap block, and an M30 screw cap.
+
+Printed-part tasks carry `grader` probes. At the `candidate` checkpoint the
+recorder measures named bodies with `jumpstart_inspect_geometry` at points the
+agent never sees, and `native-mods` requires the native feature the request
+names. `mcp/tests/agent-calibration-*.browser.mjs` build a scripted reference
+for each of these tasks and run the same grader, so a failing agent run is not
+a miscalibrated probe.
 
 ```sh
 npm run benchmark:agent -- tasks

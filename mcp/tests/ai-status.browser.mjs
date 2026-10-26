@@ -103,7 +103,8 @@ test("compact status fits all states and exposes keyboard descriptions", async (
   await status.hover();
   for (const [target, expected] of [
     ["ai-setup-codex", "make codex-install"],
-    ["ai-setup-claude", 'claude mcp add --scope user --transport stdio jumpstart -- node "$(pwd)/mcp/server/stdio-proxy.mjs"'],
+    ["ai-setup-claude", "make claude-install"],
+    ["ai-setup-cursor", "make cursor-install"],
     ["ai-setup-antigravity", '{\n  "mcpServers": {\n    "jumpstart": {\n      "command": "node",\n      "args": ["/absolute/path/to/jumpstart-3d/mcp/server/stdio-proxy.mjs"]\n    }\n  }\n}'],
   ]) {
     await panel.locator(`[data-copy-target="${target}"]`).click();

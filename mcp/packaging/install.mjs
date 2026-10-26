@@ -35,7 +35,7 @@ export async function installPlugin({ cli = 'codex', run = commandRunner(cli), r
   return { id, version: built.version, migrated: Boolean(old) };
 }
 
-function commandRunner(cli) {
+export function commandRunner(cli) {
   return args => {
     const result = spawnSync(cli, args, { encoding: 'utf8' });
     if (result.error) throw result.error;

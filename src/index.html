@@ -1062,6 +1062,7 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
       <div class="ai-client-picker" role="group" aria-label="Choose your AI client">
         <button type="button" data-client-choice="codex" aria-pressed="true">Codex</button>
         <button type="button" data-client-choice="claude" aria-pressed="false">Claude Code</button>
+        <button type="button" data-client-choice="cursor" aria-pressed="false">Cursor</button>
         <button type="button" data-client-choice="antigravity" aria-pressed="false">Antigravity CLI</button>
       </div>
       <section class="ai-setup-client" data-ai-client="codex">
@@ -1074,9 +1075,16 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
       <section class="ai-setup-client" data-ai-client="claude" hidden>
         <h3>Claude Code</h3>
         <p>From the JumpStart project root, run:</p>
-        <pre><code id="ai-setup-claude">claude mcp add --scope user --transport stdio jumpstart -- node "$(pwd)/mcp/server/stdio-proxy.mjs"</code></pre>
+        <pre><code id="ai-setup-claude">make claude-install</code></pre>
         <div class="ai-setup-copy-row"><button class="ai-setup-copy" type="button" data-copy-target="ai-setup-claude">Copy command</button></div>
-        <p>Check the server entry with <code>claude mcp get jumpstart</code>.</p>
+        <p>Start a new Claude Code session to load the server and skill. Check the entry with <code>claude mcp get jumpstart</code>.</p>
+      </section>
+      <section class="ai-setup-client" data-ai-client="cursor" hidden>
+        <h3>Cursor</h3>
+        <p>From the JumpStart project root, run:</p>
+        <pre><code id="ai-setup-cursor">make cursor-install</code></pre>
+        <div class="ai-setup-copy-row"><button class="ai-setup-copy" type="button" data-copy-target="ai-setup-cursor">Copy command</button></div>
+        <p>Restart Cursor or reload MCP servers in Cursor Settings to load the server and skill.</p>
       </section>
       <section class="ai-setup-client" data-ai-client="antigravity" hidden>
         <h3>Antigravity CLI</h3>

@@ -22,8 +22,9 @@ editor tab open. The server publishes its port on loopback only. The top-bar AI
 button shows connection status and the setup commands for supported clients.
 Stop the app with `make down`; inspect logs with `make logs`.
 
-For Codex, run `make codex-install`. For Claude Code and Antigravity CLI,
-register the host proxy described in [the MCP guide](mcp/README.md).
+Install the MCP server and the 3d-model skill with `make codex-install`,
+`make claude-install`, or `make cursor-install`. For Antigravity CLI, register
+the host proxy described in [the MCP guide](mcp/README.md).
 
 ## Editor version
 

@@ -28,6 +28,50 @@ export function inspectStl(bytes) {
   return { triangles: bytes.readUInt32LE(80), byteLength: bytes.length, degenerate, dimensions: Object.fromEntries(["x", "y", "z"].map((axis, i) => [axis, max[i] - min[i]])) };
 }
 
+// Grader probes stay out of the agent's request and run against named bodies at the candidate checkpoint.
+export async function measureGrader(task, document, call) {
+  const named = (name) => name ? document.bodies.find((body) => body.name === name) : document.bodies.length === 1 ? document.bodies[0] : undefined;
+  const measured = {};
+  for (const probe of task.grader) {
+    const body = named(probe.body), against = probe.against && named(probe.against);
+    if (!body || (probe.against && !against)) { measured[probe.id] = { error: "Named grader body not found" }; continue; }
+    const input = { bodyId: body.id, expectedRevision: document.revision,
+      ...(probe.samples && { samples: probe.samples.map(({ axis, point }) => ({ axis, point })) }),
+      ...(probe.checks && { checks: probe.checks }),
+      ...(against && { againstBodyId: against.id, pairChecks: probe.pairChecks }) };
+    try { measured[probe.id] = { result: await call("jumpstart_inspect_geometry", input) }; }
+    catch (error) { measured[probe.id] = { error: error.message }; }
+  }
+  return measured;
+}
+
+export function gradeProbes(task, measured, check) {
+  for (const probe of task.grader) {
+    const { result, error } = measured?.[probe.id] || {};
+    if (probe.pairChecks) { check(`pair-${probe.id}`, result?.pair?.acceptance?.passed === true, result?.pair?.acceptance || error || "No pair measurement"); continue; }
+    const samples = result?.samples || [];
+    for (const [i, expected] of (probe.samples || []).entries()) {
+      const intervals = samples[i]?.intervals || [], tolerance = expected.tolerance ?? 0.05;
+      const at = (values, k) => values.every((value, j) => near(intervals[j]?.[k], value, tolerance));
+      const pass = !!samples[i] && !samples[i].ambiguous
+        && (!expected.intervals || (intervals.length === expected.intervals.length && at(expected.intervals.map(([a]) => a), 0) && at(expected.intervals.map(([, b]) => b), 1)))
+        && (!expected.starts || at(expected.starts, 0)) && (!expected.ends || at(expected.ends, 1));
+      check(`sample-${probe.id}-${expected.id}`, pass, { expected, measured: samples[i]?.intervals, error });
+    }
+    for (const requested of probe.checks || []) {
+      const reported = result?.checks?.find((entry) => entry.id === requested.id);
+      check(`check-${probe.id}-${requested.id}`, reported?.pass === true, reported || error || "Not measured");
+    }
+  }
+}
+
+export function gradeNativeMods(task, document, check) {
+  for (const [i, { body: name, ...wanted }] of task.nativeMods.entries()) {
+    const body = name ? document?.bodies?.find((entry) => entry.name === name) : document?.bodies?.[0];
+    check(`native-mod-${i}-${wanted.t}`, body?.featureTree?.mods?.some((mod) => Object.entries(wanted).every(([key, value]) => mod[key] === value)), wanted);
+  }
+}
+
 // Evaluates captured readbacks, never the submitted plan's asserted dimensions.
 export function evaluateSession(session) {
   const task = agentTask(session.taskId);
@@ -35,7 +79,7 @@ export function evaluateSession(session) {
   const candidate = session.checkpoints?.candidate;
   const checks = [];
   const check = (name, pass, detail) => checks.push({ name, pass: !!pass, detail });
-  check("candidate-captured", candidate?.document?.bodies?.length === 1, "Exactly one final model is required");
+  check("candidate-captured", candidate?.document?.bodies?.length === (task.bodies ?? 1), `Exactly ${task.bodies ?? 1} final bodies are required`);
   check("kernel-errors", candidate?.document?.bodies?.length > 0 && candidate.document.bodies.every((body) => !body.error && body.volume > 0), "Live kernel readback must report valid nonempty solids");
   for (const [axis, expected] of Object.entries(task.dimensions)) check(`export-dimension-${axis}`, near(candidate?.stl?.dimensions?.[axis], expected), { expected, measured: candidate?.stl?.dimensions?.[axis], tolerance: 0.15 });
   check("stl-finite-nondegenerate", candidate?.stl?.triangles > 0 && candidate.stl.degenerate === 0, candidate?.stl || "No live export captured");
@@ -44,7 +88,7 @@ export function evaluateSession(session) {
   check("editable-history", candidate?.document?.bodies?.every((body) => body.featureTree && body.featureTree.t !== "mesh"), "Native feature readback required; mesh scaling is a separate test");
   const calls = session.calls || [];
   const successful = (name) => calls.filter((call) => call.name === name && !call.error);
-  const previews = [...successful("jumpstart_preview_model"), ...successful("jumpstart_preview_parameters")].filter((call) => call.result?.valid);
+  const previews = calls.filter((call) => call.name.startsWith("jumpstart_preview_") && !call.error && call.result?.valid);
   const applies = successful("jumpstart_apply_model");
   check("preview-before-apply", applies.length > 0 && applies.every((apply) => previews.some((preview) => preview.result.previewId === apply.args.previewId && preview.sequence < apply.sequence)), "Every recorded apply must follow its successful preview");
   for (const requirement of task.requires) {
@@ -82,7 +126,9 @@ export function evaluateSession(session) {
       check("tray-walls-divider-compartments", sampleMatches("X", [2,2,2], [25,52]) || sampleMatches("X", [2,2,2], [52,25]), "An X section through the cavities must measure 2 mm walls/divider and 25/52 mm clear lengths");
       check("tray-short-axis-walls", sampleMatches("Y", [2,2], [53]), "A Y section through a cavity must measure 2 mm walls and 53 mm clearance");
       check("tray-floor-and-height", sampleMatches("Z", [2], []) && sampleMatches("Z", [12], []), "Vertical samples must establish a 2 mm floor and a 12 mm full-height wall or divider");
-    } else check(requirement, false, "Not independently measured by this runner yet; plan values and agent claims are not evidence");
+    } else if (requirement === "grader") gradeProbes(task, candidate?.grader, check);
+    else if (requirement === "native-mods") gradeNativeMods(task, candidate?.document, check);
+    else check(requirement, false, "Not independently measured by this runner yet; plan values and agent claims are not evidence");
   }
   return { taskId: task.id, pass: checks.every((entry) => entry.pass), checks, agentReasoning: "External agent supplied every tool argument; this recorder does not generate plans or score reasoning from model identity", recordedCalls: calls.length };
 }
@@ -154,6 +200,8 @@ export async function main(argv) {
       const bytes = await readFile(join(ROOT, "exports", basename(exported.path)));
       checkpoint.stl = inspectStl(bytes); checkpoint.export = exported;
       checkpoint.stl.sha256 = createHash("sha256").update(bytes).digest("hex");
+      const task = agentTask(session.taskId);
+      if (task.grader) checkpoint.grader = await measureGrader(task, document, async (name, input) => (await call(name, input)).value);
     }
     session.checkpoints[args[0]] = checkpoint;
     process.stdout.write(`${JSON.stringify({ checkpoint: args[0], revision: document.revision })}\n`);

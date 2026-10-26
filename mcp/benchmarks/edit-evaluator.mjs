@@ -6,7 +6,7 @@ export function evaluateEditSession(session, task) {
  add("baseline-target",!!target && baseline.bodies.length>=2,"Target must be observed before editing");
  add("identity-and-native-history",!!final && final.featureTree && final.featureTree.t!=="mesh" && final.role===target?.role,"Preserve target identity and role; read back native features");
  const calls=session.calls||[], ok=name=>calls.filter(c=>c.name===name&&!c.error);
- const previews=ok("jumpstart_preview_feature_edit").filter(c=>c.result?.valid), applies=ok("jumpstart_apply_model");
+ const previews=(task.previewTools||["jumpstart_preview_feature_edit"]).flatMap(ok).filter(c=>c.result?.valid).sort((a,b)=>a.sequence-b.sequence), applies=ok("jumpstart_apply_model");
  add("preview-before-apply",applies.length>0 && applies.every(a=>previews.some(p=>p.sequence<a.sequence&&p.result.previewId===a.args.previewId)),"Every mutation needs a matching successful preview");
  const selected=previews.findLast(p=>applies.some(a=>a.args.previewId===p.result.previewId));
  add("requested-delta",selected?.result?.changes?.changed?.includes(target?.id),"The target geometry inputs must actually change");
@@ -20,6 +20,7 @@ export function evaluateEditSession(session, task) {
   const mod=final?.featureTree?.mods?.find(m=>m.t===task.field.kind);
   add("feature-value",near(mod?.[task.field.key],task.field.expected),{expected:task.field.expected,measured:mod?.[task.field.key]});
  }
+ if(task.addedKind)add("feature-added",!target?.featureTree?.mods?.some(m=>m.t===task.addedKind)&&final?.featureTree?.mods?.some(m=>m.t===task.addedKind),"Add the requested native feature to the existing body");
  if(task.removedKind)add("feature-removed",target?.featureTree?.mods?.some(m=>m.t===task.removedKind)&&!final?.featureTree?.mods?.some(m=>m.t===task.removedKind),"Remove the existing feature, not its body");
  const baselineInspections=ok("jumpstart_inspect_geometry").filter(c=>c.args.bodyId===target?.id&&c.result?.revision===baseline?.revision);
  const inspections=ok("jumpstart_inspect_geometry").filter(c=>c.args.bodyId===target?.id&&c.result?.revision===doc?.revision);

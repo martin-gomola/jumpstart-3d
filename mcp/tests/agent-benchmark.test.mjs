@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AGENT_TASKS, agentTask } from "../benchmarks/agent-tasks.mjs";
-import { evaluateSession, inspectStl } from "../benchmarks/agent-runner.mjs";
+import { evaluateSession, inspectStl, measureGrader, gradeProbes, gradeNativeMods } from "../benchmarks/agent-runner.mjs";
 
 test("agent tasks contain requests and invariants, never prepared plans", () => {
-  assert.equal(AGENT_TASKS.length, 9);
+  assert.equal(AGENT_TASKS.length, 24);
+  for (const task of AGENT_TASKS.filter(({ grader }) => grader)) assert.ok(task.requires.includes("grader"), `${task.id} must grade its probes`);
   for (const task of AGENT_TASKS) {
     assert.equal(typeof task.request, "string");
     assert.equal(task.plan, undefined);
@@ -68,6 +69,57 @@ test("tray section checks consume measured solid intervals and require the actua
   samples[0].intervals[1] = [28,30];
   result = evaluateSession(session);
   assert.equal(result.checks.find((check) => check.name === "tray-walls-divider-compartments").pass, false);
+});
+
+test("grader probes measure named bodies without exposing probe points to the agent request", async () => {
+  const task = agentTask("box-friction-lid");
+  for (const probe of task.grader) for (const sample of probe.samples || []) assert.ok(!task.request.includes(String(sample.point)));
+  const document = { revision: "r2", bodies: [{ id: "b", name: "Box" }, { id: "l", name: "Lid" }] };
+  const inputs = [];
+  const measured = await measureGrader(task, document, async (name, input) => {
+    inputs.push(input);
+    if (input.againstBodyId) return { pair: { acceptance: { passed: true } } };
+    const probe = task.grader.find(({ body }) => document.bodies.find(({ name }) => name === body).id === input.bodyId);
+    return { samples: probe.samples.map(({ intervals }) => ({ intervals })), checks: probe.checks.map(({ id }) => ({ id, pass: true })) };
+  });
+  assert.deepEqual(inputs.map(({ bodyId, againstBodyId }) => [bodyId, againstBodyId]), [["b", undefined], ["l", undefined], ["b", "l"]]);
+  assert.ok(inputs.every(({ expectedRevision }) => expectedRevision === "r2"));
+  const checks = [], check = (name, pass) => checks.push({ name, pass });
+  gradeProbes(task, measured, check);
+  assert.ok(checks.length > 8 && checks.every(({ pass }) => pass));
+  measured.lid.result.samples[0].intervals = [[-37.6, -36.2], [36.2, 37.8]];
+  checks.length = 0;
+  gradeProbes(task, measured, check);
+  assert.deepEqual(checks.filter(({ pass }) => !pass).map(({ name }) => name), ["sample-lid-lip-x"]);
+  const missing = await measureGrader(task, { revision: "r2", bodies: [{ id: "b", name: "Box" }] }, async () => ({}));
+  assert.match(missing.lid.error, /not found/);
+});
+
+test("multi-body tasks count bodies, accept any preview tool and require native feature evidence", () => {
+  const session = {
+    taskId: "box-friction-lid", baseline: { revision: "before" },
+    calls: [{ name: "jumpstart_preview_native_model", sequence: 1, result: { valid: true, previewId: "p" } }, { name: "jumpstart_apply_model", sequence: 2, args: { previewId: "p" }, result: {} }],
+    checkpoints: { candidate: { document: { revision: "after", bodies: [{ name: "Box" }, { name: "Lid" }] } } },
+  };
+  const result = evaluateSession(session);
+  assert.equal(result.checks.find(({ name }) => name === "candidate-captured").pass, true);
+  assert.equal(result.checks.find(({ name }) => name === "preview-before-apply").pass, true);
+  assert.equal(result.checks.find(({ name }) => name === "pair-no-overlap").pass, false);
+  const nativeChecks = [], add = (name, pass) => nativeChecks.push({ name, pass });
+  gradeNativeMods(agentTask("wall-bracket"), { bodies: [{ featureTree: { mods: [{ t: "hole", kind: "simple" }] } }] }, add);
+  assert.deepEqual(nativeChecks, [{ name: "native-mod-0-hole", pass: false }]);
+});
+
+test("edit tasks can add a native feature through a model preview", () => {
+  const target = { id: "plate", name: "Mount plate", role: "design", featureTree: { t: "prim", mods: [{ t: "hole" }] } };
+  const session = {
+    taskId: "edit-add-chamfer", baseline: { revision: "before", bodies: [target, { id: "other", name: "Companion" }] },
+    calls: [{ name: "jumpstart_preview_model", sequence: 1, result: { valid: true, previewId: "p" } }, { name: "jumpstart_apply_model", sequence: 2, args: { previewId: "p" }, result: {} }],
+    checkpoints: { candidate: { document: { revision: "after", bodies: [{ ...target, featureTree: { t: "prim", mods: [{ t: "hole" }, { t: "chamfer" }] } }] } } },
+  };
+  const result = evaluateSession(session);
+  assert.equal(result.checks.find(({ name }) => name === "preview-before-apply").pass, true);
+  assert.equal(result.checks.find(({ name }) => name === "feature-added").pass, true);
 });
 
 test("coaster acceptance rejects a claimed pass without measured dimensions and uniform spacing", () => {

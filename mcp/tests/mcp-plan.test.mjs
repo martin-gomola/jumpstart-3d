@@ -19,7 +19,7 @@ test("compiles a dimensioned revolve into the native sketch and feature model", 
     features: [{ id: "ring", type: "revolve", sketch: "wall", axis: "Z" }],
   }, ids());
 
-  assert.equal(result.document.mode, "advanced");
+  assert.equal(result.plan.mode, "advanced");
   assert.equal(result.document.name, "Lid ring");
   assert.equal(result.document.sketches[0].plane.n.join(","), "0,-1,0");
   assert.deepEqual(result.document.bodies[0].node, {
@@ -139,7 +139,7 @@ test("knurls compile into a native editable sketch extrusion with validated groo
   assert.equal(body.name, "Knurled knob 20 x 15");
   assert.deepEqual(body.m.slice(12, 15), [1, 2, 3]);
   assert.deepEqual(body.mcpKnurl, { diameter: 20, length: 15, grooves: 32, pitch: Math.PI * 20 / 32, depth: Math.round(Math.PI * 20 / 32 / 2 * 1000) / 1000, bore: "hex", boreSize: 6 });
-  assert.equal(result.document.mode, "advanced");
+  assert.equal(result.plan.mode, "advanced");
 
   for (const bore of ["round", "hex", "d"]) {
     const bored = buildModelPlan(doc(), { name: "Bored", operations: [{ id: "knob", type: "knurl", diameter: 24, grooves: 24, bore, boreSize: 5 }] }, ids());
@@ -562,7 +562,7 @@ test("adds typed modifiers to an existing body without replacing its source geom
     name: "Imported mesh updated",
     operations: [{ id: "new-scale", type: "modifier", target: "imported", modifier: { type: "scale", factors: [1.1, 1.1, 1], offset: [0, 0, 0] } }],
   }, ids());
-  assert.equal(result.document.mode, "advanced");
+  assert.equal(result.plan.mode, "advanced");
   assert.equal(result.document.bodies[0].node.t, "mesh");
   assert.equal(result.document.bodies[0].node.asset, "source-asset");
   assert.equal(result.document.bodies[0].node.mods[0].t, "scale");

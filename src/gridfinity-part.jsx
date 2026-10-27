@@ -26,13 +26,13 @@ function PartDialog({ planner, references, area, onMagnets }) {
 }
 
 export function initGridfinityPart(app, { openCmd, commit, schedulePreview }) {
-  // Builds the part into `doc` in place and keeps the editor's mode; returns the new body ids.
+  // Builds the part into `doc` in place; returns the new body ids.
   function build(doc, draft, at) {
     const plan = templatePlan(partState(draft));
     plan.operations[0].position = at;
-    const mode = doc.mode, compiled = compileMcpModel(doc, plan), out = compiled.document;
+    const compiled = compileMcpModel(doc, plan), out = compiled.document;
     for (const key of Object.keys(doc)) if (!(key in out)) delete doc[key];
-    Object.assign(doc, out, { mode });
+    Object.assign(doc, out);
     return compiled.createdBodyIds;
   }
 

@@ -566,7 +566,6 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
     });
   }
   doc.sketches = doc.sketches.filter((sketch) => !removedSketchIds.has(sketch.id) || keptSketchIds.has(sketch.id));
-  doc.mode = plan.mode;
   const sketches = new Map();
   const bodies = new Map();
   const createdBodyIds = [];
@@ -657,7 +656,7 @@ export function buildModelPlan(document, input, idFactory = newId, replaceBodyId
   doc.name = plan.name;
   const featureBodyIds = Object.fromEntries([...bodies].map(([id, list]) => [id, list.length === 1 ? list[0].id : list.map((body) => body.id)]));
   const liveCreatedIds = [...new Set(createdBodyIds)].filter((bodyId) => doc.bodies.some((body) => body.id === bodyId));
-  return { document: doc, createdBodyIds: liveCreatedIds, featureBodyIds, affectedBodyIds: [...affectedBodyIds].filter((bodyId) => doc.bodies.some((body) => body.id === bodyId)), pendingHolePatterns, pendingFeaturePatterns };
+  return { document: doc, plan, createdBodyIds: liveCreatedIds, featureBodyIds, affectedBodyIds: [...affectedBodyIds].filter((bodyId) => doc.bodies.some((body) => body.id === bodyId)), pendingHolePatterns, pendingFeaturePatterns };
 }
 
 export function resizeBodyDocument(document, bodyId, bounds, requestedSize, anchor = "base", idFactory = newId) {

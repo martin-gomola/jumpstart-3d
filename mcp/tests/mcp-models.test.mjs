@@ -198,3 +198,9 @@ test("parameter plans cannot consume external bodies, including locked group mem
   plain.primitives = [{ id: "base", kind: "box", parameters: { w: 2, d: 2, h: 2 } }];
   assert.throws(() => compileMcpModel(d, plain), /Unlock/);
 });
+
+test("compiling a plan leaves the document's editor mode alone", () => {
+  const compiled = compileMcpModel(doc(), { name: "Block", mode: "advanced", primitives: [{ id: "block", kind: "box", parameters: { w: 10, d: 10, h: 10 } }] });
+  assert.equal(compiled.plan.mode, "advanced");
+  assert.equal(compiled.document.mode, "beginner");
+});

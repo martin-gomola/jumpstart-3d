@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildGridfinity, GRIDFINITY_LIMITS, normalizeGridfinity } from "../browser/gridfinity.js";
+import { buildGridfinity, GRIDFINITY_LIMITS, normalizeGridfinity } from "../browser/plans/gridfinity.js";
 import { resolveGridfinityFixture as resolveNode } from "./gridfinity-test-helpers.mjs";
 
 const raw = overrides => ({ type:"gridfinity", id:"grid", ...overrides });

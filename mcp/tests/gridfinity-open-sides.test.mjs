@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BIN_SIDES, normalizeOpenSides, rotateOpenSides, binTotalHeight } from "../shared/gridfinity-walls.js";
-import { normalizeGridfinity, buildGridfinity } from "../browser/gridfinity.js";
+import { normalizeGridfinity, buildGridfinity } from "../browser/plans/gridfinity.js";
 import { normalizeDrawerLayout, drawerParts } from "../shared/drawer-layout.js";
-import { compileMcpModel } from "../browser/models.js";
-import { summarizeDrawerLayouts } from "../browser/drawer-layout.js";
+import { compileMcpModel } from "../browser/plans/models.js";
+import { summarizeDrawerLayouts } from "../browser/plans/drawer-layout.js";
 
 const doc = () => ({ id: "open-bin", seq: 0, mode: "advanced", bodies: [], sketches: [], planes: [], joints: [] });
 const bin = changes => ({ id: "bin", type: "gridfinity", kind: "bin", ...changes });

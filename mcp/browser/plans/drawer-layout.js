@@ -1,6 +1,6 @@
 import { buildGridfinity, normalizeGridfinity } from "./gridfinity.js";
-import { drawerParts, normalizeDrawerLayout } from "../shared/drawer-layout.js";
-import { checkPrintFit } from "../shared/print-area.js";
+import { drawerParts, normalizeDrawerLayout } from "../../shared/drawer-layout.js";
+import { checkPrintFit } from "../../shared/print-area.js";
 
 function partEditable(body, document) {
   const saved = body.mcpDrawerLayout;

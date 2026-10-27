@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeMagnetPockets, magnetCenters, magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
-import { normalizeGridfinity, buildGridfinity } from "../browser/gridfinity.js";
+import { normalizeGridfinity, buildGridfinity } from "../browser/plans/gridfinity.js";
 import { normalizeDrawerLayout, drawerParts, drawerBinBaseZ } from "../shared/drawer-layout.js";
-import { compileMcpModel, reviseMcpParameters } from "../browser/models.js";
+import { compileMcpModel, reviseMcpParameters } from "../browser/plans/models.js";
 
 const document = () => ({ id: "magnets", seq: 0, mode: "advanced", bodies: [], sketches: [], planes: [], joints: [] });
 function build(kind, magnets, columns = 1, rows = 1) {

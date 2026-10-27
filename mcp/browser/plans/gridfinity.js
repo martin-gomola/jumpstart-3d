@@ -50,12 +50,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-import { findRegions, resolveSketch } from "../../src/regions.js";
-import { normalizeMagnetPockets, magnetCarrierHeight, magnetCenters, MAGNET_CARRIER_FLOOR } from "../shared/gridfinity-magnets.js";
+import { findRegions, resolveSketch } from "../../../src/regions.js";
+import { normalizeMagnetPockets, magnetCarrierHeight, magnetCenters, MAGNET_CARRIER_FLOOR } from "../../shared/gridfinity-magnets.js";
 
-import { normalizeOpenSides, normalizeCloseGaps, binFootprint, binTotalHeight } from "../shared/gridfinity-walls.js";
-import { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";
-export { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";
+import { normalizeOpenSides, normalizeCloseGaps, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
+import { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
+export { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
 const IDENTITY = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 const sourceRevision = "910e22d8607fd7f5f51ad5e5cbc5287a76810bfd";
 const fail = message => { throw new Error(message); };

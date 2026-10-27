@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PRINT_AREA_PRESETS, normalizePrintArea, baseplateTileLimits, checkPrintFit } from "../shared/print-area.js";
 import { normalizeDrawerLayout, drawerParts, fillDrawerGaps } from "../shared/drawer-layout.js";
-import { compileMcpModel } from "../browser/models.js";
+import { compileMcpModel } from "../browser/plans/models.js";
 const layout = changes => ({ id: "drawer", type: "drawerLayout", width: 230, depth: 695, height: 60, bins: [], ...changes });
 test("printer area preserves decimal nozzle dimensions and rejects invalid envelopes", () => {
   assert.equal(normalizePrintArea(), false);

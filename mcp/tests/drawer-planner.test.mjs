@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDrawerPlanner, drawerStatus, numberValid } from "../browser/drawer-planner.js";
+import { createDrawerPlanner, drawerStatus, numberValid } from "../browser/ui/drawer-planner.js";
 
 const memoryStorage = () => { const data = new Map(); return { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) }; };
 

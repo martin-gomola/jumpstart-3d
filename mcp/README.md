@@ -1035,9 +1035,11 @@ geometry acceptance.
 
 - `mcp/browser/editor-bridge.js`: editor commands, multi-view capture, preview inspection gates,
   transactions, exports and revision checks.
-- `mcp/browser/models.js` and `mcp/shared/parameters.js`: owned native models, persistent
+- `mcp/browser/plans/`: typed plan normalization and native feature builders.
+  `plans/models.js` and `mcp/shared/parameters.js` own native models, persistent
   templates, bounded arithmetic and guarded regeneration.
-- `mcp/shared/geometry.js` and `mcp/browser/inspection.js`: independent tessellation
+- `mcp/browser/ui/`: React panels, their DOM-free planners and shared controls.
+- `mcp/shared/geometry.js` and `mcp/browser/inspection/`: independent tessellation
   measurements, semantic selection and bounded mesh checks.
 - `mcp/shared/schema.js`, `mcp/server/tool-contracts.mjs` and
   `mcp/server/server.mjs`: runtime input validation, tool discovery,

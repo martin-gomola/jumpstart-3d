@@ -1,19 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { ICON } from "../../src/icons.js";
-import { BIN_SIDES, normalizeOpenSides } from "../shared/gridfinity-walls.js";
-import { DEFAULT_MAGNET_POCKETS } from "../shared/gridfinity-magnets.js";
+import { BIN_SIDES, normalizeOpenSides } from "../../shared/gridfinity-walls.js";
+import { DEFAULT_MAGNET_POCKETS } from "../../shared/gridfinity-magnets.js";
 import { numberValid } from "./drawer-planner.js";
+import { pictogramSvg } from "./pictograms.js";
 
-const svgCache = new Map();
-function pictogramSvg(name) {
-  if (!svgCache.has(name)) svgCache.set(name, ICON[name]
-    .replace(/\s(stroke|fill)="(?!none")[^"]*"/g, ' $1="currentColor"')
-    .replace("<svg", '<svg aria-hidden="true" focusable="false"'));
-  return svgCache.get(name);
-}
-
-// Keep the editor's icon geometry while inheriting each control's theme and state.
 // The parent element carries the `ai-with-pictogram` class.
 export function Labelled({ icon, children }) {
   return <>
@@ -32,10 +23,33 @@ function useNativeChange(ref, handler) {
   }, [ref]);
 }
 
-export function NumberField({ id, label, text, onText, limits = {}, onCommit, onEdit, disabled, invalid, describedBy = "drawer-message", inputRef }) {
+// The native viewer owns its canvas; it sits before `beforeRef`, or after the React-rendered children.
+// Returns true when the viewer is unavailable and the caller should show a still image.
+export function usePreviewView(containerRef, previewId, createPreviewView, beforeRef) {
+  const [fallback, setFallback] = useState(false);
+  useLayoutEffect(() => {
+    let view;
+    try { view = createPreviewView(previewId); containerRef.current.insertBefore(view.element, beforeRef?.current || null); }
+    catch { setFallback(true); }
+    return () => { view?.dispose(); view?.element.remove(); };
+  }, [previewId]);
+  return fallback;
+}
+
+// Opens collapsed sections around the first invalid control, marks it and lets the browser report it.
+export function revealInvalid(form, mark) {
+  const invalid = [...form.querySelectorAll("input")].find(input => !input.disabled && !input.validity.valid);
+  if (invalid) {
+    for (let parent = invalid.parentElement; parent && parent !== form; parent = parent.parentElement) if (parent.tagName === "DETAILS") parent.open = true;
+    flushSync(() => mark(invalid.id));
+  }
+  return form.reportValidity();
+}
+
+export function NumberField({ id, label, text, onText, limits = {}, onCommit, onEdit, disabled, hidden, invalid, describedBy = "drawer-message", inputRef }) {
   const own = useRef(null), ref = inputRef || own;
   useNativeChange(ref, event => { onText(event.target.value); onCommit?.(event.target.value); });
-  return <label className="ai-template-field" htmlFor={id}>
+  return <label className="ai-template-field" htmlFor={id} hidden={hidden}>
     <span>{label}</span>
     <input ref={ref} id={id} type="number" min={limits.min} max={limits.max} step={limits.step ?? "any"} value={text} required disabled={disabled}
       aria-describedby={describedBy} aria-invalid={invalid === undefined ? undefined : String(invalid)}
@@ -64,8 +78,9 @@ export function MagnetControls({ id, label = "Magnet pockets", value, disabled, 
   const key = JSON.stringify(value || false);
   useLayoutEffect(() => { setTexts(magnetTexts(value)); setTouched({}); }, [key]);
   const valid = !texts.enabled || numberValid(texts.diameter, MAGNET_LIMITS.diameter) && numberValid(texts.depth, MAGNET_LIMITS.depth);
-  useEffect(() => onValid(valid), [valid]);
   const read = next => next.enabled ? { diameter: Number(next.diameter), depth: Number(next.depth) } : false;
+  // Reports the value being typed as well, before it is committed on `change`.
+  useEffect(() => onValid(valid, read(texts)), [valid, texts.enabled, texts.diameter, texts.depth]);
   const field = (name, text) => <NumberField id={`${id}-${name}`} label={text} text={texts[name]} limits={MAGNET_LIMITS[name]} describedBy={`${id}-note`}
     disabled={disabled || !texts.enabled} invalid={touched[name] ? !numberValid(texts[name], MAGNET_LIMITS[name]) : undefined}
     onText={next => setTexts(current => ({ ...current, [name]: next }))} onEdit={onInput}
@@ -85,9 +100,10 @@ export function MagnetControls({ id, label = "Magnet pockets", value, disabled, 
 
 const EDGE_PATHS = { left: "M4 4v16", right: "M20 4v16", front: "M4 20h16", back: "M4 4h16" };
 
-export function WallControls({ id, value = [], closeGaps = false, disabled, onChange, onCloseGaps }) {
+export function WallControls({ id, heading, value = [], closeGaps = false, disabled, onChange, onCloseGaps }) {
   const sides = normalizeOpenSides(value), flush = closeGaps && sides.length > 0;
   return <section className="ai-template-group ai-wall-controls">
+    {heading && <h4>{heading}</h4>}
     <p className="ai-template-note">Open matching sides on neighbouring bins for long items. Each part prints separately. Standard edges retain a small seam.</p>
     <div className="ai-template-fields ai-wall-choices" role="group" aria-label="Open sides">
       {BIN_SIDES.map(side => {
@@ -112,7 +128,7 @@ export function WallControls({ id, value = [], closeGaps = false, disabled, onCh
 }
 
 // A live sizing sketch is deliberately separate from the inspected native preview.
-export function DimensionGuide({ title, note, width, depth, height, kind = "bin", columns = 0, rows = 0 }) {
+export function DimensionGuide({ title, note, width, depth, height, kind = "bin", columns = 0, rows = 0, hidden }) {
   const supplied = [width, depth, height].every(n => Number.isFinite(n) && n > 0);
   const scale = Math.max(width || 1, depth || 1, (height || 1) * 2);
   const w = supplied ? 140 * width / scale : 140, d = supplied ? 140 * depth / scale : 110;
@@ -127,7 +143,7 @@ export function DimensionGuide({ title, note, width, depth, height, kind = "bin"
   const depthText = supplied ? `${format(depth)} mm deep` : drawer ? "Inside depth" : "Depth";
   const heightText = supplied ? `${format(height)} mm tall` : drawer ? "Usable height" : "Height";
   const grid = kind === "baseplate" && columns > 0 && rows > 0;
-  return <section className="ai-dimension-guide" aria-label={title}>
+  return <section className="ai-dimension-guide" aria-label={title} hidden={hidden}>
     <h3>{title}</h3>
     <svg viewBox="0 0 520 340" role="img" aria-label={`${title}: ${widthText}, ${depthText}, ${heightText}`}>
       <g>

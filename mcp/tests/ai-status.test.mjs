@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { agentStatus } from "../browser/ai-status.js";
+import { agentStatus } from "../browser/ui/ai-status.js";
 import { clientPresence } from "../server/presence.mjs";
 
 test("editor online is waiting, not proof of an AI client connection", () => {
@@ -37,7 +37,7 @@ test("presence distinguishes leases, stateless activity, disconnect and lease ex
 });
 
 test("every status has a visible AI label and an accessible state name", async () => {
-  const { AI_STATUS_CSS } = await import("../browser/ai-status.js");
+  const { AI_STATUS_CSS } = await import("../browser/ui/ai-status.js");
   const statuses = [
     agentStatus({ online: false }), agentStatus({ checking: true }), agentStatus({ online: true }),
     agentStatus({ online: true, connected: true }), agentStatus({ online: true, recent: true }),

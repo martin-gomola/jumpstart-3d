@@ -1,4 +1,4 @@
-import { validateRegionBox } from "../shared/edit-contracts.js";
+import { validateRegionBox } from "../../shared/edit-contracts.js";
 export async function inspectProtectedRegions(regions, before, after, kernel, intent) {
   const pending = [], results = [];
   const queries = [...regions, ...(intent?.changeRegion ? intent.targetBodyIds.map(bodyId=>({id:`outside:${bodyId}`,bodyId,box:{...intent.changeRegion,outside:true}})) : [])];

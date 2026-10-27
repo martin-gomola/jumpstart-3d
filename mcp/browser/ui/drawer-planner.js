@@ -1,10 +1,10 @@
-import { rotateOpenSides, binFootprint, binTotalHeight } from "../shared/gridfinity-walls.js";
-import { drawerMetrics, normalizeDrawerLayout, rotateDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../shared/drawer-layout.js";
-import { normalizeMagnetPockets, magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
-import { normalizeBinLimits } from "../shared/gridfinity-limits.js";
-import { normalizeCornerSpacers, cornerSpacerParts } from "../shared/drawer-spacers.js";
-import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "../shared/print-area.js";
-import { baseplateClipLayout } from "../shared/baseplate-clips.js";
+import { rotateOpenSides, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
+import { drawerMetrics, normalizeDrawerLayout, rotateDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../../shared/drawer-layout.js";
+import { normalizeMagnetPockets, magnetCarrierHeight } from "../../shared/gridfinity-magnets.js";
+import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
+import { normalizeCornerSpacers, cornerSpacerParts } from "../../shared/drawer-spacers.js";
+import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "../../shared/print-area.js";
+import { baseplateClipLayout } from "../../shared/baseplate-clips.js";
 
 const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);

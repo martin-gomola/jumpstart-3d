@@ -1,5 +1,5 @@
-import { buildLathePiece } from '../../src/latheGeometry.js';
-import { packMesh, toB64, fromB64, contentId } from '../../src/meshimport.js';
+import { buildLathePiece } from '../../../src/latheGeometry.js';
+import { packMesh, toB64, fromB64, contentId } from '../../../src/meshimport.js';
 
 const IDENTITY = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 const fail = message => { throw new Error(`Lathe plan: ${message}`); };

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { evaluatePairChecks } from "../shared/pairs.js";
-import { validateRequirements, evaluateRequirements } from "../browser/preview-requirements.js";
-import { inspectNativePairs } from "../browser/pair-inspection.js";
+import { validateRequirements, evaluateRequirements } from "../browser/inspection/preview-requirements.js";
+import { inspectNativePairs } from "../browser/inspection/pair-inspection.js";
 import { measureSolidPair, validatePairPlacement } from "../../src/pairGeometry.js";
 import { KernelClient } from "../../src/kernelClient.js";
 

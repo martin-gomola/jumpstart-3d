@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { BIN_SIDES, binFootprint, binTotalHeight } from "../shared/gridfinity-walls.js";
-import { drawerMetrics, placementError, drawerBinBaseZ } from "../shared/drawer-layout.js";
-import { normalizeBinLimits } from "../shared/gridfinity-limits.js";
-import { normalizeCornerSpacers } from "../shared/drawer-spacers.js";
-import { normalizePrintArea, checkPrintFit } from "../shared/print-area.js";
-import { createDrawerPlanner, drawerStatus, numberValid } from "./drawer-planner.js";
-import { Labelled, NumberField, TextField, MagnetControls, WallControls, DimensionGuide } from "./controls.jsx";
+import { BIN_SIDES, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
+import { drawerMetrics, placementError, drawerBinBaseZ } from "../../shared/drawer-layout.js";
+import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
+import { normalizeCornerSpacers } from "../../shared/drawer-spacers.js";
+import { normalizePrintArea, checkPrintFit } from "../../shared/print-area.js";
+import { drawerStatus, numberValid } from "./drawer-planner.js";
+import { Labelled, NumberField, TextField, MagnetControls, WallControls, DimensionGuide, usePreviewView } from "./controls.jsx";
 
 const DRAWER_LIMITS = { width: { min: 42, max: 881.99 }, depth: { min: 42, max: 881.99 }, height: { min: 14, max: 10000 }, floor: { min: 0.8, max: 6 }, wall: { min: 0.8, max: 4 } };
 const SPACER_LIMITS = { clearance: { min: 0, max: 1, step: 0.1 }, spacerHeight: { min: 1, max: 12, step: 0.5 }, leg: { min: 5, max: 60, step: 1 } };
@@ -17,17 +16,7 @@ const fieldTexts = draft => {
     floor: String(draft.floor), wall: String(draft.wall), clearance: String(spacers.clearance), spacerHeight: String(spacers.height), leg: String(spacers.legLength) };
 };
 
-export function initDrawerPanel({ root, request, subscribe, onBusy, createPreviewView }) {
-  // Commit each planner change before returning, as the DOM panel did, so chained clicks see current controls.
-  const planner = createDrawerPlanner({ request, onBusy, notify: flushSync });
-  subscribe(kind => { if (!["preview", "version"].includes(kind)) planner.deactivate(); });
-  const reactRoot = createRoot(root);
-  flushSync(() => reactRoot.render(<DrawerPlanner planner={planner} root={root} createPreviewView={createPreviewView} />));
-  return { refreshDocument: planner.refreshDocument, deactivate: planner.deactivate,
-    getBinLimits: planner.getBinLimits, getPrintArea: planner.getPrintArea, setBinLimits: planner.setBinLimits };
-}
-
-function DrawerPlanner({ planner, root, createPreviewView }) {
+export function DrawerPlanner({ planner, hidden, createPreviewView }) {
   const state = useSyncExternalStore(planner.subscribe, planner.getState);
   const { draft, busy, selectedId, view, preview } = state;
   const status = drawerStatus(draft), { ready, error } = status, metrics = status.metrics;
@@ -35,36 +24,30 @@ function DrawerPlanner({ planner, root, createPreviewView }) {
   const [texts, setTexts] = useState(() => fieldTexts(draft)), [touched, setTouched] = useState({});
   const [baseMagnetsValid, setBaseMagnetsValid] = useState(true);
   const [gesture, setGesture] = useState(null), [ghost, setGhost] = useState(null);
-  const settingsRef = useRef(null), boardRef = useRef(null), widthRef = useRef(null), undoRef = useRef(null), redoRef = useRef(null);
+  const rootRef = useRef(null), settingsRef = useRef(null), boardRef = useRef(null), widthRef = useRef(null), undoRef = useRef(null), redoRef = useRef(null);
   const previewButtonRef = useRef(null), addBinRef = useRef(null), reviewTitleRef = useRef(null);
 
   useLayoutEffect(() => { setTexts(fieldTexts(planner.getState().draft)); setTouched({}); }, [state.fieldsVersion]);
   useLayoutEffect(() => { if (state.scrollSeq) settingsRef.current.scrollTop = 0; }, [state.scrollSeq]);
-  useEffect(() => { root.setAttribute("aria-busy", String(busy)); }, [busy]);
   useEffect(() => { if (preview) reviewTitleRef.current?.focus(); }, [preview?.seq]);
 
   // Reordering the measurements or rebuilding a bin inspector can blur its control.
   function history(kind) {
     const active = document.activeElement;
     if (!flushSync(() => planner[kind]())) return;
-    const target = root.contains(active) && active.getClientRects().length && !active.disabled ? active : undoRef.current.disabled ? redoRef.current : undoRef.current;
+    const target = rootRef.current.contains(active) && active.getClientRects().length && !active.disabled ? active : undoRef.current.disabled ? redoRef.current : undoRef.current;
     if (!target.disabled) target.focus({ preventScroll: true });
   }
-  const historyRef = useRef(history); historyRef.current = history;
-  useEffect(() => {
-    const keydown = event => {
-      if (event.key === "Escape") return;
-      const typing = event.target.tagName === "TEXTAREA" || event.target.tagName === "INPUT" && !["checkbox", "radio"].includes(event.target.type);
-      if ((event.ctrlKey || event.metaKey) && !typing && ["z", "y"].includes(event.key.toLowerCase())) {
-        event.preventDefault();
-        historyRef.current(event.key.toLowerCase() === "y" || event.shiftKey ? "redo" : "undo");
-      }
-      // Draft navigation must not nudge or undo selected native CAD bodies behind the panel.
-      event.stopPropagation();
-    };
-    root.addEventListener("keydown", keydown);
-    return () => root.removeEventListener("keydown", keydown);
-  }, [root]);
+  const keydown = event => {
+    if (event.key === "Escape") return;
+    const typing = event.target.tagName === "TEXTAREA" || event.target.tagName === "INPUT" && !["checkbox", "radio"].includes(event.target.type);
+    if ((event.ctrlKey || event.metaKey) && !typing && ["z", "y"].includes(event.key.toLowerCase())) {
+      event.preventDefault();
+      history(event.key.toLowerCase() === "y" || event.shiftKey ? "redo" : "undo");
+    }
+    // Draft navigation must not nudge or undo selected native CAD bodies behind the panel.
+    event.stopPropagation();
+  };
 
   const setText = name => text => setTexts(current => ({ ...current, [name]: text }));
   const focusBin = id => [...boardRef.current.querySelectorAll("[data-bin-id]")].find(button => button.dataset.binId === id)?.focus();
@@ -128,7 +111,7 @@ function DrawerPlanner({ planner, root, createPreviewView }) {
     </label>
     <p className="ai-template-note" role="status" hidden={!draft.baseplateClips}>{status.clipNote}</p>
     <MagnetControls id="drawer-baseplate-magnets" label="Baseplate magnet pockets" value={draft.baseplateMagnets || false} disabled={busy || !draft.includeBaseplate}
-      onInput={planner.markEditing} onChange={planner.setBaseMagnets} onValid={setBaseMagnetsValid} />
+      onInput={planner.markEditing} onChange={planner.setBaseMagnets} onValid={valid => setBaseMagnetsValid(valid)} />
     <p className="ai-template-note" hidden={!draft.baseplateMagnets}>{status.carrierNote}</p>
   </details>;
   const message = <p key="message" id="drawer-message" className="ai-template-message" role="status" aria-live="polite" data-error={state.message.error ? "true" : undefined}>{state.message.text}</p>;
@@ -183,7 +166,7 @@ function DrawerPlanner({ planner, root, createPreviewView }) {
     } else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); planner.select(entry.id, true); }
   };
 
-  return <>
+  return <div ref={rootRef} className="ai-drawer-mode" hidden={hidden} aria-busy={String(busy)} onKeyDown={keydown}>
     <div className="ai-template-settings">
       <div ref={settingsRef} className="ai-controls drawer-settings">
         <div className="drawer-view-toolbar">
@@ -248,7 +231,7 @@ function DrawerPlanner({ planner, root, createPreviewView }) {
         </div>}
       </section>
     </div>
-  </>;
+  </div>;
 }
 
 function BinButton({ bin, index, selected, invalid, busy, style, onKeyDown }) {
@@ -268,14 +251,7 @@ function BinButton({ bin, index, selected, invalid, busy, style, onKeyDown }) {
 }
 
 function PreviewContent({ preview, createPreviewView, titleRef, stale }) {
-  const contentRef = useRef(null), [fallback, setFallback] = useState(false);
-  // The native viewer owns its canvas; it stays after the React-rendered children.
-  useLayoutEffect(() => {
-    let view;
-    try { view = createPreviewView(preview.previewId); contentRef.current.append(view.element); }
-    catch { setFallback(true); }
-    return () => { view?.dispose(); view?.element.remove(); };
-  }, [preview.previewId]);
+  const contentRef = useRef(null), fallback = usePreviewView(contentRef, preview.previewId, createPreviewView);
   return <div ref={contentRef} className="ai-preview-content">
     <h3 ref={titleRef} tabIndex={-1}>Review drawer layout</h3>
     <p className="ai-template-stale" hidden={!stale} role="status">Out of date. Preview the layout again before adding.</p>

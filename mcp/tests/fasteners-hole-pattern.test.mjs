@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildHolePattern } from "../browser/hole-pattern.js";
-import { buildModelPlan, normalizeModelPlan } from "../browser/model-plan.js";
+import { buildHolePattern } from "../browser/plans/hole-pattern.js";
+import { buildModelPlan, normalizeModelPlan } from "../browser/plans/model-plan.js";
 
 const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 function doc() { return { id: "d1", name: "Untitled", mode: "beginner", seq: 0, sketches: [], bodies: [], planes: [], joints: [] }; }

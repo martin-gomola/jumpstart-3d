@@ -2,7 +2,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { AI_STATUS_CSS } from "../browser/ai-status.js";
+import { AI_STATUS_CSS } from "../browser/ui/ai-status.js";
 import { reactBuildOptions } from "../../react-build.mjs";
 
 // The kit gates open local HTML. Bundle the production panel with a document
@@ -14,11 +14,11 @@ const source = await readFile(`${root}/src/index.html`, "utf8");
 const styles = source.match(/<style>([\s\S]*?)<\/style>/)[1];
 const panel = source.slice(source.indexOf('  <aside id="ai-setup-panel"'), source.indexOf('  <nav class="ribbon"')).replace('data-active-tab="templates" hidden', 'data-active-tab="templates"');
 const trigger = source.match(/<button id="ai-status"[\s\S]*?<\/button>/)[0].replace('aria-expanded="false"', 'aria-expanded="true"');
-const panelStyles = await readFile(`${root}/mcp/browser/templates.css`, "utf8");
+const panelStyles = await readFile(`${root}/mcp/browser/ui/templates.css`, "utf8");
 await writeFile(`${output}/panel-markup.html`, panel);
 const entry = `
-  import { initTemplatePanel } from './mcp/browser/template-panel.js';
-  import { initAiSetupPanel, initAgentStatus } from './mcp/browser/ai-status.js';
+  import { initTemplatePanel } from './mcp/browser/ui/template-panel.jsx';
+  import { initAiSetupPanel, initAgentStatus } from './mcp/browser/ui/ai-status.js';
   initAiSetupPanel();
   initAgentStatus()({ online: true });
   initTemplatePanel({

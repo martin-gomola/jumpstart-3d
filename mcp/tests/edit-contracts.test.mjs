@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {validateRequirements,evaluateRequirements} from "../browser/preview-requirements.js";
+import {validateRequirements,evaluateRequirements} from "../browser/inspection/preview-requirements.js";
 import {decodeTrace} from "../benchmarks/trace-report.mjs";
 import {evaluateEditSession} from "../benchmarks/edit-evaluator.mjs";
 import {agentTask} from "../benchmarks/agent-tasks.mjs";

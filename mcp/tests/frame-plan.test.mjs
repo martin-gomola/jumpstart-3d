@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compileFramePlan, inspectRectangularFrame } from '../browser/frame-plan.js';
-import { reviseMcpParameters } from '../browser/models.js';
+import { compileFramePlan, inspectRectangularFrame } from '../browser/plans/frame-plan.js';
+import { reviseMcpParameters } from '../browser/plans/models.js';
 import { frameTools } from '../server/frame-contracts.mjs';
 import { validateToolInput } from '../shared/schema.js';
 const document = () => ({ id: 'frame-test', name: 'Untitled', mode: 'beginner', seq: 0, bodies: [], planes: [], sketches: [], joints: [] });

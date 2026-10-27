@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePocket, buildPocket, POCKET_LIMITS } from "../browser/pockets.js";
+import { normalizePocket, buildPocket, POCKET_LIMITS } from "../browser/plans/pockets.js";
 import { findRegions, resolveSketch } from "../../src/regions.js";
 
 const input = (changes = {}) => ({ type: "pocket", id: "pocket1", target: "insert", profile: { type: "roundedRect", width: 20, height: 30, radius: 3 }, position: [-15, -20], depth: 8, clearance: 0.3, minimumFloor: 2, minimumWall: 1.2, ...changes });

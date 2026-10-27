@@ -32,7 +32,7 @@ main { padding: var(--fixture-inset); }
 </aside>
 <main><h1>AI connection status</h1><p>Focus or hover the label to read its state. Open AI setup for client instructions.</p></main>
 <script type="module">
-import { AI_STATUS_CSS, initAgentStatus, initAiSetupPanel } from "../../browser/ai-status.js";
+import { AI_STATUS_CSS, initAgentStatus, initAiSetupPanel } from "../../browser/ui/ai-status.js";
 const style = document.createElement("style"); style.textContent = AI_STATUS_CSS; document.head.append(style);
 window.setStatus = initAgentStatus(); initAiSetupPanel(); window.setStatus({online:true,connected:true});
 </script></body></html>

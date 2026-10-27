@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { focusCapabilities, publishTools } from "../server/discovery.mjs";
-import { evaluateRequirements, validateRequirements, comparePreviewBodies } from "../browser/preview-requirements.js";
+import { evaluateRequirements, validateRequirements, comparePreviewBodies } from "../browser/inspection/preview-requirements.js";
 import { failureGuidance } from "../shared/failure-guidance.js";
 import { validateToolInput } from "../shared/schema.js";
 import { readFile, readdir } from "node:fs/promises";

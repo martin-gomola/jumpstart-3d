@@ -1,4 +1,4 @@
-import tokens from "../tokens/ai-status.json" with { type: "json" };
+import tokens from "../../tokens/ai-status.json" with { type: "json" };
 export const STATUS_HOLD_MS = Number.parseFloat(tokens.feedback.$value);
 
 const cssTokens = Object.entries(tokens).map(([key, token]) => `--ai-status-${key}: ${token.$value};`).join(" ");

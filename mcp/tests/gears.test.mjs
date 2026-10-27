@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildModelPlan, normalizeModelPlan } from "../browser/model-plan.js";
+import { buildModelPlan, normalizeModelPlan } from "../browser/plans/model-plan.js";
 
 function doc() {
   return { id: "doc-gear", name: "Untitled", mode: "beginner", seq: 0, sketches: [], bodies: [], planes: [], joints: [] };

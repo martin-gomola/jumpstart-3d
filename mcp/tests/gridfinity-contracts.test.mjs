@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compileMcpModel, reviseMcpParameters } from "../browser/models.js";
+import { compileMcpModel, reviseMcpParameters } from "../browser/plans/models.js";
 
 const document = () => ({ id: "gridfinity-contract", name: "Fixture", seq: 0, mode: "advanced", bodies: [], sketches: [], planes: [], joints: [] });
 const blank = { id: "insert", type: "gridfinity", kind: "insert", columns: 2, rows: 3, heightUnits: 3, floor: 2, wall: 1.2, lip: false };

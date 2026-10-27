@@ -157,15 +157,14 @@ reference material. The product-owned interface moves to React.
 Drawer layout was ported first, ahead of Single part, because it was the most
 reported pain point:
 
-- `mcp/browser/drawer-planner.js` is the pure draft controller (stage 2 for this
-  workflow). It owns the draft, local undo, preview, apply and document
+- `mcp/browser/ui/drawer-planner.js` is the pure draft controller (stage 2 for
+  this workflow). It owns the draft, local undo, preview, apply and document
   reconciliation, and has Node tests in `mcp/tests/drawer-planner.test.mjs`.
-- `mcp/browser/drawer-panel.jsx` renders it through `useSyncExternalStore`.
+- `mcp/browser/ui/drawer-panel.jsx` renders it through `useSyncExternalStore`.
   Store notifications commit synchronously so chained user events see current
   controls, as the DOM renderer did.
-- `mcp/browser/controls.jsx` holds React versions of the pictogram label,
-  number field, magnet, open-side and dimension-guide controls. Single part
-  still uses the DOM versions until it is ported.
+- `mcp/browser/ui/controls.jsx` holds the shared pictogram label, number field,
+  magnet, open-side, dimension-guide and preview-view controls.
 - React 19.3.1, React DOM 19.3.1 and scheduler 0.28.0 production builds are
   pinned in `third_party/`; `react-build.mjs` supplies the esbuild aliases.
 
@@ -174,6 +173,22 @@ without a renderer switch after the unchanged drawer browser tests passed, so
 rollback is a commit revert. The editor-session adapter and shadcn are not
 adopted yet. The drawer keeps the existing `request`/`subscribe` bridge, and the
 components reuse the existing CSS classes and tokens.
+
+## Progress — 2026-10-27
+
+- Single part and printer settings are ported. `mcp/browser/ui/part-planner.js`
+  is the pure Single part store (Node tests in `mcp/tests/part-planner.test.mjs`)
+  and `mcp/browser/ui/template-panel.jsx` mounts one React root for the whole
+  workspace. The DOM control duplicates are gone; both workflows use
+  `controls.jsx`.
+- `mcp/browser/` is grouped by role: `ui/` for React components, stores,
+  pictograms and CSS; `plans/` for typed plan builders; `inspection/` for
+  geometry checks. Editor adapters and the preview viewer stay at the root.
+- `plans/model-plan.js` keeps primitive, sketch and feature handling and the
+  shared build loop. Each operation type has its own module in
+  `plans/operations/` with `normalize` and `build` (and `check` for imports),
+  registered in `plans/operations/index.js`. Input validation helpers are in
+  `plans/plan-input.js` and transform math in `plans/plan-geometry.js`.
 
 ## Documentation grounding
 

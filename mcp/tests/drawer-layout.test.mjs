@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { drawerMetrics, normalizeDrawerLayout, placementError, drawerParts, fillDrawerGaps, firstDrawerSpace } from "../shared/drawer-layout.js";
-import { compileMcpModel } from "../browser/models.js";
-import { summarizeDrawerLayouts } from "../browser/drawer-layout.js";
+import { compileMcpModel } from "../browser/plans/models.js";
+import { summarizeDrawerLayouts } from "../browser/plans/drawer-layout.js";
 
 const bin = (id = "bin-1", changes = {}) => ({ id, label: id, x: 0, y: 0, columns: 2, rows: 2, heightUnits: 3, kind: "bin", ...changes });
 const layout = changes => ({ id: "drawer", type: "drawerLayout", layoutId: "tools", name: "Tool drawer", width: 260, depth: 180, height: 40, bins: [bin()], ...changes });

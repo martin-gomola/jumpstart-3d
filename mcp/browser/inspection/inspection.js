@@ -1,6 +1,6 @@
-import { failureGuidance } from "../shared/failure-guidance.js";
-import { inspectRectangularFrame } from "./frame-plan.js";
-import { inspectPrintability, inspectTriangleMesh, rankPrintOrientations, sectionTriangleMesh, sampleSolidIntervals } from "../shared/geometry.js";
+import { failureGuidance } from "../../shared/failure-guidance.js";
+import { inspectRectangularFrame } from "../plans/frame-plan.js";
+import { inspectPrintability, inspectTriangleMesh, rankPrintOrientations, sectionTriangleMesh, sampleSolidIntervals } from "../../shared/geometry.js";
 
 // Estimated triangle passes per check; printability also enforces its own ray-test budget.
 export const checkPasses = (check) => check.kind === "channels" ? 104 : check.kind === "printability" ? 4 : 2;

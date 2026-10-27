@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildLathePlanMesh,compileLathePlan,validateLathePlan} from '../browser/lathe-plan.js';
+import {buildLathePlanMesh,compileLathePlan,validateLathePlan} from '../browser/plans/lathe-plan.js';
 const top={name:'Spinning top',blank:{kind:'square',length:70,side:40},profile:[[0,0.5],[8,7],[22,20],[30,20],[40,5],[70,5]]};
 const cup={name:'Turned cup',blank:{kind:'round',length:90,diameter:60},profile:[[0,26],[12,26],[16,29],[20,27],[24,29],[90,30]],hollow:{wall:3,base:6,end:'tail',style:'follow'},scale:1.1};
 const document=()=>({id:'doc',mode:'beginner',seq:0,bodies:[],sketches:[],planes:[],params:[]});

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { boot, loadDoc, newDoc, body, prim, waitIdle, watchErrors } from "../../test/helpers.mjs";
-import { normalizePocket, buildPocket } from "../browser/pockets.js";
-import { inspectGeometry } from "../browser/inspection.js";
+import { normalizePocket, buildPocket } from "../browser/plans/pockets.js";
+import { inspectGeometry } from "../browser/inspection/inspection.js";
 
 function pocketDocument(profile, extra = {}) {
   const target = body("insert", "Pocket test blank", prim("box", { w: 83.5, d: 125.5, h: 21 }));

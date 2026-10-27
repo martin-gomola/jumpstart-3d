@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { buildGridfinity, normalizeGridfinity } from "../browser/gridfinity.js";
+import { buildGridfinity, normalizeGridfinity } from "../browser/plans/gridfinity.js";
 import { magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
 import { resolveGridfinityFixture } from "./gridfinity-test-helpers.mjs";
-import { inspectGeometry } from "../browser/inspection.js";
+import { inspectGeometry } from "../browser/inspection/inspection.js";
 import { boot, loadDoc, newDoc, body, IDENTITY, watchErrors } from "../../test/helpers.mjs";
 
 function fixture(columns = 1, rows = 1, magnets = true) {

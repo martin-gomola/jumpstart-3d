@@ -30,7 +30,7 @@ const python = (name, args) => ["python3", [`${kit}/${name}.py`, ...args]];
 const jobs = [
   ["tokens", python("validate_tokens", ["mcp/tokens/ai-status.json"])],
   ["contrast", python("validate_contrast", [`${output}/theme-contrast.json`])],
-  ["hardcodes", python("lint_hardcodes", ["mcp/browser/templates.css", "mcp/browser/ai-status.js", "mcp/browser/template-panel.js", "mcp/browser/drawer-panel.jsx", "mcp/browser/drawer-planner.js", "mcp/browser/controls.jsx", "mcp/browser/dimension-guide.js", "mcp/browser/pictograms.js", "mcp/browser/wall-controls.js"])],
+  ["hardcodes", python("lint_hardcodes", ["templates.css", "ai-status.js", "template-panel.jsx", "part-planner.js", "drawer-panel.jsx", "drawer-planner.js", "controls.jsx", "pictograms.js"].map(file => `mcp/browser/ui/${file}`))],
   ["emoji", python("check_no_emoji", ["mcp/browser"])],
   ["native-select", python("lint_native_select", [`${output}/panel-markup.html`])],
   ...views.flatMap(view => [false, true].flatMap(dark => ["verify_states", "axe_audit"].map(gate => [`${gate}-${view}${dark ? "-dark" : ""}`, node(gate, [`${harness}/${view}.html`, ...(dark ? ["--dark"] : [])])]))),

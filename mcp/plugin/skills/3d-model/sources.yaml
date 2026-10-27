@@ -10,7 +10,7 @@ sources:
     trust: "Typed measured drawer coordinates, overlap/height limits, native part placements and tiled baseplates."
     mutable: true
   - id: drawer-ownership
-    path: mcp/browser/drawer-layout.js
+    path: mcp/browser/plans/drawer-layout.js
     trust: "Saved native layout ownership and replacement checks for edited, missing, locked or externally referenced parts."
     mutable: true
   - id: portable-format
@@ -34,7 +34,7 @@ sources:
     trust: "Repository's documented parameter, Lathe, preview, and frame semantics."
     mutable: true
   - id: model-plan
-    path: mcp/browser/model-plan.js
+    path: mcp/browser/plans/model-plan.js
     trust: "Typed model-plan normalization and native feature compilation; current implementation source."
     mutable: true
   - id: managed-imports
@@ -66,7 +66,7 @@ sources:
     trust: "Typed-plan acceptance cases for representative tutorial models; dimensions remain tutorial examples, not general fit specifications."
     mutable: true
   - id: preview-requirements
-    path: mcp/browser/preview-requirements.js
+    path: mcp/browser/inspection/preview-requirements.js
     trust: "Independent generated-geometry acceptance checks and source-preservation comparison; not physical fit certification."
     mutable: true
   - id: printability-heuristics
@@ -128,11 +128,11 @@ sources:
     trust: "Native role defaults, conservative combination and printable/assembly selection. Independently implemented from SOMA workflow ideas; no GPL code copied."
     mutable: true
   - id: gridfinity-generator
-    path: mcp/browser/gridfinity.js
+    path: mcp/browser/plans/gridfinity.js
     trust: "Current typed Gridfinity normalization and native geometry generation; read the returned dimensions and supported parameter ranges."
     mutable: true
   - id: measured-pockets
-    path: mcp/browser/pockets.js
+    path: mcp/browser/plans/pockets.js
     trust: "Measured-profile pocket contracts, native cuts, source evidence and conservative material-margin checks; not arbitrary imported surface-clearance certification."
     mutable: true
   - id: gridfinity-interface

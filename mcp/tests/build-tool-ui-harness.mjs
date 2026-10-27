@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { build } from "esbuild";
 import { renderToolCss } from "../tokens/render-tool-css.mjs";
-import { AI_STATUS_CSS } from "../browser/ai-status.js";
+import { AI_STATUS_CSS } from "../browser/ui/ai-status.js";
 const output = "exports/editor-v274/harness";
 await mkdir(output, { recursive: true });
 const source = await readFile("src/index.html", "utf8");

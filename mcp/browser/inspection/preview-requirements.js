@@ -1,7 +1,7 @@
-import { validateRegionBox } from "../shared/edit-contracts.js";
-import { evaluatePairChecks, validatePairThresholds } from "../shared/pairs.js";
-import { validateToolInput } from "../shared/schema.js";
-import { requirementsSchema } from "../shared/requirements.js";
+import { validateRegionBox } from "../../shared/edit-contracts.js";
+import { evaluatePairChecks, validatePairThresholds } from "../../shared/pairs.js";
+import { validateToolInput } from "../../shared/schema.js";
+import { requirementsSchema } from "../../shared/requirements.js";
 import { checkPasses, inspectGeometry } from "./inspection.js";
 
 export function validateRequirements(requirements) {

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyFeaturePatterns, buildModelPlan, normalizeModelPlan, resizeBodyDocument } from "../browser/model-plan.js";
+import { applyFeaturePatterns, buildModelPlan, normalizeModelPlan, resizeBodyDocument } from "../browser/plans/model-plan.js";
+import { OPERATION_TYPES } from "../browser/plans/operations/index.js";
 
 function doc() {
   return { id: "doc-1", name: "Untitled", mode: "beginner", seq: 0, sketches: [], bodies: [], planes: [], joints: [] };
@@ -603,4 +604,13 @@ test("rejects unsupported plan fields and ambiguous modifier inputs", () => {
     primitives: [{ id: "b", kind: "box" }],
     operations: [{ id: "shell", type: "modifier", target: "b", modifier: { type: "shell", thickness: 2, direction: "sideways", faces: [] } }],
   }), /direction must be in, out, or both/);
+});
+
+test("every operation type has a module that normalizes and builds it", () => {
+  const types = Object.keys(OPERATION_TYPES);
+  for (const type of types) {
+    assert.equal(typeof OPERATION_TYPES[type].normalize, "function", type);
+    assert.equal(typeof OPERATION_TYPES[type].build, "function", type);
+  }
+  assert.throws(() => normalizeModelPlan({ operations: [{ id: "x", type: "unknown" }] }), (error) => types.every((type) => error.message.includes(type)));
 });

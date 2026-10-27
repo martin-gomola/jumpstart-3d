@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { buildGridfinity, normalizeGridfinity } from "../browser/gridfinity.js";
+import { buildGridfinity, normalizeGridfinity } from "../browser/plans/gridfinity.js";
 import { resolveGridfinityFixture as resolveNode } from "./gridfinity-test-helpers.mjs";
 import { boot, loadDoc, newDoc, body, IDENTITY, watchErrors } from "../../test/helpers.mjs";
 
@@ -86,7 +86,7 @@ test("4x5 and 6x6 native bins and magnetic socket carriers have connected measur
     const view = window.__app.scene.views.get(body.id);
     return { error: window.__app.scene.errors.get(body.id), bounds: view.data?.bbox, volume: view.data?.volume, vertices: Array.from(view.data?.vertices || []), triangles: Array.from(view.data?.triangles || []) };
   }));
-  const { inspectGeometry } = await import("../browser/inspection.js");
+  const { inspectGeometry } = await import("../browser/inspection/inspection.js");
   for (const part of parts) {
     expect(part.error).toBeUndefined(); expect(part.volume).toBeGreaterThan(0);
     const mesh = inspectGeometry(part, { mesh: true }).meshValidation;
@@ -110,7 +110,7 @@ test("open bin walls remove their rims while retaining connected floors and Grid
     const data = window.__app.scene.views.get(body.id)?.data;
     return { error: window.__app.scene.errors.get(body.id), bounds: data?.bbox, volume: data?.volume, vertices: Array.from(data?.vertices || []), triangles: Array.from(data?.triangles || []) };
   }));
-  const { inspectGeometry } = await import("../browser/inspection.js");
+  const { inspectGeometry } = await import("../browser/inspection/inspection.js");
   for (const part of parts) {
     expect(part.error).toBeUndefined(); expect(part.volume).toBeGreaterThan(0);
     const validation = inspectGeometry(part, { mesh: true }).meshValidation;
@@ -151,7 +151,7 @@ test("open bin walls remove their rims while retaining connected floors and Grid
 });
 
 test("separately printable adjoining bins clear a 280 mm item across their open sides", async ({ page }, info) => {
-  const { compileMcpModel } = await import("../browser/models.js");
+  const { compileMcpModel } = await import("../browser/plans/models.js");
   const definition = { id: "drawer", type: "drawerLayout", width: 294, depth: 84, height: 50, includeBaseplate: false, binLimits: { columns: 5, rows: 5 }, printArea: { width: 250, depth: 250, height: 250, edgeMargin: 2 }, bins: [
     { id: "main", x: 0, y: 0, columns: 5, rows: 2, openSides: ["right"] },
     { id: "extension", x: 5, y: 0, columns: 2, rows: 2, openSides: ["left"] },
@@ -199,7 +199,7 @@ test("flush open edges continue down to the feet without a rounded ledge and ret
     { kind: "baseplate", columns: 2, rows: 1, position: [21, 0, -.25] },
   ]);
   await boot(page, info); await loadDoc(page, doc);
-  const { inspectGeometry } = await import("../browser/inspection.js");
+  const { inspectGeometry } = await import("../browser/inspection/inspection.js");
   const parts = await page.evaluate(() => window.__store.doc.bodies.map(b => {
     const d = window.__app.scene.views.get(b.id)?.data;
     return { error: window.__app.scene.errors.get(b.id), bbox: d?.bbox, vertices: Array.from(d?.vertices || []), triangles: Array.from(d?.triangles || []) };
@@ -250,7 +250,7 @@ test("flush openings build connected native solids on every axis and preserve di
   ];
   const doc = fixture(cases.map((spec, i) => ({ kind: "bin", closeGaps: true, lip: true, position: [i*300,0,0], ...spec })));
   const errors = watchErrors(page); await boot(page, info); await loadDoc(page, doc);
-  const { inspectGeometry } = await import("../browser/inspection.js");
+  const { inspectGeometry } = await import("../browser/inspection/inspection.js");
   const parts = await page.evaluate(() => window.__store.doc.bodies.map(b => { const d=window.__app.scene.views.get(b.id)?.data;return {error:window.__app.scene.errors.get(b.id),vertices:Array.from(d?.vertices||[]),triangles:Array.from(d?.triangles||[]),bbox:d?.bbox}; }));
   for (const p of parts) { expect(p.error).toBeUndefined(); const mesh=inspectGeometry(p,{mesh:true}).meshValidation;expect(mesh.valid).toBe(true);expect(mesh.disconnectedComponents).toBe(1); }
   for (const [index,point] of [[0,[-20.9,-20.4,-1]],[1,[20.4,-20.9,-1]],[2,[20.4,20.9,-1]]]) {

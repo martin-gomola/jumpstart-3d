@@ -1,4 +1,4 @@
-import { findRegions, resolveSketch } from "../../src/regions.js";
+import { findRegions, resolveSketch } from "../../../src/regions.js";
 
 export const POCKET_LIMITS = Object.freeze({ count: 16, segments: 64, coordinate: 10000, clearance: 10 });
 const IDENTITY = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];

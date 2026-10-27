@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bodyRole, combinedRole, selectExportBodies } from "../../src/bodyRoles.js";
-import { compileMcpModel, reviseMcpParameters } from "../browser/models.js";
+import { compileMcpModel, reviseMcpParameters } from "../browser/plans/models.js";
 
 const doc = () => ({ id: "roles", seq: 0, mode: "beginner", bodies: [], sketches: [], planes: [], joints: [] });
 const primitives = ["part", "phone", "screw"].map(id => ({ id, kind: "box" }));

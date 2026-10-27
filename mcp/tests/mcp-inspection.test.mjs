@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inspectGeometry, measureParallelChannels } from '../browser/inspection.js';
+import { inspectGeometry, measureParallelChannels } from '../browser/inspection/inspection.js';
 import { inspectPrintability, rankPrintOrientations } from '../shared/geometry.js';
 
 // Independently construct a stepped solid from exposed grid-cell faces, without CAD plans.

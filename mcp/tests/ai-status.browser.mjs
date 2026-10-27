@@ -17,7 +17,7 @@ test("compact status fits all states and exposes keyboard descriptions", async (
   // the same production CSS and renderer without running a model operation.
   await page.route("http://status.test/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    const allowed = ["/mcp/tests/fixtures/ai-status.html", "/mcp/browser/ai-status.js", "/mcp/tokens/ai-status.json"];
+    const allowed = ["/mcp/tests/fixtures/ai-status.html", "/mcp/browser/ui/ai-status.js", "/mcp/tokens/ai-status.json"];
     if (!allowed.includes(path)) return route.abort();
     await route.fulfill({ body: await readFile(resolve(`.${path}`)), contentType: extname(path) === ".json" ? "application/json" : extname(path) === ".js" ? "text/javascript" : "text/html" });
   });

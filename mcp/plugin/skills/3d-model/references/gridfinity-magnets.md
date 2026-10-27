@@ -30,8 +30,8 @@ choice; do not silently change measurements to make the layout pass.
 The sidebar exposes bin magnets under More bin options and baseplate magnets
 under Advanced construction. Use this magnet fit in all bins copies the current
 bin configuration to all existing bins; newly added bins can be configured later.
-Single part has its own Magnet pockets checkbox. All changes require a fresh
-preview and explicit apply.
+Drawer changes require a fresh preview and explicit apply. The editor's
+Gridfinity part dialog has its own Magnet pockets checkbox and previews live.
 
 Inspect pocket count and opening direction in `magnetPockets` recipe data,
 retained floor/roof with supported samples, connected geometry, and the aligned

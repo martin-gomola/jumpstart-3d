@@ -37,10 +37,12 @@ choosing a CAD mode closes the AI workspace.
 
 - Keep AI connection separate from Create. Show only the selected AI client’s
   setup instructions. Gridfinity is a named generator section,
-  with Drawer layout and Single part as its workflows. Printer & settings is a
+  with Drawer layout as its workflow. Printer & settings is a
   secondary action. Future unrelated generators
   belong beside Gridfinity, not inside its drawer or part controls.
-- Default Gridfinity to Drawer layout; retain Single part for cutouts and detailed CAD parameters.
+- Make single Gridfinity parts with the editor's Gridfinity part dialog, beside the other
+  part tools, not in the AI workspace. It previews in the viewport, checks the saved
+  printer area and keeps one entry point for manual single parts.
 - Allow an empty bin arrangement to preview/apply matching baseplates and optional
   spacers. Label it Baseplates only, explain that bins are optional, and reject
   output with neither bins nor baseplates.
@@ -108,7 +110,7 @@ remain text controls, rather than accumulating decorative icons.
 - Keep the control column's action footer outside its scrolling content. Selecting
   a bin reveals its settings without moving the canvas; keyboard focus must remain
   visible as the inspector scrolls.
-- Single part starts with Bin. Use a compact illustrated type selector, footprint
+- The Gridfinity part dialog starts with Bin. Use a compact illustrated type selector, footprint
   steppers, physical-height presets and an exact height disclosure. Put wall/floor
   thickness and magnets under Construction & magnets, and compartment/stacking
   options in their own disclosure. Inserts retain measured cutouts, with Position

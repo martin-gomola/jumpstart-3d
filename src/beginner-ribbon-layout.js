@@ -3,7 +3,7 @@
 export const BEGINNER_SECTIONS = [
   { id: "edit", title: "Edit", tools: ["copy", "paste", "dup", "del"] },
   { id: "create", title: "Create", fold: 5, tools: ["sketch", "sketch3d", "extrude", "import"] },
-  { id: "parts", title: "Parts", fold: 1, tools: ["fastener", "gear", "nameplate", "knurl", "spring"] },
+  { id: "parts", title: "Parts", fold: 1, tools: ["gridfinity", "fastener", "gear", "nameplate", "knurl", "spring"] },
   { id: "combine", title: "Combine", tools: ["group", "ungroup", "hole", "solid"] },
   { id: "arrange", title: "Arrange", fold: 4, tools: ["align", "mirror", "pattern", "drop", "lock"] },
   { id: "modify", title: "Modify", fold: 3, tools: ["fillet", "shell", "texture", "facepat"] },

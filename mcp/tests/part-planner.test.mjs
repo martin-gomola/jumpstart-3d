@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createPartPlanner, partState, partSummary, templatePlan } from "../browser/ui/part-planner.js";
+import { createPartPlanner, partFit, partState, partSummary, templatePlan } from "../browser/ui/part-planner.js";
 
 test("part planner turns edited texts into the template plan without the DOM", () => {
-  const planner = createPartPlanner({ request: async () => { throw new Error("unused"); } });
+  const planner = createPartPlanner();
   planner.setKind("insert");
   planner.setField("columns", "3");
   const [pocket] = planner.getState().draft.pockets;
@@ -24,35 +24,17 @@ test("part planner turns edited texts into the template plan without the DOM", (
   assert.equal(partSummary(planner.getState().draft).dimensions, "Enter a valid size to update the sizing guide.");
 });
 
-test("part planner previews, applies and discards on document changes", async () => {
-  const calls = [];
-  const request = async (method, params) => {
-    calls.push(method);
-    if (method === "get_document") return { revision: 4, bodies: [] };
-    if (method === "preview_model") return { valid: true, previewId: "p1", bodies: [{ id: "b1", name: "Bin", dimensions: { x: 83.5, y: 125.5, z: 25.4 } }], images: [] };
-    if (method === "inspect_geometry") return { meshValidation: { valid: true, disconnectedComponents: 1 } };
-    if (method === "apply_model") { assert.equal(params.previewId, "p1"); return {}; }
-    throw new Error(method);
-  };
-  const planner = createPartPlanner({ request });
-  await planner.preview();
-  let state = planner.getState();
-  assert.equal(state.cached.previewId, "p1");
-  assert.equal(state.preview.dimensions.x, 83.5);
-  assert.equal(state.message.text, "Preview ready. The document is unchanged.");
-
+test("part fit checks the overall size against the saved printer area", () => {
+  const planner = createPartPlanner(), area = { width: 90, depth: 130, height: 100, edgeMargin: 2 };
+  assert.deepEqual(partFit(planner.getState().draft, true, false), { rotated: false });
+  assert.deepEqual(partFit(planner.getState().draft, true, area), { rotated: false });
+  assert.deepEqual(partFit(planner.getState().draft, true, { ...area, width: 130, depth: 90 }), { rotated: true });
+  assert.match(partFit(planner.getState().draft, true, { ...area, depth: 90 }).error, /^This part \(83\.5 × 125\.5 × [\d.]+ mm\) exceeds the usable printer area/);
+  planner.setField("columns", "0");
+  assert.deepEqual(partFit(planner.getState().draft, true, { ...area, depth: 90 }), { rotated: false });
+  planner.setField("columns", "2");
+  planner.showError(new Error("Too deep"));
+  assert.deepEqual(planner.getState().message, { text: "Too deep", error: true });
   planner.setLip(false);
-  assert.equal(planner.getState().cached, null);
-  assert.ok(planner.getState().preview, "an edited preview stays visible as out of date");
-
-  await planner.preview();
-  await planner.apply();
-  state = planner.getState();
-  assert.deepEqual(calls.slice(-2), ["apply_model", "get_document"]);
-  assert.equal(state.preview, null);
-  assert.equal(state.success, 1);
-
-  planner.documentChanged("edit");
-  assert.equal(planner.getState().success, 0);
-  assert.equal(planner.getState().message.text, "The document changed. Preview again before adding.");
+  assert.deepEqual(planner.getState().message, { text: "", error: false });
 });

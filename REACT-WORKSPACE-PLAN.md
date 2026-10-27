@@ -181,6 +181,10 @@ components reuse the existing CSS classes and tokens.
   and `mcp/browser/ui/template-panel.jsx` mounts one React root for the whole
   workspace. The DOM control duplicates are gone; both workflows use
   `controls.jsx`.
+- Single part moved out of the AI workspace into the editor's Gridfinity part
+  dialog (`src/gridfinity-part.jsx`), which renders the shared `PartForm`
+  from `mcp/browser/ui/part-form.jsx`. The workspace keeps Drawer layout and
+  Printer & settings; the dialog reads the saved printer area for its fit check.
 - `mcp/browser/` is grouped by role: `ui/` for React components, stores,
   pictograms and CSS; `plans/` for typed plan builders; `inspection/` for
   geometry checks. Editor adapters and the preview viewer stay at the root.

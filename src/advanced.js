@@ -26,6 +26,7 @@ import { initPipeCoil } from "./pipecoil.js";
 import { initFasteners } from "./fasteners.js"; // jumpstart-3d: fasteners
 import { initHolePattern } from "./holepattern.js"; // jumpstart-3d: hole pattern
 import { initGears } from "./gears.js"; // jumpstart-3d: gears
+import { initGridfinityPart } from "./gridfinity-part.jsx"; // jumpstart-3d: Gridfinity part
 import { initNamePlate } from "./nameplate.js"; // jumpstart-3d: name plates
 import { initKnurl } from "./knurl.js"; // jumpstart-3d: knurl
 import { initSpring } from "./spring.js"; // jumpstart-3d: spring
@@ -5748,6 +5749,7 @@ export function initAdvanced(app) {
         { id: "ad-loft", label: "Loft", title: "Blend between profiles on different planes (square to circle, to a point, along a centerline…)", icon: "loft", fn: () => loftCmd() },
         { id: "ad-mirror", label: "Mirror", title: "Mirror bodies across a plane or flat face", icon: "mirror", fn: () => mirrorCmd() },
         { id: "ad-hole-m", label: "Hole", title: "Hole (H)", icon: "hole", fn: () => holeCmd() },
+        { id: "ad-gridfinity", label: "Gridfinity part", title: "A Gridfinity bin, insert with measured pockets, or baseplate", icon: "grid", fn: () => gridfinityPart.cmd() }, // jumpstart-3d: Gridfinity part
         { id: "ad-holepattern", label: "Hole pattern", title: "Rows, staggered rows or a circle of round, square, hex or slot holes on a flat face", icon: "hole", fn: () => holePattern.cmd() }, // jumpstart-3d: hole pattern
         { id: "ad-thread", label: "Thread", title: "Modeled metric (ISO) and inch (UNC / UNF) threads on round faces", icon: "thread", fn: () => threadCmd() },
         { id: "ad-thread-offset", label: "Thread print offset…", title: "Loosen printed threads", icon: "thread", fn: () => threadOffsetCmd() },
@@ -6131,6 +6133,7 @@ export function initAdvanced(app) {
   const fasteners = initFasteners(app, { openCmd, commit, row, seg, offsetSelect, STD }); // jumpstart-3d: fasteners
   const holePattern = initHolePattern(app, { openCmd, commit, row, seg, pickbox, pickBaseFace, baseOf, drawFace, ov, clearOv, offsetSelect, pitchRow, planeFromFace, CLEAR, CBORE, CSINK, TAP, isInchKey }); // jumpstart-3d: hole pattern
   const gears = initGears(app, { openCmd, commit, row, seg }); // jumpstart-3d: gears
+  const gridfinityPart = initGridfinityPart(app, { openCmd, commit, schedulePreview }); // jumpstart-3d: Gridfinity part
   const namePlate = initNamePlate(app, { openCmd, commit, row, seg }); // jumpstart-3d: name plates
   const knurl = initKnurl(app, { openCmd, commit, row, seg }); // jumpstart-3d: knurl
   const spring = initSpring(app, { openCmd, commit, row, seg }); // jumpstart-3d: spring
@@ -6252,6 +6255,7 @@ export function initAdvanced(app) {
     fastener: () => fasteners.cmd(), addFastener: (spec) => fasteners.add(spec), // jumpstart-3d: fasteners
     holePattern: () => holePattern.cmd(), addHolePattern: (spec) => holePattern.add(spec), // jumpstart-3d: hole pattern
     gear: () => gears.cmd(), addGear: (spec) => gears.add(spec), // jumpstart-3d: gears
+    gridfinityPart: () => gridfinityPart.cmd(), addGridfinityPart: (spec, at) => gridfinityPart.add(spec, at), // jumpstart-3d: Gridfinity part
     namePlate: () => namePlate.cmd(), addNamePlate: (spec) => namePlate.add(spec), // jumpstart-3d: name plates
     knurl: () => knurl.cmd(), addKnurl: (spec) => knurl.add(spec), // jumpstart-3d: knurl
     spring: () => spring.cmd(), addSpring: (spec) => spring.add(spec), // jumpstart-3d: spring

@@ -65,19 +65,22 @@ JumpStart exposes the running local editor through a stdio MCP server. The serve
 
 ### AI workspace templates
 
-Open **AI → Create**, then choose **Drawer layout** or
-**Single part** for an insert, bin, or baseplate. These workflows belong to the
-Gridfinity generator; other generators can have their own controls. The workspace
+Open **AI → Create** for **Drawer layout** and **Printer & settings**. These
+belong to the Gridfinity generator; other generators can have their own controls.
+A single bin, insert or baseplate is made with the editor's **Gridfinity** part
+tool (beginner ribbon Parts section and Advanced Create). It opens a dialog that
+previews the part live in the viewport, checks its overall size against the
+printer area saved in Printer & settings, and adds a saved parameter model, so
+Model settings revises it later. The dialog keeps the editor's current mode. The workspace
 fills the page below the main app header. Desktop controls scroll beside the
 expanding layout/model preview, dimensions, and Add/Cancel actions. Covered CAD
 controls are inactive while it is open; the main mode switch remains available.
 Use **Back to editor**, Escape, or a CAD mode to return without losing the draft.
 The Create panel uses the same typed plans and preview/apply checks as the agent.
-Single part starts with Bin. Footprint steppers and height choices update a sizing
-sketch immediately; this sketch is not a geometry or print-fit check. **Preview**
-builds the native model and offers orbit, zoom, Top view and Reset view. After
-adding a part or layout, **Continue in editor** returns to the CAD document for
-saving or export to a slicer. No connected AI client is required for these tools.
+**Preview layout** builds the native model and offers orbit, zoom, Top view and
+Reset view. After adding a layout, **Continue in editor** returns to the CAD
+document for saving or export to a slicer. No connected AI client is required for
+these tools.
 
 Changing a value keeps the last preview visible with an **Out of date** label
 and disables **Add to document**. Select **Preview** to rebuild and inspect the
@@ -108,6 +111,10 @@ The planner calculates the cell grid and leftover space, lets you draw/move bins
 and exposes settings for the selected bin. Add bin and Fill gaps provide pointer-free
 alternatives. Arrow keys move a focused bin; Shift + arrows resize it. Undo layout
 and Ctrl/Cmd+Z affect the layout draft while planner controls have focus.
+Drawer bins and the Gridfinity part dialog share the same option controls:
+compartments per side (1 to 7), floor and wall thickness, and, for insert blanks,
+measured pockets. A drawer bin uses the drawer's floor and wall unless **Own floor
+and wall thickness** is selected under More bin options.
 
 Preview layout creates a typed `drawerLayout` operation. It checks overlaps,
 bounds, height and resource limits, then generates editable native bins and matching
@@ -199,8 +206,8 @@ preview timeout and geometry inspection budgets remain enforced.
 
 ### Optional magnet pockets
 
-Single part provides a **Magnet pockets** checkbox for bins, insert blanks and
-baseplates. In Drawer layout, open **More bin options** for a selected bin and
+The Gridfinity part dialog provides a **Magnet pockets** checkbox for bins, insert
+blanks and baseplates. In Drawer layout, open **More bin options** for a selected bin and
 **Advanced construction** for baseplate pockets. **Use this magnet fit in all bins**
 copies a selected bin's pocket sizes to every current bin.
 
@@ -224,7 +231,12 @@ The `drawerLayout` operation accepts `width`, `depth`, `height`, `bins`, optiona
 `includeBaseplate`, `baseplateMagnets`, `floor`, `wall`, and explicit `replaceExisting`. Bin positions
 `x`/`y` are whole cells from the front-left; +Y goes toward the back. Each bin has
 `id`, `label`, `columns`, `rows`, `heightUnits`, `kind` (bin/insert), optional
-`dividers` and `lip`. Limits: 20 cells per direction, 16 bins, and 144 generated
+`dividers` and `lip`. The drawer's `floor` and `wall` are defaults; a bin's own
+`floor` or `wall` overrides them. Insert bins accept `pockets`: the `pocket`
+operation's fields without `type` and `target`, positioned from the insert
+centre. `minimumFloor` and `minimumWall` default to the bin's floor and wall, and
+pockets are cut and checked when the layout builds, so they regenerate and
+rotate with it. Limits: 20 cells per direction, 16 bins, and 144 generated
 grid cells. `get_document` returns saved `drawerLayouts` and whether they remain
 editable. Existing tool names, preview revision checks and apply idempotency remain
 in effect. Draft rearrangement itself does not mutate the native document.

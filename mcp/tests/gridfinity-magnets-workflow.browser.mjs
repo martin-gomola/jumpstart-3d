@@ -62,39 +62,6 @@ async function editor(page) {
   return editorId;
 }
 
-test("single-part magnetic baseplates validate fit dimensions, preview read-only and persist native pockets", async ({ page }, info) => {
-  const errors = watchErrors(page), editorId = await editor(page);
-  const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });
-  await page.click("#ai-status"); await page.click("#ai-templates-tab");
-  await page.getByRole("button", { name: "Single part", exact: true }).click();
-  await page.getByRole("button", { name: /Baseplate A matching/ }).click();
-  await page.getByText("Construction & magnets", { exact: true }).click();
-  await page.locator("#ai-template-magnets").check();
-  await page.fill("#ai-template-magnets-diameter", "0");
-  const before = await get();
-  await page.click("#ai-templates-panel button[type=submit]");
-  expect((await get()).revision).toBe(before.revision);
-  await page.fill("#ai-template-magnets-diameter", "6.5"); await page.locator("#ai-template-magnets-diameter").press("Tab");
-  await expect(page.locator(".ai-single-part")).toContainText("Baseplate height 8.2 mm");
-  await page.click("#ai-templates-panel button[type=submit]");
-  await expect(page.locator("#ai-template-message")).toContainText("Preview ready", { timeout: 90_000 });
-  await page.screenshot({ path: info.outputPath("magnetic-baseplate.png") });
-  expect((await get()).bodies).toHaveLength(0);
-  await page.getByRole("button", { name: "Add to document", exact: true }).click();
-  await expect(page.locator("#ai-template-message")).toContainText("Added to the document", { timeout: 90_000 });
-  const applied = await get();
-  expect(applied.bodies).toHaveLength(1);
-  expect(applied.bodies[0].gridfinity.magnetPockets).toMatchObject({ count: 24, diameter: 6.5, depth: 2.4, carrierFloor: 0.8, opening: "top" });
-  expect(applied.bodies[0].dimensions.z).toBeCloseTo(8.2, 3);
-  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
-  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
-  const reopened = await get();
-  expect(reopened.bodies[0].gridfinity.magnetPockets).toEqual(applied.bodies[0].gridfinity.magnetPockets);
-  await tool("jumpstart_undo", { editorId, expectedRevision: reopened.revision });
-  expect((await get()).bodies).toHaveLength(0);
-  expect(errors).toEqual([]);
-});
-
 test("drawer magnet controls align baseplates and bins, check the raised seating height and update without duplicates", async ({ page }, info) => {
   const errors = watchErrors(page), editorId = await editor(page);
   const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });

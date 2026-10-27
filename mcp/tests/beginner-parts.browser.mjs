@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { boot, watchErrors, loadDoc, newDoc, waitIdle, bodies, body, prim } from "../../test/helpers.mjs";
 
 const PARTS = [
+  ["bb-gridfinity", "Gridfinity"],
   ["bb-fastener", "Fastener"],
   ["bb-gear", "Gear"],
   ["bb-nameplate", "Name plate"],
@@ -40,7 +41,7 @@ test("Advanced Create lists the part tools and Hole pattern drills one Hole feat
   await boot(page, info);
   await loadDoc(page, newDoc("plate", "advanced", { bodies: [body("plate", "Plate", prim("box", { w: 80, d: 50, h: 6 }))] }));
   await page.click("#ad-features");
-  for (const id of ["ad-holepattern", "ad-fastener", "ad-gear", "ad-nameplate", "ad-knurl", "ad-spring"]) await expect(page.locator(`#${id}`)).toBeVisible();
+  for (const id of ["ad-gridfinity", "ad-holepattern", "ad-fastener", "ad-gear", "ad-nameplate", "ad-knurl", "ad-spring"]) await expect(page.locator(`#${id}`)).toBeVisible();
   await page.keyboard.press("Escape");
   const [before] = await bodies(page);
   const made = await page.evaluate(() => window.__app.advanced.addHolePattern({ body: "plate", face: "+z", layout: { type: "grid", cols: 3, rows: 2, pitch: 20 }, hole: { dia: 3 } }));
@@ -61,4 +62,38 @@ test("Parts folds into one menu on a narrow window", async ({ page }, info) => {
   await expect(holder).toHaveAttribute("aria-label", "Parts tools");
   await holder.click();
   await expect(page.getByRole("menu", { name: "Parts" }).getByRole("menuitem")).toHaveText(PARTS.map(([, label]) => label));
+});
+
+test("Gridfinity part dialog previews live, keeps the editor mode and adds a pocketed insert as a saved model", async ({ page }, info) => {
+  const errors = watchErrors(page);
+  await boot(page, info);
+  await loadDoc(page, newDoc("tray", "beginner"));
+  await openTool(page, "bb-gridfinity");
+  const dialog = page.locator("#cmd");
+  await expect(dialog.locator("h4").first()).toHaveText("Gridfinity part");
+  await dialog.locator('[data-template="baseplate"]').click();
+  expect(await dialog.locator(".gp-form").evaluate(form => [...form.querySelectorAll("h3,h4,p")].map(node => getComputedStyle(node).marginBlockStart).filter(margin => margin !== "0px"))).toEqual([]);
+  await dialog.screenshot({ path: "exports/ai-panel/gridfinity-dialog-baseplate.png" });
+  await dialog.locator('[data-template="insert"]').click();
+  await page.fill("#gp-1-width", "30"); await page.fill("#gp-1-height", "20"); await page.fill("#gp-1-depth", "6");
+  await expect.poll(() => page.evaluate(() => window.__store.view.bodies.length)).toBe(1);
+  await waitIdle(page);
+  await page.screenshot({ path: "exports/ai-panel/gridfinity-dialog.png" });
+  expect(await page.evaluate(() => window.__store.doc.bodies.length)).toBe(0);
+  await page.fill("#gp-1-depth", "");
+  await expect(page.locator("#cmd-ok")).toBeDisabled();
+  await page.fill("#gp-1-depth", "60");
+  await expect(page.locator("#gp-message")).toContainText("depth");
+  await expect(page.locator("#cmd-ok")).toBeDisabled();
+  await page.fill("#gp-1-depth", "6");
+  await expect(page.locator("#cmd-ok")).toBeEnabled();
+  await page.click("#cmd-ok");
+  await expect(dialog).toBeHidden();
+  await waitIdle(page);
+  const doc = await page.evaluate(() => { const d = window.__store.doc; return { mode: d.mode, models: d.mcpModels?.length, bodies: d.bodies.map(b => ({ kind: b.mcpGridfinity?.kind, pockets: b.mcpPockets?.map(p => p.depth) })), selected: window.__app.sel.length }; });
+  expect(doc).toEqual({ mode: "beginner", models: 1, bodies: [{ kind: "insert", pockets: [6] }], selected: 1 });
+  const [made] = await bodies(page);
+  expect(made.error).toBeNull();
+  expect(made.volume).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
 });

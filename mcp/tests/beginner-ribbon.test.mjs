@@ -19,5 +19,5 @@ test("beginner ribbon reopens small sections when a larger fold made room", () =
 test("every beginner tool appears in exactly one section", () => {
   const tools = BEGINNER_SECTIONS.flatMap((s) => s.tools);
   assert.equal(new Set(tools).size, tools.length);
-  assert.equal(tools.length, 30);
+  assert.equal(tools.length, 31);
 });

@@ -14,7 +14,8 @@ import { failureGuidance } from "../shared/failure-guidance.js";
 import { extendMcpTools } from "./tool-contracts.mjs";
 import { inspectTriangleMesh } from "../shared/geometry.js";
 import { clientPresence } from "./presence.mjs";
-import { listManagedImports, resolveManagedImports, MAX_IMPORTS_PER_PLAN, MAX_IMPORT_CATALOG_FILES } from "./imports.mjs";
+import { listManagedImports, resolveManagedImports, MAX_IMPORTS_PER_PLAN, MAX_IMPORT_CATALOG_FILES, OUTLINE_FORMATS } from "./imports.mjs";
+import { parseOutline, outlinePocket, OUTLINE_LIMITS } from "../shared/traced-outline.js";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const DOCS = join(ROOT, "build", "site");
@@ -230,8 +231,20 @@ const tools = extendMcpTools([
   {
     name: "jumpstart_list_imports",
     title: "List managed CAD imports",
-    description: "List STL, 3MF, STEP, and STP files placed by the operator in the read-only managed imports directory. Returns metadata and SHA-256 asset ids only. Use an id in a typed import operation; requests never accept host paths or file bytes.",
+    description: "List STL, 3MF, STEP, and STP files, and SVG or tool JSON outlines, placed by the operator in the read-only managed imports directory. Returns metadata and SHA-256 asset ids only. Use a CAD id in a typed import operation and an outline id with jumpstart_get_outline; requests never accept host paths or file bytes.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
+  },
+  {
+    name: "jumpstart_get_outline",
+    title: "Read a traced tool outline as a pocket contour",
+    description: "Convert a managed SVG or tool JSON outline (for example a Tracefinity tool export, in mm, cm or in) into a closed line contour for a Gridfinity pocket operation. Returns profile (centred on its bounding box, +Y as seen from above), width and depth in mm, deviation (largest distance between the trace and the simplified contour), minimumClearance, innerOutlinesIgnored, and fingerHoles as extra pocket profiles positioned relative to the outline centre. Next: choose an insert at least width/depth plus clearance and walls, then preview a gridfinity insert with a pocket using this profile; set clearance to at least minimumClearance plus a fit allowance, and merge finger holes into it. Inner outlines are cut away with the tool; physical fit needs a test print.",
+    inputSchema: {
+      type: "object", additionalProperties: false, required: ["assetId"],
+      properties: {
+        assetId: { type: "string", pattern: "^[a-f0-9]{64}$", description: "SHA-256 asset id of an svg or json outline from jumpstart_list_imports." },
+        maxSegments: { type: "integer", minimum: OUTLINE_LIMITS.minSegments, maximum: OUTLINE_LIMITS.segments, description: `Most line segments in the contour; default ${OUTLINE_LIMITS.segments}. Fewer segments simplify more and raise deviation.` },
+      },
+    },
   },
   {
     name: "jumpstart_list_editors",
@@ -654,6 +667,11 @@ async function executeTool(name, args) {
     case "jumpstart_preview_frame": return await run("preview_frame", { ...args, editorId: host(args) });
     case "jumpstart_preview_lathe": return await run("preview_lathe", { ...args, editorId: host(args) });
     case "jumpstart_list_imports": return await listManagedImports(IMPORTS);
+    case "jumpstart_get_outline": {
+      const [asset] = await resolveManagedImports(IMPORTS, [args.assetId], OUTLINE_FORMATS);
+      const outline = parseOutline(Buffer.from(asset.base64, "base64").toString("utf8"), asset.name);
+      return { assetId: asset.assetId, file: asset.name, ...outlinePocket(outline, { maxSegments: args.maxSegments }), sourceEvidence: { product: outline.name.slice(0, 160), kind: "measured", units: "mm" } };
+    }
     case "jumpstart_list_editors": return { editors: listEditors() };
     case "jumpstart_get_document": return await run("get_document", { ...args, editorId: host(args) });
     case "jumpstart_preview_new_document": return await run("preview_new_document", { ...args, editorId: host(args) });

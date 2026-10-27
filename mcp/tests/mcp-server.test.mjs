@@ -39,6 +39,7 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     const names = listing.result.tools.map((tool) => tool.name);
     assert.deepEqual(names, [
       "jumpstart_list_imports",
+      "jumpstart_get_outline",
       "jumpstart_list_editors",
       "jumpstart_get_document",
       "jumpstart_preview_model",

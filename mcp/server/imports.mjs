@@ -7,7 +7,9 @@ export const MAX_IMPORT_FILE_BYTES = 24 * 1024 * 1024;
 export const MAX_IMPORTS_PER_PLAN = 4;
 export const MAX_IMPORT_BYTES_PER_PLAN = 24 * 1024 * 1024;
 export const MAX_IMPORT_CATALOG_FILES = 128;
-const FORMATS = new Set([".stl", ".3mf", ".step", ".stp"]);
+export const CAD_FORMATS = new Set(["stl", "3mf", "step"]);
+export const OUTLINE_FORMATS = new Set(["svg", "json"]);
+const FORMATS = new Set([".stl", ".3mf", ".step", ".stp", ".svg", ".json"]);
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 async function importRoot(directory) {
@@ -52,7 +54,7 @@ export async function listManagedImports(directory) {
   return { assets: assets.sort((a, b) => a.name.localeCompare(b.name)), truncated, limits: { fileBytes: MAX_IMPORT_FILE_BYTES, totalPlanBytes: MAX_IMPORT_BYTES_PER_PLAN, importsPerPlan: MAX_IMPORTS_PER_PLAN, catalogFiles: MAX_IMPORT_CATALOG_FILES } };
 }
 
-export async function resolveManagedImports(directory, requestedIds) {
+export async function resolveManagedImports(directory, requestedIds, formats = CAD_FORMATS) {
   if (!Array.isArray(requestedIds) || requestedIds.length > MAX_IMPORTS_PER_PLAN) throw new Error(`A model plan can import at most ${MAX_IMPORTS_PER_PLAN} assets`);
   if (new Set(requestedIds).size !== requestedIds.length) throw new Error("An import asset may only appear once in a model plan");
   if (requestedIds.some((id) => typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id))) throw new Error("Import references must be SHA-256 asset ids from jumpstart_list_imports");
@@ -82,5 +84,7 @@ export async function resolveManagedImports(directory, requestedIds) {
   }
   const missing = requestedIds.find((id) => !found.has(id));
   if (missing) throw new Error(`Import ${missing} is unavailable, changed, or not an allowed regular file in the managed imports directory`);
+  const wrong = requestedIds.map((id) => found.get(id)).find((asset) => !formats.has(asset.format));
+  if (wrong) throw new Error(formats === CAD_FORMATS ? `${wrong.name} is a tool outline; read it with jumpstart_get_outline and cut it as a pocket contour` : `${wrong.name} is not a tool outline; outlines are SVG or tool JSON files`);
   return requestedIds.map((id) => found.get(id));
 }

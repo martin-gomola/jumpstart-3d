@@ -255,7 +255,7 @@ and replace its placeholder). Compose bind-mounts `exports/` and `imports/`
 under that host directory, outside the checkout, so those files survive
 container replacement and remain easy to open from the host file browser. MCP
 exports are written there. Put STL, 3MF, STEP, or STP files you want the agent to
-import in its `imports/` subdirectory. Compose mounts imports read-only at
+import, and SVG or tool JSON outlines for cutouts, in its `imports/` subdirectory. Compose mounts imports read-only at
 `/app/imports`; MCP imports use digest ids from `jumpstart_list_imports`, never
 host paths or file bytes. `jumpstart_save_document` still saves native projects
 to browser-local storage; this Docker data mount does not back up browser data.
@@ -353,7 +353,8 @@ apply commits a successful preview as one undoable edit.
 
 | Tool | Purpose |
 | --- | --- |
-| `jumpstart_list_imports` | List operator-managed CAD files by metadata and SHA-256 asset id; returns no file contents. |
+| `jumpstart_list_imports` | List operator-managed CAD files and tool outlines by metadata and SHA-256 asset id; returns no file contents. |
+| `jumpstart_get_outline` | Convert a managed SVG or tool JSON outline into a pocket contour with its size, simplification deviation and finger holes. |
 | `jumpstart_list_editors` | List connected editor tabs and their connection state. |
 | `jumpstart_get_document` | Read the document revision and selected bodies, with optional feature trees, sketches, and geometry selectors. |
 | `jumpstart_get_capabilities` | Read compact capabilities or filter schemas by tool name and typed plan operation. |
@@ -1156,6 +1157,20 @@ mounts it read-only.
 ```json
 {"id":"housing","type":"import","assetId":"<sha256-from-list-imports>","units":"mm"}
 ```
+
+Tool cutouts start from a traced outline in the same `imports/` directory: an
+SVG with a `width` in mm, cm or in and a `viewBox` (straight polygons or
+`M`/`L`/`H`/`V`/`Z` paths, no transforms), or a tool JSON with `points` in mm.
+[Tracefinity](https://github.com/tracefinity/tracefinity) tool SVGs and tool
+JSON from its API match these formats. `jumpstart_get_outline` returns a
+`contour` profile of at most 64 lines centred on the outline, its `width` and
+`depth`, and `deviation`, the largest distance between the trace and the
+simplified contour. Use a pocket `clearance` of at least `minimumClearance`
+plus a fit allowance, so the simplified cut still contains the trace. Finger
+holes from tool JSON come back as circle or rounded-rectangle profiles
+positioned from the outline centre; add them as merged pockets. Inner outlines
+are cut away with the tool. Outline files cannot be used in `import`
+operations, and CAD files cannot be read as outlines.
 
 The `gear` operation builds a native spur, straight bevel, or rack from
 persisted parameters. Spur and bevel outside diameter is `module × (teeth + 2)`;

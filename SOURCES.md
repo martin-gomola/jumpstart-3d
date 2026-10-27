@@ -87,6 +87,15 @@ checks before accepting the change.
   The comments/model page could not be fetched during this review. No model files,
   comments or implementation from Printables were copied or treated as verified specifications.
 
+## Traced tool outlines
+
+- Repository: <https://github.com/tracefinity/tracefinity> (MIT), reviewed 2026-10-27.
+- Read `backend/app/api/routes.py` (`download_tool_svg`) and
+  `backend/app/models/schemas.py` (`Tool`, `FingerHole`) for the exported file
+  formats only. `mcp/shared/traced-outline.js` reads those formats and was
+  written independently; no Tracefinity code, models or runtime are included.
+  Photo tracing stays in Tracefinity.
+
 ## Drawer planning interaction reference
 
 - Repository: <https://github.com/andymai/gridfinity-layout-tool>

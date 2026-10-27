@@ -41,6 +41,7 @@ const $ = (id) => document.getElementById(id);
 export const app = {
   mode: "beginner",
   sel: [],
+  uiListeners: new Set(), // called with the kind after every refreshUI
   clipboard: null,
   snapOn: true,
   objectSnap: true,
@@ -844,6 +845,7 @@ app.refreshUI = function (kind) {
     }
   } else app.advanced.refresh(kind);
   app.status();
+  for (const fn of app.uiListeners) fn(kind);
 };
 
 app.status = function () {

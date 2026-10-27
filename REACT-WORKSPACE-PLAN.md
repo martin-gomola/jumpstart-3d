@@ -194,6 +194,12 @@ components reuse the existing CSS classes and tokens.
   Check and Workshops. Sections that do not fit fold into a menu instead of
   scrolling; `src/beginner-ribbon-layout.js` decides which. Layerling
   (AGPL-3.0) informed the grouping only; no code was taken from it.
+- Selecting a body of a saved parameter model (`mcpModels`, made by the AI)
+  shows a Model settings card in the viewport, in every mode. Its independent
+  parameters are editable and derived ones are read-only; Preview and Apply use
+  the same `preview_parameters` and `apply_model` calls as the agent. A model
+  moved or edited by hand is reported instead of regenerated. The store is
+  `mcp/browser/ui/parameter-planner.js`; the card is `parameter-card.jsx`.
 
 ## Documentation grounding
 

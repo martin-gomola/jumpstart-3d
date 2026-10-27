@@ -10,11 +10,12 @@ import { store, resolveNode, newDoc } from "../../src/store.js";
 import { applyFeaturePatterns, resizeBodyDocument } from "./plans/model-plan.js";
 import { getUnit } from "../../src/units.js";
 import { clone } from "../../src/util.js";
-import { compileMcpModel, refreshMcpModelBodyState, reviseMcpParameters } from "./plans/models.js";
+import { compileMcpModel, mcpModelEdited, refreshMcpModelBodyState, reviseMcpParameters } from "./plans/models.js";
 import { inspectGeometry } from "./inspection/inspection.js";
 import { selectGeometry } from "../shared/geometry.js";
 import { initAgentStatus, initAiSetupPanel, STATUS_HOLD_MS } from "./ui/ai-status.js";
 import { initTemplatePanel } from "./ui/template-panel.jsx";
+import { initParameterCard } from "./ui/parameter-card.jsx";
 import { previewViewer } from "./preview-viewer.js";
 import { checkPrintFit } from "../shared/print-area.js";
 import { summarizeDrawerLayouts } from "./plans/drawer-layout.js";
@@ -166,7 +167,7 @@ function documentSummary(app, editorId, revision, includeGeometry = false, optio
     bodies: bodies.map((body) => bodyInfo(body, app, includeGeometry, options)),
     drawerLayouts: summarizeDrawerLayouts(doc).filter(layout => !wanted || layout.bodyIds.some(id => wanted.has(id))),
     ...(wanted ? { selection: { bodyIds: [...wanted], totalBodies: doc.bodies.filter((body) => !body.cutPreview).length, returnedBodies: bodies.length } } : {}),
-    parametricModels: (doc.mcpModels || []).filter((model) => !wanted || model.bodyIds.some((id) => wanted.has(id))).map(({ bodyState, sketchState, planeState, ...model }) => ({ ...clone(model), sourceState: "saved parameter template; native edits are checked before regeneration" })),
+    parametricModels: (doc.mcpModels || []).filter((model) => !wanted || model.bodyIds.some((id) => wanted.has(id))).map(({ bodyState, sketchState, planeState, ...model }) => ({ ...clone(model), editedOutside: mcpModelEdited(doc, { bodyState, sketchState, planeState, ...model }), sourceState: "saved parameter template; native edits are checked before regeneration" })),
   };
 }
 
@@ -839,12 +840,18 @@ export function initMcp(app) {
     commandQueue = result.catch(() => {});
     return result;
   };
-  initTemplatePanel({ request: (action, params) => enqueue({ action, params }), subscribe: listener => store.on(listener),
-    createPreviewView: previewId => {
-      const preview = previews.get(previewId);
-      if (!preview) throw new Error("Preview expired. Generate it again.");
-      return previewViewer(preview.compiled.affectedBodyIds.map(id => preview.geometries.get(id).mesh));
-    } });
+  const localRequest = (action, params) => enqueue({ action, params });
+  const createPreviewView = previewId => {
+    const preview = previews.get(previewId);
+    if (!preview) throw new Error("Preview expired. Generate it again.");
+    return previewViewer(preview.compiled.affectedBodyIds.map(id => preview.geometries.get(id).mesh));
+  };
+  initTemplatePanel({ request: localRequest, subscribe: listener => store.on(listener), createPreviewView });
+  const parameterHost = document.createElement("div");
+  parameterHost.id = "model-params-root";
+  document.getElementById("viewport").append(parameterHost);
+  const parameterCard = initParameterCard({ host: parameterHost, request: localRequest, subscribe: listener => store.on(listener), createPreviewView });
+  app.uiListeners.add(() => parameterCard.select(app.sel));
 
   const poll = async () => {
     if (polling || stopped) return;

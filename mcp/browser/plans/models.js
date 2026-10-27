@@ -20,12 +20,17 @@ export function refreshMcpModelBodyState(document, modelId) {
   model.sketchState = state(document, model.sketchIds, "sketches");
 }
 
+// True when the model's bodies, sketches or planes changed outside its parameter plan.
+export function mcpModelEdited(document, model) {
+  return state(document, model.bodyIds, "bodies") !== model.bodyState || state(document, model.sketchIds || [], "sketches") !== model.sketchState || state(document, model.planeIds || [], "planes") !== model.planeState;
+}
+
 export function compileMcpModel(document, rawPlan, replaceBodyIds = [], options = {}) {
   const { modelId: requestedId, ...template } = rawPlan;
   const resolved = resolveParametricPlan(template, options.values || {});
   const previous = options.previous;
   if (previous) {
-    if (state(document, previous.bodyIds, "bodies") !== previous.bodyState || state(document, previous.sketchIds, "sketches") !== previous.sketchState || state(document, previous.planeIds, "planes") !== previous.planeState) {
+    if (mcpModelEdited(document, previous)) {
       throw new Error("The model was edited outside its saved parameter plan; reconcile native edits before regenerating parameters");
     }
     replaceBodyIds = previous.bodyIds;

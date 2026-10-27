@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { AI_STATUS_CSS } from "../browser/ai-status.js";
+import { reactBuildOptions } from "../../react-build.mjs";
 
 // The kit gates open local HTML. Bundle the production panel with a document
 // fixture; actual native previews and transactions remain covered by browser tests.
@@ -55,7 +56,7 @@ const entry = `
   }
   document.body.dataset.uiReady = "true";
 `;
-const bundle = await build({ stdin: { contents: entry, resolveDir: root }, bundle: true, format: "iife", write: false, logLevel: "silent" });
+const bundle = await build({ stdin: { contents: entry, resolveDir: root }, bundle: true, format: "iife", write: false, logLevel: "silent", ...reactBuildOptions(root) });
 for (const view of ["drawer", "layout", "part", "settings", "connection", "open-walls", "orientation"]) {
   await writeFile(`${output}/harness/${view}.html`, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gridfinity ${view} UI gate</title><style>${styles}\n${AI_STATUS_CSS}\n${panelStyles}</style></head><body data-view="${view}"><header class="topbar"><div class="modeswitch">${trigger}</div></header>${panel}<script>${bundle.outputFiles[0].text}</script></body></html>`);
 }

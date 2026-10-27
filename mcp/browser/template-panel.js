@@ -3,7 +3,7 @@ import { wallControls } from "./wall-controls.js";
 import { binFootprint, binTotalHeight } from "../shared/gridfinity-walls.js";
 import { iconLabel } from "./pictograms.js";
 import { dimensionGuide } from "./dimension-guide.js";
-import { initDrawerPanel } from "./drawer-panel.js";
+import { initDrawerPanel } from "./drawer-panel.jsx";
 import { magnetControls } from "./magnet-controls.js";
 import { magnetCarrierHeight } from "../shared/gridfinity-magnets.js";
 import { GRIDFINITY_LIMITS } from "../shared/gridfinity-limits.js";

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { build } from "esbuild";
 import { renderToolCss } from "./mcp/tokens/render-tool-css.mjs";
 import { AI_STATUS_CSS } from "./mcp/browser/ai-status.js";
+import { reactBuildOptions } from "./react-build.mjs";
 
 const root = new URL(".", import.meta.url).pathname;
 const src = join(root, "src");
@@ -20,7 +21,8 @@ const alias = {
   "replicad-opencascadejs": join(tp, "replicad-opencascadejs/dist/replicad_single.js"),
   three: join(tp, "three/build/three.module.js"),
 };
-const common = { bundle: true, minify: true, legalComments: "eof", target: "es2020", alias, logLevel: "warning" };
+const react = reactBuildOptions(root);
+const common = { bundle: true, minify: true, legalComments: "eof", target: "es2020", alias: { ...alias, ...react.alias }, jsx: react.jsx, logLevel: "warning" };
 const wasm = join(src, "occt-gz.wasm");
 const wasmSize = statSync(wasm).size;
 

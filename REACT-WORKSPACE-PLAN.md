@@ -147,6 +147,34 @@ only through bounded typed schemas, cost limits, native/mesh capability labels,
 inspection and explicit apply. Never describe a mesh conversion as analytically
 editable native CAD or a geometric check as guaranteed physical printer fit.
 
+## Progress — 2026-10-26
+
+The author has stopped improving the editor interface, so author updates are now
+ported for the editor core only (kernel, sketcher, regions, document store,
+workers and geometry fixes). Interface changes in the author source are
+reference material. The product-owned interface moves to React.
+
+Drawer layout was ported first, ahead of Single part, because it was the most
+reported pain point:
+
+- `mcp/browser/drawer-planner.js` is the pure draft controller (stage 2 for this
+  workflow). It owns the draft, local undo, preview, apply and document
+  reconciliation, and has Node tests in `mcp/tests/drawer-planner.test.mjs`.
+- `mcp/browser/drawer-panel.jsx` renders it through `useSyncExternalStore`.
+  Store notifications commit synchronously so chained user events see current
+  controls, as the DOM renderer did.
+- `mcp/browser/controls.jsx` holds React versions of the pictogram label,
+  number field, magnet, open-side and dimension-guide controls. Single part
+  still uses the DOM versions until it is ported.
+- React 19.3.1, React DOM 19.3.1 and scheduler 0.28.0 production builds are
+  pinned in `third_party/`; `react-build.mjs` supplies the esbuild aliases.
+
+Differences from the stages above: the legacy drawer renderer was removed
+without a renderer switch after the unchanged drawer browser tests passed, so
+rollback is a commit revert. The editor-session adapter and shadcn are not
+adopted yet. The drawer keeps the existing `request`/`subscribe` bridge, and the
+components reuse the existing CSS classes and tokens.
+
 ## Documentation grounding
 
 - [React: add React to an existing project](https://react.dev/learn/add-react-to-an-existing-project)

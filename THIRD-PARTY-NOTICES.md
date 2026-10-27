@@ -38,6 +38,13 @@ JumpStart 3D includes the open-source software and fonts below. Their full licen
 - License: ISC
 - Project: https://github.com/mourner/flatbush
 
+## React and React DOM (19.3.1, scheduler 0.28.0)
+
+- Used for: Interface components in the Gridfinity drawer planner. Only the production builds are included (`third_party/react`, `third_party/react-dom`, `third_party/scheduler`).
+- Copyright (c) Meta Platforms, Inc. and affiliates.
+- License: MIT (`LICENSES/MIT-react.txt`)
+- Project: https://github.com/facebook/react
+
 ## Poppins Bold (font, subset)
 
 - Used for: The "Rounded sans" font of the Text tool.

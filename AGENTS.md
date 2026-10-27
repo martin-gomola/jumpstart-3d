@@ -22,7 +22,8 @@ update policy.
 
 ## Source updates
 
-- Treat `classyapps2026/jumpstart3d` as the source reference for editor code.
+- Treat `classyapps2026/jumpstart3d` as the source reference for editor core
+  code. Its interface changes are reference only; see `REACT-WORKSPACE-PLAN.md`.
 - Treat `MaxSikorski/jumpstart-3d` as a feature and implementation reference.
 - Review source changes as file-level patches. Do not merge either repository
   into this repository as a routine update.
@@ -35,6 +36,11 @@ update policy.
 Build with `npm run build`. Run `npm test` when a change affects code contracts,
 geometry, editor behavior, browser integration, or MCP transactions. Report the
 commands actually run and any skipped checks.
+
+New and reworked product UI uses React (`*.jsx`, pinned builds in
+`third_party/react*`). Keep draft logic in plain modules without DOM access.
+React owns its mount subtree; do not mutate its children from DOM code. Keep
+the ids, roles and labels that browser tests use.
 
 UI changes use the shared tokens in `mcp/tokens/ai-status.json` and the app's
 CSS variables. Do not introduce emoji, native `<select>` elements, or

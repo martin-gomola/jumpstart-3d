@@ -26,7 +26,10 @@ are reviewed as source material; their branches are not merged automatically.
 ## Update process
 
 For an editor update, fetch the author source and compare its `app/src/` files
-with this repo's `src/`. Review the changes, port the selected files, then
+with this repo's `src/`. Port core changes: kernel, sketcher, regions, document
+store, workers and geometry fixes. Interface changes are reference material;
+the product-owned interface is maintained here (see `REACT-WORKSPACE-PLAN.md`).
+Review the changes, port the selected files, then
 reapply and check the integration points listed in `mcp/README.md`. Keep
 `third_party/` pinned and update its notices when dependencies change.
 

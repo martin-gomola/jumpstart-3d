@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { BIN_SIDES, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
-import { drawerMetrics, placementError, drawerBinBaseZ } from "../../shared/drawer-layout.js";
+import { drawerMetrics, placementError, drawerBinBaseZ, binFloor, binWall } from "../../shared/drawer-layout.js";
 import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
 import { normalizeCornerSpacers } from "../../shared/drawer-spacers.js";
 import { normalizePrintArea, checkPrintFit } from "../../shared/print-area.js";
 import { drawerStatus, numberValid } from "./drawer-planner.js";
 import { Labelled, NumberField, TextField, MagnetControls, WallControls, DimensionGuide, usePreviewView } from "./controls.jsx";
+import { PocketForm, CompartmentFields, ThicknessFields, THICKNESS_LIMITS } from "./part-options.jsx";
+import { COMPARTMENT_LIMITS, MAX_POCKETS, newPocketDraft, nextPocketIndex, pocketDraftValid, pocketFromDraft, draftFromPocket, referencePatch } from "./pocket-draft.js";
 
 const DRAWER_LIMITS = { width: { min: 42, max: 881.99 }, depth: { min: 42, max: 881.99 }, height: { min: 14, max: 10000 }, floor: { min: 0.8, max: 6 }, wall: { min: 0.8, max: 4 } };
 const SPACER_LIMITS = { clearance: { min: 0, max: 1, step: 0.1 }, spacerHeight: { min: 1, max: 12, step: 0.5 }, leg: { min: 5, max: 60, step: 1 } };
@@ -16,7 +18,7 @@ const fieldTexts = draft => {
     floor: String(draft.floor), wall: String(draft.wall), clearance: String(spacers.clearance), spacerHeight: String(spacers.height), leg: String(spacers.legLength) };
 };
 
-export function DrawerPlanner({ planner, hidden, createPreviewView }) {
+export function DrawerPlanner({ planner, hidden, createPreviewView, references = [] }) {
   const state = useSyncExternalStore(planner.subscribe, planner.getState);
   const { draft, busy, selectedId, view, preview } = state;
   const status = drawerStatus(draft), { ready, error } = status, metrics = status.metrics;
@@ -92,15 +94,12 @@ export function DrawerPlanner({ planner, hidden, createPreviewView }) {
     </div>
     <p className="ai-template-note" role="status">{status.spacerNote}</p>
   </div>;
-  const inspector = <Inspector key="inspector" planner={planner} draft={draft} bin={bin} busy={busy} ready={ready} onRemoved={() => addBinRef.current.focus()} />;
+  const inspector = <Inspector key="inspector" planner={planner} draft={draft} bin={bin} busy={busy} ready={ready} references={references} onRemoved={() => addBinRef.current.focus()} />;
   const construction = <details key="construction" className="drawer-advanced" hidden={!ready}>
     <summary className="ai-with-pictogram"><Labelled icon="sketch">Advanced construction</Labelled></summary>
-    <div className="ai-template-fields">
-      <NumberField id="drawer-floor" label="Floor thickness (mm)" text={texts.floor} onText={setText("floor")} limits={DRAWER_LIMITS.floor} disabled={busy}
-        invalid={touched.floor ? !numberValid(texts.floor, DRAWER_LIMITS.floor) : undefined} onCommit={text => { setTouched(current => ({ ...current, floor: true })); planner.setDimension("floor", Number(text)); }} />
-      <NumberField id="drawer-wall" label="Wall thickness (mm)" text={texts.wall} onText={setText("wall")} limits={DRAWER_LIMITS.wall} disabled={busy}
-        invalid={touched.wall ? !numberValid(texts.wall, DRAWER_LIMITS.wall) : undefined} onCommit={text => { setTouched(current => ({ ...current, wall: true })); planner.setDimension("wall", Number(text)); }} />
-    </div>
+    <ThicknessFields id="drawer" texts={texts} disabled={busy} invalid={name => touched[name] ? !numberValid(texts[name], DRAWER_LIMITS[name]) : undefined}
+      onText={(name, text) => setText(name)(text)} onCommit={(name, text) => { setTouched(current => ({ ...current, [name]: true })); planner.setDimension(name, Number(text)); }} />
+    <p className="ai-template-note">Defaults for every bin. A bin can set its own under More bin options.</p>
     <label className="ai-template-field" htmlFor="drawer-baseplate">
       <input id="drawer-baseplate" type="checkbox" checked={draft.includeBaseplate} disabled={busy} onChange={event => planner.setBaseplate(event.target.checked)} />
       <span>Include matching baseplates</span>
@@ -262,7 +261,7 @@ function PreviewContent({ preview, createPreviewView, titleRef, stale }) {
   </div>;
 }
 
-function Inspector({ planner, draft, bin, busy, ready, onRemoved }) {
+function Inspector({ planner, draft, bin, busy, ready, references, onRemoved }) {
   const sectionRef = useRef(null), headerRef = useRef(null);
   useLayoutEffect(() => {
     const settings = sectionRef.current.parentElement, header = headerRef.current;
@@ -273,7 +272,7 @@ function Inspector({ planner, draft, bin, busy, ready, onRemoved }) {
     return () => { observer.disconnect(); settings.style.removeProperty("--drawer-inspector-height"); };
   }, [bin?.id]);
   return <section ref={sectionRef} className="drawer-inspector" aria-label="Selected bin" hidden={!ready} data-selected-bin-id={bin?.id || ""}>
-    {bin ? <BinInspector key={bin.id} planner={planner} draft={draft} bin={bin} busy={busy} headerRef={headerRef} onRemoved={onRemoved} /> : <>
+    {bin ? <BinInspector key={bin.id} planner={planner} draft={draft} bin={bin} busy={busy} headerRef={headerRef} references={references} onRemoved={onRemoved} /> : <>
       <h3>Make room for your things</h3>
       <p className="ai-template-note">{draft.bins.length ? "Select a bin on the drawer to adjust it." : draft.includeBaseplate ? "Choose Add bin, or drag across the grid to draw one. You can also preview just the baseplates." : "Draw a rectangle on the grid or choose Add bin."}</p>
     </>}
@@ -285,15 +284,18 @@ function useDetails(initial) {
   return { open, onToggle: event => setOpen(event.currentTarget.open) };
 }
 
-function BinInspector({ planner, draft, bin, busy, headerRef, onRemoved }) {
+function BinInspector({ planner, draft, bin, busy, headerRef, references, onRemoved }) {
   const names = (bin.openSides || []).map(side => side[0].toUpperCase() + side.slice(1));
+  const rooms = useBinTexts(planner, { x: String(bin.dividers.x + 1), y: String(bin.dividers.y + 1) }, { x: COMPARTMENT_LIMITS, y: COMPARTMENT_LIMITS });
+  const thickness = useBinTexts(planner, { floor: String(binFloor(draft, bin)), wall: String(binWall(draft, bin)) }, THICKNESS_LIMITS);
+  const ownThickness = bin.floor !== undefined || bin.wall !== undefined;
   const divided = bin.dividers.x || bin.dividers.y;
   const walls = useDetails(names.length > 0), compartments = useDetails(!!divided), more = useDetails(false);
   const printHeight = normalizePrintArea(draft.printArea)?.height ?? Infinity;
   const stepper = (key, title, mm) => {
     let printable = true;
     const expanded = binFootprint({ ...bin, [key]: bin[key] + 1 });
-    try { checkPrintFit(draft.printArea, expanded.width, expanded.depth, binTotalHeight({ ...bin, floor: draft.floor }), bin.label); } catch { printable = false; }
+    try { checkPrintFit(draft.printArea, expanded.width, expanded.depth, binTotalHeight({ ...bin, floor: binFloor(draft, bin) }), bin.label); } catch { printable = false; }
     return <div className="drawer-stepper">
       <span>{title}</span>
       <div>
@@ -305,7 +307,7 @@ function BinInspector({ planner, draft, bin, busy, headerRef, onRemoved }) {
     </div>;
   };
   const heights = [...new Set([2, 3, 5, 7, bin.heightUnits])].sort((a, b) => a - b);
-  const total = binTotalHeight({ ...bin, floor: draft.floor });
+  const total = binTotalHeight({ ...bin, floor: binFloor(draft, bin) });
   const stackingNote = bin.openSides?.length === 4 ? "All sides are open, so no stacking rim remains." : bin.lip
     ? `The rim adds 4.4 mm. Total bin height: ${total.toFixed(1)} mm. Check the complete stack against the drawer height.`
     : "Adds a 4.4 mm rim to support another Gridfinity bin.";
@@ -324,7 +326,7 @@ function BinInspector({ planner, draft, bin, busy, headerRef, onRemoved }) {
     <span>Height</span>
     <div className="ai-template-shapes" role="group" aria-label="Bin height">
       {heights.map(units => {
-        const partHeight = binTotalHeight({ ...bin, heightUnits: units, floor: draft.floor });
+        const partHeight = binTotalHeight({ ...bin, heightUnits: units, floor: binFloor(draft, bin) });
         return <button key={units} type="button" disabled={busy || partHeight + drawerBinBaseZ(draft) > draft.height || partHeight > printHeight} aria-pressed={String(bin.heightUnits === units)}
           onClick={() => planner.updateBin({ heightUnits: units })}>{`${units * 7} mm`}</button>;
       })}
@@ -344,29 +346,77 @@ function BinInspector({ planner, draft, bin, busy, headerRef, onRemoved }) {
       </details>
       <details className="drawer-compartment-options" open={compartments.open} onToggle={compartments.onToggle}>
         <summary className="ai-with-pictogram"><Labelled icon="grid">{divided ? `Compartments: ${bin.dividers.x + 1} × ${bin.dividers.y + 1}` : "Compartments"}</Labelled></summary>
-        <div className="drawer-compartments">
-          {[["x", "Across width"], ["y", "Along depth"]].map(([axis, label]) => <CompartmentChoice key={axis} axis={axis} label={label} bin={bin} busy={busy} planner={planner} />)}
-        </div>
+        <CompartmentFields id="drawer-bin-compartments" texts={rooms.texts} disabled={busy} invalid={rooms.invalid} onText={rooms.setText} onEdit={rooms.edit}
+          onCommit={rooms.commit(texts => ({ dividers: { x: Number(texts.x) - 1, y: Number(texts.y) - 1 } }))} />
       </details>
     </>}
+    {bin.kind === "insert" && <BinPockets planner={planner} bin={bin} busy={busy} references={references} />}
     <details className="drawer-advanced" open={more.open} onToggle={more.onToggle}>
       <summary>More bin options</summary>
       <div className="ai-template-shapes" role="group" aria-label="Part type">
         {[["bin", "Storage bin"], ["insert", "Insert blank"]].map(([kind, text]) => <button key={kind} type="button" disabled={busy} aria-pressed={String(bin.kind === kind)}
-          onClick={() => planner.updateBin({ kind, ...(kind === "insert" ? { dividers: { x: 0, y: 0 }, lip: false, openSides: [], closeGaps: false } : {}) })}>{text}</button>)}
+          onClick={() => planner.updateBin({ kind, ...(kind === "insert" ? { dividers: { x: 0, y: 0 }, lip: false, openSides: [], closeGaps: false } : { pockets: undefined }) })}>{text}</button>)}
       </div>
+      <label className="ai-template-field" htmlFor="drawer-bin-own-thickness">
+        <input id="drawer-bin-own-thickness" type="checkbox" checked={ownThickness} disabled={busy}
+          onChange={event => planner.updateBin(event.target.checked ? { floor: draft.floor, wall: draft.wall } : { floor: undefined, wall: undefined })} />
+        <span>Own floor and wall thickness</span>
+      </label>
+      {ownThickness && <ThicknessFields id="drawer-bin" texts={thickness.texts} disabled={busy} invalid={thickness.invalid} onText={thickness.setText} onEdit={thickness.edit}
+        onCommit={thickness.commit(texts => ({ floor: Number(texts.floor), wall: Number(texts.wall) }))} />}
+      <p className="ai-template-note">{ownThickness ? "This bin keeps its own values when the drawer defaults change." : `Uses the drawer defaults: ${draft.floor} mm floor, ${draft.wall} mm wall.`}</p>
       <MagnetControls id="drawer-bin-magnets" label="Magnet pockets under this part" value={bin.magnets || false} disabled={busy} onInput={planner.markEditing} onChange={planner.setBinMagnets} />
       <button type="button" disabled={busy || !bin.magnets} onClick={planner.magnetsForAll}>Use this magnet fit in all bins</button>
     </details>
   </>;
 }
 
-function CompartmentChoice({ axis, label, bin, busy, planner }) {
-  return <>
-    <span>{label}</span>
-    <div className="ai-template-shapes" role="group" aria-label={`${label} compartments`}>
-      {[1, 2, 3].map(count => <button key={count} type="button" disabled={busy} aria-pressed={String(bin.dividers[axis] === count - 1)}
-        onClick={() => planner.updateBin({ dividers: { ...bin.dividers, [axis]: count - 1 } })}>{`${count}`}</button>)}
+// Texts follow the committed bin; a complete valid set commits on change, otherwise the preview waits.
+function useBinTexts(planner, values, limits) {
+  const key = JSON.stringify(values), latest = useRef(values);
+  const [texts, setTexts] = useState(values), [touched, setTouched] = useState({});
+  useLayoutEffect(() => { latest.current = values; setTexts(values); setTouched({}); }, [key]);
+  const valid = () => Object.entries(limits).every(([field, range]) => numberValid(latest.current[field], range));
+  return {
+    texts,
+    invalid: name => touched[name] ? !numberValid(texts[name], limits[name]) : undefined,
+    setText: (name, text) => { latest.current = { ...latest.current, [name]: text }; setTexts(latest.current); },
+    edit: () => valid() ? planner.settle() : planner.markEditing(),
+    commit: change => name => {
+      setTouched(current => ({ ...current, [name]: true }));
+      if (valid()) planner.updateBin(change(latest.current));
+    },
+  };
+}
+
+function BinPockets({ planner, bin, busy, references }) {
+  const key = JSON.stringify(bin.pockets || []), fromBin = () => (bin.pockets || []).map((pocket, i) => draftFromPocket(pocket, i + 1));
+  const [drafts, setDrafts] = useState(fromBin), [bad, setBad] = useState(() => new Set());
+  const latest = useRef(drafts), addRef = useRef(null);
+  useLayoutEffect(() => { latest.current = fromBin(); setDrafts(latest.current); setBad(new Set()); }, [key]);
+  const save = () => { if (latest.current.every(pocketDraftValid)) planner.updateBin({ pockets: latest.current.map(pocketFromDraft) }); else planner.markEditing(); };
+  const replace = (next, commit) => {
+    latest.current = next; setDrafts(next);
+    if (commit) save(); else if (next.every(pocketDraftValid)) planner.settle(); else planner.markEditing();
+  };
+  const change = (index, edit, commit) => replace(latest.current.map(draft => draft.index === index ? edit(draft) : draft), commit);
+  const add = () => {
+    const ids = new Set(latest.current.map(draft => draft.id ?? `pocket-${draft.index}`));
+    let n = 1; while (ids.has(`pocket-${n}`)) n++;
+    replace([...latest.current, { ...newPocketDraft(nextPocketIndex(latest.current)), id: `pocket-${n}` }], true);
+  };
+  return <section className="ai-template-group drawer-bin-pockets" aria-label="Insert pockets">
+    <h4>Pockets</h4>
+    <p className="ai-template-note">Pockets are cut into this insert when you preview. Clearance is per side; suggested values need a fit test on your printer.</p>
+    <div className="ai-template-pockets">
+      {drafts.map(draft => <PocketForm key={draft.index} pocket={draft} id={name => `drawer-pocket-${draft.index}-${name}`} titleId={`drawer-pocket-title-${draft.index}`}
+        disabled={busy} references={references} invalid={id => bad.has(id) || undefined}
+        onValidity={(id, valid) => setBad(current => { const next = new Set(current); if (valid) next.delete(id); else next.add(id); return next; })}
+        onPatch={(patch, commit) => change(draft.index, current => ({ ...current, ...patch }), commit)}
+        onField={(name, text) => change(draft.index, current => ({ ...current, fields: { ...current.fields, [name]: text } }), false)} onCommit={save}
+        onReference={body => change(draft.index, current => ({ ...current, ...referencePatch(current, body) }), true)}
+        onRemove={() => { replace(latest.current.filter(entry => entry.index !== draft.index), true); addRef.current?.focus(); }} />)}
     </div>
-  </>;
+    <button ref={addRef} type="button" disabled={busy || drafts.length >= MAX_POCKETS} onClick={add}>Add pocket</button>
+  </section>;
 }

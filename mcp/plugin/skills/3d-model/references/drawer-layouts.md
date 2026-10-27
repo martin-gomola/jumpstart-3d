@@ -45,12 +45,17 @@ native edits, missing/locked parts and external dependencies; do not delete them
 or bypass the check to force regeneration. Offer a new separate layout or
 reconcile the user's native edits instead.
 
-Use the Single part/cutout workflow for item-specific pockets. Do not turn a
+Put item-specific pockets on insert bins inside the layout with `bins[].pockets`
+rather than separate `pocket` operations, so they regenerate with it. They take
+the `pocket` operation's measured profile, position, depth, clearance and
+`sourceEvidence`; a traced outline from `jumpstart_get_outline` becomes a
+`contour` profile. A bin's own `floor` or `wall` overrides the drawer default and
+also sets that bin's pocket material limits. Do not turn a
 reference item's bounds into an exact fitted surface. Keep imported items as
 reference bodies so they remain visible and are excluded from printable exports.
 
 The sidebar's Drawer layout view uses the same typed operation. Draw/move bins
 on the grid or use Add bin, footprint steppers, and keyboard movement. Select a
-bin to edit its name, height and compartments. Advanced construction settings are
+bin to edit its name, height, compartments, thickness and insert pockets. Advanced construction settings are
 optional. Draft undo is separate from document undo; an unapplied arrangement
 must not be described as saved in the native project.

@@ -1,6 +1,7 @@
 import { buildGridfinity, normalizeGridfinity } from "./gridfinity.js";
 import { drawerParts, normalizeDrawerLayout } from "../../shared/drawer-layout.js";
 import { checkPrintFit } from "../../shared/print-area.js";
+import { buildPocket, normalizePocket } from "./pockets.js";
 
 function partEditable(body, document) {
   const saved = body.mcpDrawerLayout;
@@ -47,7 +48,7 @@ export function buildDrawerLayout(raw, { document, addBody, idFactory, nextSeq, 
     if (old?.color !== undefined) body.color = old.color;
     created.push(body);
   };
-  for (const { clipSlots, ...spec } of drawerParts(op)) {
+  for (const { clipSlots, pockets = [], ...spec } of drawerParts(op)) {
     if (spec.type === "baseplateClip") {
       const node = { t: "prim", kind: "box", p: { w: spec.axis === "x" ? spec.length : spec.width, d: spec.axis === "x" ? spec.width : spec.length, h: spec.height, r: 0, c: 0 }, mods: [] };
       const body = addBody(spec.name, node, matrixForTransform(spec.position, [0, 0, 0]));
@@ -72,6 +73,10 @@ export function buildDrawerLayout(raw, { document, addBody, idFactory, nextSeq, 
     const built = buildGridfinity(normalized, { document, idFactory, nextSeq, clipSlots });
     const body = addBody(normalized.name, built.node, matrixForTransform(normalized.position, [0, 0, 0]));
     body.mcpGridfinity = built.recipe;
+    for (const pocket of pockets) {
+      try { buildPocket(normalizePocket(pocket), { document, target: body, idFactory, nextSeq }); }
+      catch (error) { throw new Error(`${normalized.name}: ${error.message}`); }
+    }
     if (op.printArea) body.mcpPrintFit = checkPrintFit(op.printArea, built.recipe.width, built.recipe.depth, built.recipe.totalHeight, normalized.name);
     body.mcpDrawerLayout = { version: 1, layoutId: op.layoutId, partId: spec.id, name: body.name, definition, nodeSignature: JSON.stringify(body.node), matrix: JSON.stringify(body.m) };
     const old = previous.find(part => part.mcpDrawerLayout.partId === spec.id);

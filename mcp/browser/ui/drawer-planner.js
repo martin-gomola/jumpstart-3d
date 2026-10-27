@@ -1,10 +1,11 @@
 import { rotateOpenSides, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
-import { drawerMetrics, normalizeDrawerLayout, rotateDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ } from "../../shared/drawer-layout.js";
+import { drawerMetrics, normalizeDrawerLayout, rotateDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ, binFloor, rotateBinPockets } from "../../shared/drawer-layout.js";
 import { normalizeMagnetPockets, magnetCarrierHeight } from "../../shared/gridfinity-magnets.js";
 import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "../../shared/drawer-spacers.js";
-import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "../../shared/print-area.js";
+import { normalizePrintArea, baseplateTileLimits, checkPrintFit, savedPrintArea, PRINT_AREA_KEY } from "../../shared/print-area.js";
 import { baseplateClipLayout } from "../../shared/baseplate-clips.js";
+import { referenceBodies } from "./pocket-draft.js";
 
 const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);
@@ -49,8 +50,7 @@ export function drawerStatus(draft) {
 }
 
 export function createDrawerPlanner({ request, onBusy = () => {}, storage = globalThis.localStorage, notify = run => run() }) {
-  let preferredBinLimits = normalizeBinLimits(), preferredPrintArea = false;
-  try { const saved = storage?.getItem("jumpstart.gridfinity.printArea"); if (saved) preferredPrintArea = normalizePrintArea(JSON.parse(saved)); } catch { /* Browser preferences are optional. */ }
+  let preferredBinLimits = normalizeBinLimits(), preferredPrintArea = savedPrintArea(storage);
   try { const saved = storage?.getItem("jumpstart.gridfinity.binLimits"); if (saved) preferredBinLimits = normalizeBinLimits(JSON.parse(saved)); } catch { /* Browser preferences are optional. */ }
   const fresh = () => ({ type: "drawerLayout", id: "drawer", layoutId: uuid(), name: "Drawer layout", width: 0, depth: 0, height: 0, includeBaseplate: true, baseplateMagnets: false, printArea: copy(preferredPrintArea), binLimits: copy(preferredBinLimits), floor: 2, wall: 1.2, bins: [] });
   let counter = 0, previewSeq = 0;
@@ -114,7 +114,7 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
   }
   async function refreshDocument(current, autoLoad = true) {
     const changedDocument = state.documentId !== current.document.id;
-    put({ documentId: current.document.id, savedLayouts: current.drawerLayouts || [] });
+    put({ documentId: current.document.id, savedLayouts: current.drawerLayouts || [], references: referenceBodies(current) });
     if (changedDocument) {
       put({ cached: null, preview: null });
       if (autoLoad && state.savedLayouts.length === 1 && state.savedLayouts[0].editable) load(state.savedLayouts[0]);
@@ -131,6 +131,8 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
     status: () => drawerStatus(state.draft),
     deactivate: act(invalidate),
     markEditing: act(() => { invalidate(); put({ editing: true }); }),
+    // Valid typed text commits on `change`, which fires before any click; a value restored to its start fires none.
+    settle: act(() => put({ editing: false })),
     setView: act(view => put({ view })),
     setMeasureOpen: act(open => put({ measureOpen: open })),
     announce: act(announce),
@@ -213,7 +215,7 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
       const next = copy(state.draft); next.bins = next.bins.filter(entry => entry.id !== bin.id);
       put({ selectedId: null }); commit(next, "Bin removed. Undo layout restores it.");
     }),
-    rotateBin: act(() => { const bin = picked(); if (bin) updateBin({ columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers.y, y: bin.dividers.x }, openSides: rotateOpenSides(bin.openSides) }); }),
+    rotateBin: act(() => { const bin = picked(); if (bin) updateBin({ columns: bin.rows, rows: bin.columns, dividers: { x: bin.dividers.y, y: bin.dividers.x }, openSides: rotateOpenSides(bin.openSides), ...(bin.pockets ? { pockets: rotateBinPockets(bin.pockets) } : {}) }); }),
     duplicateBin: act(() => perform(() => {
       const bin = picked(), space = firstDrawerSpace(state.draft, bin.columns, bin.rows); if (!space) throw new Error("No space for another bin of that size.");
       if (state.draft.bins.length >= 16) throw new Error("This layout supports up to 16 bins.");
@@ -268,10 +270,10 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
       if (draft.bins.some(bin => bin.columns > limits.columns || bin.rows > limits.rows)) throw new Error("Existing bins exceed these limits. Resize or remove them, or start a new drawer first.");
       const next = copy(draft); next.binLimits = limits; next.printArea = normalizePrintArea(printArea);
       if (next.includeBaseplate) baseplateTileLimits(next.printArea);
-      for (const bin of next.bins) checkPrintFit(next.printArea, binFootprint(bin).width, binFootprint(bin).depth, bin.kind === "bin" ? binTotalHeight({ ...bin, floor: next.floor }) : bin.heightUnits * 7, bin.label);
+      for (const bin of next.bins) checkPrintFit(next.printArea, binFootprint(bin).width, binFootprint(bin).depth, bin.kind === "bin" ? binTotalHeight({ ...bin, floor: binFloor(next, bin) }) : bin.heightUnits * 7, bin.label);
       if (drawerReady(draft) && (next.bins.length || next.includeBaseplate)) normalizeDrawerLayout(next);
       commit(next, "Settings updated. Preview again before applying."); preferredBinLimits = copy(limits); preferredPrintArea = copy(next.printArea);
-      try { storage.setItem("jumpstart.gridfinity.binLimits", JSON.stringify(limits)); storage.setItem("jumpstart.gridfinity.printArea", JSON.stringify(next.printArea)); return "Settings saved for this drawer and new drawers in this browser."; }
+      try { storage.setItem("jumpstart.gridfinity.binLimits", JSON.stringify(limits)); storage.setItem(PRINT_AREA_KEY, JSON.stringify(next.printArea)); return "Settings saved for this drawer and new drawers in this browser."; }
       catch { return "Settings applied to this drawer. Browser preferences could not be saved."; }
     }),
   };

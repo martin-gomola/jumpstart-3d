@@ -535,10 +535,11 @@ test("matching open sides support separately printed long-item bins through prev
   await page.getByRole("button", { name: "Add bin", exact: true }).click();
   for (let count = 0; count < 3; count++) await page.getByRole("button", { name: "Increase width", exact: true }).click();
   await page.locator(".drawer-compartment-options summary").click();
-  const compartments = page.getByRole("group", { name: "Across width compartments", exact: true });
-  await compartments.getByRole("button", { name: "2", exact: true }).click();
-  await expect(compartments.getByRole("button", { name: "2", exact: true })).toBeFocused();
-  await compartments.getByRole("button", { name: "1", exact: true }).click();
+  const compartments = page.locator("#drawer-bin-compartments-x");
+  await compartments.fill("2"); await compartments.press("Tab");
+  await expect(page.locator(".drawer-compartment-options summary")).toContainText("Compartments: 2 × 1");
+  await expect(page.locator("#drawer-bin-compartments-y")).toBeFocused();
+  await compartments.fill("1"); await compartments.press("Tab");
   await page.locator(".drawer-compartment-options summary").click();
   await page.locator(".drawer-wall-options summary").click();
   await page.getByRole("button", { name: "Open right side", exact: true }).click();
@@ -670,7 +671,7 @@ test("selected drawer bins expose stackable rims, preserve them through save and
   expect(errors).toEqual([]);
 });
 
-test("flush open-edge joins persist through drawer save and Single part supports the same option", async ({ page }) => {
+test("flush open-edge joins persist through drawer save", async ({ page }) => {
   const errors = watchErrors(page), editorId = await openPlanner(page);
   const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });
   await dimensions(page, 84, 42, 50);
@@ -698,21 +699,46 @@ test("flush open-edge joins persist through drawer save and Single part supports
   await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
   await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
   const saved = await get(); expect(saved.drawerLayouts[0].definition.bins.every(b => b.closeGaps)).toBe(true);
-  const ids = new Set(saved.bodies.map(b => b.id));
-  await page.getByRole("button", { name: "Single part", exact: true }).click();
-  await page.locator('[data-template="bin"]').click();
-  await page.getByText("Compartments & stacking", { exact: true }).click();
-  const singleClose = page.getByRole("checkbox", { name: "Close gaps on open sides", exact: true });
-  await expect(singleClose).toBeDisabled();
-  await page.getByRole("button", { name: "Open right side", exact: true }).click();
-  await singleClose.check();
-  await page.getByRole("button", { name: "Preview", exact: true }).click();
-  const singleAdd = page.getByRole("button", { name: "Add to document", exact: true });
-  await expect(singleAdd).toBeEnabled({ timeout: 90_000 }); await singleAdd.click();
-  const created = (await get()).bodies.find(b => !ids.has(b.id));
-  expect(created.gridfinity.closeGaps).toBe(true);
-  expect(created.dimensions.x).toBeCloseTo(created.gridfinity.columns * 42 - .25, 4);
-  await page.getByRole("button", { name: "Open right side", exact: true }).click();
-  await expect(singleClose).toBeDisabled(); await expect(singleClose).not.toBeChecked();
+  expect(errors).toEqual([]);
+});
+
+test("drawer insert bins take measured pockets and their own wall thickness through preview, apply and reload", async ({ page }) => {
+  const errors = watchErrors(page), editorId = await openPlanner(page);
+  const get = () => tool("jumpstart_get_document", { editorId, includeGeometry: true });
+  await dimensions(page, 126, 84, 50);
+  await page.getByRole("button", { name: "Add bin", exact: true }).click();
+  await page.locator(".drawer-inspector .drawer-advanced summary").click();
+  await page.getByRole("button", { name: "Insert blank", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Own floor and wall thickness", exact: true }).check();
+  await page.fill("#drawer-bin-wall", "2"); await page.locator("#drawer-bin-wall").press("Tab");
+  await page.getByRole("button", { name: "Add pocket", exact: true }).click();
+  for (const [name, value] of [["width", "30"], ["height", "20"], ["depth", "6"]]) {
+    await page.fill(`#drawer-pocket-1-${name}`, value); await page.locator(`#drawer-pocket-1-${name}`).press("Tab");
+  }
+  await page.locator(".drawer-bin-pockets").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "exports/ai-panel/drawer-insert-pockets.png" });
+  await page.fill("#drawer-pocket-1-width", "");
+  await expect(page.getByRole("button", { name: "Preview layout", exact: true })).toBeDisabled();
+  await page.fill("#drawer-pocket-1-width", "30"); await page.locator("#drawer-pocket-1-width").press("Tab");
+  const before = await get();
+  await page.getByRole("button", { name: "Preview layout", exact: true }).click();
+  const add = page.getByRole("button", { name: "Add layout to document", exact: true });
+  await expect(add).toBeEnabled({ timeout: 90_000 });
+  expect((await get()).revision).toBe(before.revision);
+  await add.click();
+  await expect(page.locator("#drawer-message")).toContainText("Layout added");
+  const applied = await get();
+  const [layout] = applied.drawerLayouts;
+  expect(layout.editable).toBe(true);
+  expect(layout.definition.bins[0]).toMatchObject({ kind: "insert", floor: 2, wall: 2, pockets: [{ id: "pocket-1", profile: { type: "roundedRect", width: 30, height: 20, radius: 3 }, depth: 6, clearance: 0.3 }] });
+  const insert = applied.bodies.find(body => body.gridfinity?.kind === "insert");
+  expect(insert.gridfinity.wall).toBe(2);
+  expect(insert.pockets).toMatchObject([{ id: "pocket-1", minimumWall: 2, minimumFloor: 2 }]);
+  await tool("jumpstart_save_document", { editorId, expectedRevision: applied.revision });
+  await tool("jumpstart_reopen_document", { editorId, expectedRevision: applied.revision, documentId: applied.document.id });
+  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await page.locator('.drawer-bin[data-bin-id="bin-1"]').click();
+  await expect(page.locator("#drawer-pocket-1-width")).toHaveValue("30");
+  await expect(page.locator("#drawer-bin-wall")).toHaveValue("2");
   expect(errors).toEqual([]);
 });

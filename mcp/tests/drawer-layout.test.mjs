@@ -62,6 +62,34 @@ test("drawer plans remain native, persist metadata, replace only owned parts and
   assert.throws(() => compileMcpModel(dependent, { name: "unsafe", operations: [edit] }), /depends/);
 });
 
+test("drawer bins override floor and wall and insert bins keep measured pockets through regeneration and rotation", async () => {
+  const { rotateDrawerLayout } = await import("../shared/drawer-layout.js");
+  const pocket = { profile: { type: "roundedRect", width: 30, height: 12, radius: 2 }, position: [5, 10], rotation: 0, depth: 6, clearance: 0.3, sourceEvidence: { product: "Caliper", kind: "measured" } };
+  const input = layout({ floor: 2, wall: 1.2, bins: [bin("tray", { floor: 3, wall: 2 }), bin("tool", { x: 2, kind: "insert", wall: 1.6, pockets: [pocket, { ...pocket, id: "pen", position: [-10, -10], profile: { type: "circle", radius: 4 } }] })] });
+  const normalized = normalizeDrawerLayout(input);
+  assert.deepEqual([normalized.bins[0].floor, normalized.bins[0].wall, normalized.bins[1].floor], [3, 2, undefined]);
+  assert.deepEqual(normalized.bins[1].pockets.map(p => p.id), ["pocket-1", "pen"]);
+  assert.equal(normalized.bins[1].pockets[0].minimumWall, undefined);
+  const [tray, tool] = drawerParts(normalized);
+  assert.deepEqual([tray.floor, tray.wall, tool.floor, tool.wall], [3, 2, 2, 1.6]);
+  assert.deepEqual(tool.pockets.map(p => [p.target, p.minimumFloor, p.minimumWall]), [["tool", 2, 1.6], ["tool", 2, 1.6]]);
+  for (const bins of [[bin("b", { pockets: [pocket] })], [bin("b", { kind: "insert", pockets: [{ ...pocket, target: "other" }] })], [bin("b", { kind: "insert", pockets: [pocket, { ...pocket, id: "pocket-1" }] })], [bin("b", { floor: 0.5 })]])
+    assert.throws(() => normalizeDrawerLayout(layout({ bins })), /pockets|unsupported|unique|floor/);
+  const built = compileMcpModel(doc(), { name: "Tool drawer", operations: [input] });
+  const insert = built.document.bodies.find(body => body.mcpDrawerLayout.partId === "tool");
+  assert.deepEqual(insert.mcpPockets.map(p => p.id), ["pocket-1", "pen"]);
+  assert.equal(insert.node.mods.filter(mod => mod.src === "pocket").length, 2);
+  const stored = JSON.parse(JSON.stringify(built.document));
+  assert.equal(summarizeDrawerLayouts(stored)[0].editable, true);
+  const revised = compileMcpModel(stored, { name: "Revised", operations: [{ ...input, replaceExisting: true, bins: [input.bins[0], { ...input.bins[1], pockets: [pocket] }] }] });
+  assert.equal(revised.document.bodies.find(body => body.mcpDrawerLayout.partId === "tool").mcpPockets.length, 1);
+  assert.equal(revised.document.sketches.filter(sketch => sketch.name.startsWith("Pocket ")).length, 1);
+  assert.throws(() => compileMcpModel(doc(), { operations: [layout({ bins: [bin("tool", { kind: "insert", pockets: [{ ...pocket, depth: 20 }] })] })] }), /tool: Pocket: depth/);
+  const turned = rotateDrawerLayout(normalized);
+  assert.deepEqual(turned.bins[1].pockets.map(p => [p.position, p.rotation]), [[[10, -5], -90], [[-10, 10], -90]]);
+  assert.deepEqual(rotateDrawerLayout(rotateDrawerLayout(rotateDrawerLayout(turned))), normalized);
+});
+
 test("configurable bin limits support larger native bins without changing default limits or baseplate tiling", () => {
   const large = layout({ width: 230, depth: 690, binLimits: { columns: 5, rows: 6 }, bins: [bin("wide", { columns: 5, rows: 4 })] });
   const normalized = normalizeDrawerLayout(large);

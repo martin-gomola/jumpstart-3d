@@ -21,6 +21,12 @@ export function normalizePrintArea(value) {
   }
   return result;
 }
+export const PRINT_AREA_KEY = "jumpstart.gridfinity.printArea";
+// The printer area saved in Printer & settings, or false when none is saved or it is unreadable.
+export function savedPrintArea(storage) {
+  try { const saved = storage?.getItem(PRINT_AREA_KEY); return saved ? normalizePrintArea(JSON.parse(saved)) : false; }
+  catch { return false; }
+}
 export function baseplateTileLimits(value, grid) {
   const area = normalizePrintArea(value);
   if (!area) return { columns: 4, rows: 4 };

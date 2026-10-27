@@ -3,7 +3,7 @@ FROM node:22-alpine AS build
 WORKDIR /workspace
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY build.mjs ./
+COPY build.mjs react-build.mjs ./
 COPY src ./src
 COPY third_party ./third_party
 COPY mcp/browser ./mcp/browser

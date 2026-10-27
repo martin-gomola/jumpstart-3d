@@ -23,6 +23,11 @@ import { textBounds } from "./textgeo.js";
 import { initSection } from "./section.js";
 import { sketchesDXF } from "./dxf.js";
 import { initPipeCoil } from "./pipecoil.js";
+import { initFasteners } from "./fasteners.js"; // jumpstart-3d: fasteners
+import { initGears } from "./gears.js"; // jumpstart-3d: gears
+import { initNamePlate } from "./nameplate.js"; // jumpstart-3d: name plates
+import { initKnurl } from "./knurl.js"; // jumpstart-3d: knurl
+import { initSpring } from "./spring.js"; // jumpstart-3d: spring
 import { initPrintSim } from "./printsim.js";
 import { FACEPAT, facePatCells } from "./facepat.js";
 
@@ -2795,12 +2800,12 @@ export function initAdvanced(app) {
   // every thread feature in a body, including ones inside combined bodies
   function threadMods(node, out = []) {
     for (const m of node.mods || []) if (m.t === "thread" || (m.t === "hole" && m.tapped)) out.push(m);
-    for (const c of node.children || []) threadMods(c.node, out);
+    for (const c of node.children || []) if (!c.hole) threadMods(c.node, out); // jumpstart-3d: fasteners. a tap cutter keeps the offset it was made with
     return out;
   }
   function threadOffsetCmd() {
     const selIds = app.sel.slice();
-    const count = (ids) => ids.reduce((n, id) => { const b = findBody(store.doc, id); return n + (b ? threadMods(b.node).length : 0); }, 0);
+    const count = (ids) => ids.reduce((n, id) => { const b = findBody(store.doc, id); return n + (b && !b.hole ? threadMods(b.node).length : 0); }, 0); // jumpstart-3d: fasteners
     const allIds = store.doc.bodies.map((b) => b.id);
     const nAll = count(allIds), nSel = count(selIds);
     const st = { clear: store.doc.threadOffset || -0.2, scope: nSel ? "sel" : "all", forNew: !nSel };
@@ -2809,7 +2814,7 @@ export function initAdvanced(app) {
       keepSelection: true,
       apply(doc) {
         const ids = st.scope === "sel" ? selIds : doc.bodies.map((b) => b.id);
-        for (const id of ids) { const b = findBody(doc, id); if (b) for (const m of threadMods(b.node)) m.clear = st.clear; }
+        for (const id of ids) { const b = findBody(doc, id); if (b && !b.hole) for (const m of threadMods(b.node)) m.clear = st.clear; } // jumpstart-3d: fasteners
         if (st.forNew) doc.threadOffset = st.clear;
       },
       ok() { commit(def, "Thread print offset"); app.toast(st.clear ? `Print offset ${offsetLabel(st.clear)} applied to ${st.scope === "sel" ? nSel : nAll} thread${(st.scope === "sel" ? nSel : nAll) === 1 ? "" : "s"}.` : "Print offset removed."); },
@@ -5744,6 +5749,11 @@ export function initAdvanced(app) {
         { id: "ad-hole-m", label: "Hole", title: "Hole (H)", icon: "hole", fn: () => holeCmd() },
         { id: "ad-thread", label: "Thread", title: "Modeled metric (ISO) and inch (UNC / UNF) threads on round faces", icon: "thread", fn: () => threadCmd() },
         { id: "ad-thread-offset", label: "Thread print offset…", title: "Loosen printed threads", icon: "thread", fn: () => threadOffsetCmd() },
+        { id: "ad-fastener", label: "Fastener", title: "Bolts, nuts, threaded rods and tap cutters, metric and inch", icon: "thread", fn: () => fasteners.cmd() }, // jumpstart-3d: fasteners
+        { id: "ad-gear", label: "Gear", title: "Spur gears, bevel gears and racks by module and tooth count", icon: "gear", fn: () => gears.cmd() }, // jumpstart-3d: gears
+        { id: "ad-nameplate", label: "Name plate", title: "A tag or name plate sized to its text, with raised or cut-in letters", icon: "tag", fn: () => namePlate.cmd() }, // jumpstart-3d: name plates
+        { id: "ad-knurl", label: "Knurled knob", title: "A knob or grip with straight V grooves all round and an optional round, hex or D bore", icon: "knurl", fn: () => knurl.cmd() }, // jumpstart-3d: knurl
+        { id: "ad-spring", label: "Spring", title: "A compression spring of round wire, with open ends or ends cut flat", icon: "spring", fn: () => spring.cmd() }, // jumpstart-3d: spring
       ] },
       { id: "ad-prims", label: "Primitives", title: "Box, cylinder, sphere, torus, prism and more", icon: "box", dropdown: [
         { id: "ad-box", label: "Box", icon: "box", fn: () => primCmd("box") },
@@ -6116,6 +6126,11 @@ export function initAdvanced(app) {
   const sim = initSimulate(app, { vp, scene, openCmd, closeCmd, commit, schedulePreview, pickBaseFace, baseOf, drawLine, drawFace, drawDot, clearOv, row, seg, pickbox, sliderRow });
   function jointCmd(id) { sim.jointCmd(id); }
   const { pipeCmd, coilCmd } = initPipeCoil(app, { vp, scene, openCmd, closeCmd, commit, schedulePreview, pickBaseFace, pickBaseEdge, edgeWorldPts, drawLine, drawDot, clearOv, row, seg, pickbox, pickSketchCurve, pathPts, deleteFeature, frameFrom });
+  const fasteners = initFasteners(app, { openCmd, commit, row, seg, offsetSelect, STD }); // jumpstart-3d: fasteners
+  const gears = initGears(app, { openCmd, commit, row, seg }); // jumpstart-3d: gears
+  const namePlate = initNamePlate(app, { openCmd, commit, row, seg }); // jumpstart-3d: name plates
+  const knurl = initKnurl(app, { openCmd, commit, row, seg }); // jumpstart-3d: knurl
+  const spring = initSpring(app, { openCmd, commit, row, seg }); // jumpstart-3d: spring
   // section analysis: lives on after its dialog closes; a chip in the view shows it is on
   const section = (app.section = initSection(app, vp, scene));
   const secChip = el("div", { class: "section-chip", id: "section-chip", hidden: true },
@@ -6231,6 +6246,11 @@ export function initAdvanced(app) {
     hole: () => holeCmd(),
     shell: (opts) => shellCmd(null, opts || {}),
     fillet: () => edgeCmd("fillet"),
+    fastener: () => fasteners.cmd(), addFastener: (spec) => fasteners.add(spec), // jumpstart-3d: fasteners
+    gear: () => gears.cmd(), addGear: (spec) => gears.add(spec), // jumpstart-3d: gears
+    namePlate: () => namePlate.cmd(), addNamePlate: (spec) => namePlate.add(spec), // jumpstart-3d: name plates
+    knurl: () => knurl.cmd(), addKnurl: (spec) => knurl.add(spec), // jumpstart-3d: knurl
+    spring: () => spring.cmd(), addSpring: (spec) => spring.add(spec), // jumpstart-3d: spring
     editFeature: (body, mod) => editItem({ body, mod }),
     appearance: () => appearanceCmd(),
     extrude: (opts) => extrudeCmd("extrude", null, opts || {}),

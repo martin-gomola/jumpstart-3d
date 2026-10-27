@@ -22,6 +22,15 @@ are reviewed as source material; their branches are not merged automatically.
 - License: MIT, with third-party libraries retaining their own licenses.
 - We adapt selected behaviors and keep the relevant notices. We do not inherit
   its release, support, or contribution process.
+- From build 24 (`v2.5.1-community.24`, commit `4e49a01`) that project is
+  AGPL-3.0-only. Builds up to 23 keep their MIT terms. Do not port code that
+  first appears in build 24 or later; use it as feature reference only.
+- Parts tools: `src/fasteners.js`, `gears.js`, `nameplate.js`, `knurl.js` and
+  `spring.js` come from build 23 (`v2.5-community.23`,
+  `21417c3fea8193b3751945a28467690b52b60a39`, MIT), with their `jumpstart-3d:`
+  glue in `advanced.js` and `icons.js`. Local changes: the size and font choices
+  use `tool-choice`, the tools sit in the beginner ribbon's Parts section, and
+  the `JS3D` bridge entry points are not included.
 
 ## Update process
 

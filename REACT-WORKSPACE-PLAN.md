@@ -200,6 +200,9 @@ components reuse the existing CSS classes and tokens.
   the same `preview_parameters` and `apply_model` calls as the agent. A model
   moved or edited by hand is reported instead of regenerated. The store is
   `mcp/browser/ui/parameter-planner.js`; the card is `parameter-card.jsx`.
+- The beginner ribbon has a Parts section: Fastener, Gear, Name plate, Knurled
+  knob and Coil spring. The dialogs are the community build 23 (MIT) modules,
+  also listed in the advanced "Advanced Create" menu; see `SOURCES.md`.
 
 ## Documentation grounding
 

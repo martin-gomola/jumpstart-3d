@@ -2,7 +2,7 @@ import { binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
 import { magnetCarrierHeight } from "../../shared/gridfinity-magnets.js";
 import { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
 import { checkPrintFit } from "../../shared/print-area.js";
-import { numberValid } from "./drawer-planner.js";
+import { numberValid } from "./field-text.js";
 import { POCKET_LIMITS, MAX_POCKETS, COMPARTMENT_LIMITS, newPocketDraft, referencePatch, pocketDraftValid } from "./pocket-draft.js";
 
 export const PART_TEMPLATES = [

@@ -11,16 +11,6 @@ const uuid = () => `drawer-${crypto.randomUUID()}`;
 const copy = value => structuredClone(value);
 const binCounter = draft => draft.bins.reduce((max, bin) => Math.max(max, Number(bin.id.match(/\d+$/)?.[0]) || 0), 0);
 
-// Mirrors HTML number-input validity so the view can enable actions without reading the DOM.
-export function numberValid(text, { min = -Infinity, max = Infinity, step = "any" } = {}) {
-  if (String(text).trim() === "") return false;
-  const value = Number(text);
-  if (!Number.isFinite(value) || value < min || value > max) return false;
-  if (step === "any") return true;
-  const steps = (value - (Number.isFinite(min) ? min : 0)) / step;
-  return Math.abs(steps - Math.round(steps)) < 1e-7;
-}
-
 export function drawerReady(draft) {
   const m = drawerMetrics(draft);
   return m.columns > 0 && m.rows > 0 && m.columns <= 20 && m.rows <= 20 && Number.isFinite(draft.height) && draft.height >= 14;

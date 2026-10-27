@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { numberValid } from "./drawer-planner.js";
+import { numberValid } from "./field-text.js";
 import { PART_TEMPLATES, PART_LIMITS, MAX_POCKETS } from "./part-planner.js";
 import { Labelled, NumberField, MagnetControls, WallControls } from "./controls.jsx";
 import { PocketForm, CompartmentFields, ThicknessFields } from "./part-options.jsx";

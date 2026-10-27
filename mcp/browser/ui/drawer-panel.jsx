@@ -5,7 +5,8 @@ import { drawerMetrics, placementError, drawerBinBaseZ, binFloor, binWall } from
 import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
 import { normalizeCornerSpacers } from "../../shared/drawer-spacers.js";
 import { normalizePrintArea, checkPrintFit } from "../../shared/print-area.js";
-import { drawerStatus, numberValid } from "./drawer-planner.js";
+import { drawerStatus } from "./drawer-planner.js";
+import { numberValid } from "./field-text.js";
 import { Labelled, NumberField, TextField, MagnetControls, WallControls, DimensionGuide, usePreviewView } from "./controls.jsx";
 import { PocketForm, CompartmentFields, ThicknessFields, THICKNESS_LIMITS } from "./part-options.jsx";
 import { COMPARTMENT_LIMITS, MAX_POCKETS, newPocketDraft, nextPocketIndex, pocketDraftValid, pocketFromDraft, draftFromPocket, referencePatch } from "./pocket-draft.js";

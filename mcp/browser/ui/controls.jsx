@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { BIN_SIDES, normalizeOpenSides } from "../../shared/gridfinity-walls.js";
 import { DEFAULT_MAGNET_POCKETS } from "../../shared/gridfinity-magnets.js";
-import { numberValid } from "./drawer-planner.js";
+import { numberValid } from "./field-text.js";
 import { pictogramSvg } from "./pictograms.js";
 
 // The parent element carries the `ai-with-pictogram` class.

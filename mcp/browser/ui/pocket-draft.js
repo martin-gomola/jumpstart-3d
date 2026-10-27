@@ -1,4 +1,4 @@
-import { numberValid } from "./drawer-planner.js";
+import { numberValid } from "./field-text.js";
 
 export const POCKET_LIMITS = {
   width: { min: 1, max: 1000 }, height: { min: 1, max: 1000 }, radius: { min: 0.1, max: 500 }, depth: { min: 0.1, max: 1000 },

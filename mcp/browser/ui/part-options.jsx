@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { numberValid } from "./drawer-planner.js";
+import { numberValid } from "./field-text.js";
 import { POCKET_LIMITS, COMPARTMENT_LIMITS, pocketFieldUsed } from "./pocket-draft.js";
 import { NumberField } from "./controls.jsx";
 

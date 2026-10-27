@@ -340,9 +340,15 @@ export function initTutorials(app) {
   // ---------------------------------------------------------------- "Show me": point at the tool
   function target(show) {
     if (show.tile) return app.beginner && app.beginner.showTile ? app.beginner.showTile(show.tile, !!show.hole) : null;
-    for (const s of show.sel.split(",").map((x) => x.trim())) {
+    const sels = show.sel.split(",").map((x) => x.trim());
+    for (const s of sels) {
       const e = document.querySelector(s);
       if (e && e.getClientRects().length) return e;
+    }
+    // a beginner tool inside a folded ribbon section: point at the section's menu button
+    for (const s of sels) {
+      const id = /^#([\w-]+)$/.exec(s)?.[1], holder = id && document.querySelector(`[data-holds~="${id}"]`);
+      if (holder && holder.getClientRects().length) return holder;
     }
     if (show.via) { const v = document.querySelector(show.via); if (v && v.getClientRects().length) return v; }
     return null;
@@ -364,7 +370,7 @@ export function initTutorials(app) {
     spot = t;
     t.classList.add("tut-spot");
     const r = t.getBoundingClientRect();
-    const via = step.show.via && t.matches(step.show.via);
+    const via = (step.show.via && t.matches(step.show.via)) || t.hasAttribute("data-holds");
     bubble = el("div", { class: "tut-bubble", id: "tut-bubble", role: "status" },
       el("b", {}, step.tool), el("span", {}, via ? "Open this menu, then pick it from the list." : step.show.name ? "Click here and type your name." : bubbleText(step)));
     document.body.append(bubble);

@@ -189,6 +189,11 @@ components reuse the existing CSS classes and tokens.
   `plans/operations/` with `normalize` and `build` (and `check` for imports),
   registered in `plans/operations/index.js`. Input validation helpers are in
   `plans/plan-input.js` and transform math in `plans/plan-geometry.js`.
+- The beginner ribbon is React (`src/beginner-ribbon.jsx`). Tools sit in titled
+  sections like the advanced ribbon: Edit, Create, Combine, Arrange, Modify,
+  Check and Workshops. Sections that do not fit fold into a menu instead of
+  scrolling; `src/beginner-ribbon-layout.js` decides which. Layerling
+  (AGPL-3.0) informed the grouping only; no code was taken from it.
 
 ## Documentation grounding
 

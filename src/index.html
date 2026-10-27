@@ -195,6 +195,13 @@ button { cursor: pointer; }
 .rbtn.finish svg { color: var(--ok); }
 .ribbon .note { align-self: center; padding: 0 14px; color: var(--ink-3); font-size: 12px; white-space: nowrap; }
 
+/* beginner ribbon: the advanced ribbon's sections; sections that do not fit fold into a menu */
+.bribbon, .bribbon-row { display: flex; flex: 1; min-width: 0; align-items: stretch; }
+.bribbon .rtrail { display: flex; align-items: center; gap: 4px; margin-left: auto; padding: 0 8px; flex: none; }
+.rbtn .ri, .rmenu .ri { display: flex; }
+.rbtn.dim { opacity: .45; }
+.bribbon .rdrop > span { height: 12px; }
+
 /* beginner toolbar */
 .bbar { display: flex; align-items: center; gap: 4px; padding: 6px 10px; overflow-x: auto; scrollbar-width: thin; }
 .bbar > button { flex: none; white-space: nowrap; }
@@ -739,7 +746,7 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .psplay .btn { padding: 4px 10px; font-size: 12px; }
 .psplay .num { width: auto; padding: 3px 4px; font-size: 11.5px; font-family: var(--f-ui); }
 .psplay .lv { margin-left: auto; }
-.simlock .bbar button:not(#bb-printsim), .simlock #shapes { pointer-events: none; opacity: .4; }
+.simlock .bbar button:not(#bb-printsim), .simlock .bribbon button:not(#bb-printsim):not([data-holds~="bb-printsim"]), .simlock .rmenu button:not(#bb-printsim), .simlock #shapes { pointer-events: none; opacity: .4; }
 .psplate { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; border-bottom: 1px solid var(--line-2); }
 #timeline.locked { opacity: .45; pointer-events: none; }
 .platenode { display: flex; align-items: center; gap: 8px; cursor: pointer; }

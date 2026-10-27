@@ -10,6 +10,7 @@ import { FONT_NAMES } from "./fonts.js";
 import {
   M4, arr, makePrimBody, frameOnFace, deleteBodies, duplicateBodies, groupBodies, ungroupBody, transformBodies, setBodyProps, PRIM_DEFAULTS, nextName,
 } from "./ops.js";
+import { mountBeginnerRibbon } from "./beginner-ribbon.jsx";
 
 const SHAPES = [
   ["box", "#e4572e"], ["cylinder", "#f3a712"], ["sphere", "#2b7bb9"], ["cone", "#29a35a"], ["pyramid", "#d9a400"],
@@ -150,61 +151,30 @@ export function initBeginner(app) {
   }
 
   // ---------------------------------------------------------------- toolbar
+  let ribbonView = null;
   function renderRibbon() {
+    ribbonView?.unmount();
     ribbon.innerHTML = "";
-    const bar = el("div", { class: "bbar" });
-    const btn = (icon, label, title, fn, id, showLabel = false) => {
-      const b = el("button", { class: "ibtn", title, id, "aria-label": label, html: ICON[icon] });
-      if (showLabel) b.append(el("span", { class: "lbl" }, label));
-      b.onclick = fn;
-      bar.append(b);
-      return b;
-    };
-    btn("copy", "Copy", "Copy (Ctrl+C)", () => copy(), "bb-copy");
-    btn("paste", "Paste", "Paste (Ctrl+V)", () => paste(), "bb-paste");
-    btn("duplicate", "Duplicate", "Duplicate (Ctrl+D)", () => dup(), "bb-dup");
-    btn("del", "Delete", "Delete (Del)", () => del(), "bb-del");
-    bar.append(el("span", { class: "sep" }));
-    btn("sketch", "Sketch", "Draw a 2D sketch on the workplane or a flat face", () => app.advanced.createSketch(), "bb-sketch", true);
-    btn("spline", "3D Sketch", "Draw lines in 3D on a shape, a virtual sphere or cube, or in the air", () => app.sketch3d.open(), "bb-sketch3d", true);
-    btn("cosforge", "CosForge", "Design a cosplay costume on a body built from your measurements, then cut it into printable pieces (opens in its own window)", () => app.cosforge.open(), "bb-cosforge", true);
-    btn("lathe", "Lathe", "Turn a shape or a wood blank on a virtual lathe, with chisels, then hollow it out", () => app.lathe.open(), "bb-lathe", true);
-    btn("extrude", "Extrude", "Extrude a sketch into a shape (E)", () => app.quickExtrude(), "bb-extrude", true);
-    btn("import", "Import", "Import a 3D model (STL, 3MF or STEP), an SVG or DXF drawing (to extrude), or a picture to trace", () => app.insertFile("any"), "bb-import", true);
-    bar.append(el("span", { class: "sep" }));
-    btn("group", "Group", "Group (Ctrl+G): merges solids, cuts holes", () => group(), "bb-group", true);
-    btn("ungroup", "Ungroup", "Ungroup (Ctrl+Shift+G)", () => ungroup(), "bb-ungroup", true);
-    btn("align", "Align", "Align (A)", () => app.advanced.align(), "bb-align", true);
-    btn("pattern", "Pattern", "Make rows or circles of copies", () => app.advanced.pattern(), "bb-pattern", true);
-    btn("mirror", "Mirror", "Mirror (M)", (e) => mirrorPopover(e.currentTarget), "bb-mirror", true);
-    btn("drop", "Drop", "Drop to workplane (D)", () => drop(), "bb-drop", true);
-    btn("texture", "Texture", "Add a surface texture (T)", () => app.advanced.texture(), "bb-texture", true);
-    btn("fillet", "Fillet", "Round the edges of a shape: click edges or a face, or round all of its edges", () => app.advanced.fillet(), "bb-fillet", true);
-    btn("shell", "Shell", "Make a shape hollow inside with a wall you choose, or open it up like a cup or box", () => app.advanced.shell(), "bb-shell", true);
-    btn("facePattern", "Face pattern", "Raise or cut a hexagon, diamond plate or screen mesh pattern on a flat face", () => app.advanced.facePattern(), "bb-facepat", true);
-    btn("measure", "Measure", "Measure sizes, distances and angles (I)", () => app.advanced.measure(), "bb-measure", true);
-    btn("printsim", "3D Print Sim", "Simulate printing it: supports, layers, strength, print time", () => app.advanced.openPrintSim(), "bb-printsim", true);
-    bar.append(el("span", { class: "sep" }));
-    const sh = btn("holeToggle", "Hole", "Make hole (H)", () => setHole(true), "bb-hole", true);
-    sh.querySelector("svg").outerHTML;
-    btn("box", "Solid", "Make solid (S)", () => setHole(false), "bb-solid", true);
-    btn("lock", "Lock", "Lock or unlock (Ctrl+L)", () => toggleLock(), "bb-lock", true);
-    bar.append(el("span", { class: "sep" }));
-    const mb = btn("select", "Multi-select", "Tap shapes to add them to the selection (same as Shift+click)", () => { multi = !multi; mb.setAttribute("aria-pressed", multi); }, "bb-multi", true);
-    mb.setAttribute("aria-pressed", multi);
-    bar.append(el("button", { class: "ibtn panel-toggle", onclick: () => $("shapes-tab").click() }, el("span", { class: "lbl" }, "Objects")));
-    ribbon.append(bar);
-    updateRibbon();
+    const host = el("div", { class: "bribbon" });
+    ribbon.append(host);
+    ribbonView = mountBeginnerRibbon(host, {
+      copy: () => copy(), paste: () => paste(), dup: () => dup(), del: () => del(),
+      sketch: () => app.advanced.createSketch(), sketch3d: () => app.sketch3d.open(), extrude: () => app.quickExtrude(), import: () => app.insertFile("any"),
+      group: () => group(), ungroup: () => ungroup(), hole: () => setHole(true), solid: () => setHole(false),
+      align: () => app.advanced.align(), mirror: (anchor) => mirrorPopover(anchor), pattern: () => app.advanced.pattern(), drop: () => drop(), lock: () => toggleLock(),
+      fillet: () => app.advanced.fillet(), shell: () => app.advanced.shell(), texture: () => app.advanced.texture(), facepat: () => app.advanced.facePattern(),
+      measure: () => app.advanced.measure(), printsim: () => app.advanced.openPrintSim(),
+      cosforge: () => app.cosforge.open(), lathe: () => app.lathe.open(),
+      multi: () => { multi = !multi; updateRibbon(); }, objects: () => $("shapes-tab").click(),
+    }, ribbonState());
+    renderMirror();
+  }
+  function ribbonState() {
+    const n = app.sel.length;
+    return { n, canPaste: !!app.clipboard, canUngroup: app.selected().some((b) => b.node.t === "group"), allLocked: n > 0 && app.sel.every((id) => app.isLocked(id)), multi };
   }
   function updateRibbon() {
-    const n = app.sel.length;
-    const sel = app.selected();
-    const set = (id, on) => { const b = $(id); if (b) b.disabled = !on; };
-    set("bb-copy", n); set("bb-dup", n); set("bb-del", n); set("bb-paste", !!app.clipboard);
-    set("bb-group", true); const gb = $("bb-group"); if (gb) gb.classList.toggle("dim", n < 2); set("bb-ungroup", sel.some((b) => b.node.t === "group"));
-    set("bb-align", n >= 1); set("bb-lock", n);
-    const lk = $("bb-lock");
-    if (lk) { const all = n && app.sel.every((id) => app.isLocked(id)); lk.innerHTML = ICON[all ? "unlock" : "lock"]; lk.append(el("span", { class: "lbl" }, all ? "Unlock" : "Lock")); } set("bb-pattern", n); set("bb-fillet", true); set("bb-shell", true); set("bb-drop", n); set("bb-hole", n); set("bb-solid", n);
+    ribbonView?.update(ribbonState());
     renderMirror();
   }
 
@@ -313,7 +283,7 @@ export function initBeginner(app) {
   var mirrorPop = null; // (var: the ribbon can refresh before this line runs)
   var mirrorState = { copy: false };
   function mirrorPopover(anchor) {
-    popover(anchor || $("bb-mirror"), "Mirror", []);
+    popover(anchor || $("bb-mirror") || ribbon.querySelector('[data-holds~="bb-mirror"]') || ribbon, "Mirror", []);
     mirrorPop = vpEl.querySelector(".popover:last-child");
     mirrorPop.classList.add("mirror-pop");
     renderMirror();
@@ -1266,7 +1236,7 @@ export function initBeginner(app) {
     screenRect,
     rubberDown(e, add, start, base, onPick) { drag = { kind: "rubber", start: start || vp.local(e), add, base: base || app.sel.slice(), fusion: true, onPick }; },
     refresh(kind) {
-      if (kind === "mode" || !ribbon.querySelector(".bbar")) renderRibbon();
+      if (kind === "mode" || !ribbon.querySelector(".bribbon")) renderRibbon();
       updateRibbon();
       renderInspector(kind === "mode" || kind === "units");
       closePopovers && kind === "mode" && closePopovers();

@@ -1,9 +1,10 @@
-import { rotateOpenSides, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
+import { rotateOpenSides } from "../../shared/gridfinity-walls.js";
+import { partPrintFit } from "../../shared/gridfinity-envelope.js";
 import { drawerMetrics, normalizeDrawerLayout, rotateDrawerLayout, placementError, firstDrawerSpace, fillDrawerGaps, DRAWER_LIMITS, drawerBinBaseZ, binFloor, rotateBinPockets } from "../../shared/drawer-layout.js";
 import { normalizeMagnetPockets, magnetCarrierHeight } from "../../shared/gridfinity-magnets.js";
 import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "../../shared/drawer-spacers.js";
-import { normalizePrintArea, baseplateTileLimits, checkPrintFit, savedPrintArea, PRINT_AREA_KEY } from "../../shared/print-area.js";
+import { normalizePrintArea, baseplateTileLimits, savedPrintArea, PRINT_AREA_KEY } from "../../shared/print-area.js";
 import { baseplateClipLayout } from "../../shared/baseplate-clips.js";
 import { referenceBodies } from "./pocket-draft.js";
 
@@ -260,7 +261,7 @@ export function createDrawerPlanner({ request, onBusy = () => {}, storage = glob
       if (draft.bins.some(bin => bin.columns > limits.columns || bin.rows > limits.rows)) throw new Error("Existing bins exceed these limits. Resize or remove them, or start a new drawer first.");
       const next = copy(draft); next.binLimits = limits; next.printArea = normalizePrintArea(printArea);
       if (next.includeBaseplate) baseplateTileLimits(next.printArea);
-      for (const bin of next.bins) checkPrintFit(next.printArea, binFootprint(bin).width, binFootprint(bin).depth, bin.kind === "bin" ? binTotalHeight({ ...bin, floor: binFloor(next, bin) }) : bin.heightUnits * 7, bin.label);
+      for (const bin of next.bins) partPrintFit({ ...bin, floor: binFloor(next, bin) }, next.printArea, bin.label);
       if (drawerReady(draft) && (next.bins.length || next.includeBaseplate)) normalizeDrawerLayout(next);
       commit(next, "Settings updated. Preview again before applying."); preferredBinLimits = copy(limits); preferredPrintArea = copy(next.printArea);
       try { storage.setItem("jumpstart.gridfinity.binLimits", JSON.stringify(limits)); storage.setItem(PRINT_AREA_KEY, JSON.stringify(next.printArea)); return "Settings saved for this drawer and new drawers in this browser."; }

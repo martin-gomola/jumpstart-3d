@@ -1,4 +1,5 @@
-import { normalizeOpenSides, normalizeCloseGaps, binFootprint, rotateOpenSides, binTotalHeight } from "./gridfinity-walls.js";
+import { normalizeOpenSides, normalizeCloseGaps, rotateOpenSides } from "./gridfinity-walls.js";
+import { partEnvelope, partPrintFit, usableDepthError } from "./gridfinity-envelope.js";
 import { normalizePrintArea, baseplateTileLimits, checkPrintFit } from "./print-area.js";
 import { normalizeCornerSpacers, cornerSpacerParts } from "./drawer-spacers.js";
 import { normalizeBaseplateClips, baseplateClipLayout } from "./baseplate-clips.js";
@@ -83,8 +84,7 @@ export function placementError(drawer, candidate, ignoreId) {
   const limits = normalizeBinLimits(drawer.binLimits);
   if (candidate.columns < 1 || candidate.rows < 1 || candidate.columns > limits.columns || candidate.rows > limits.rows) return `Bin exceeds the configured ${limits.columns} × ${limits.rows} cell limit. Adjust Gridfinity Settings.`;
   if (candidate.x < 0 || candidate.y < 0 || candidate.x + candidate.columns > columns || candidate.y + candidate.rows > rows) return "Keep the bin inside the drawer grid.";
-  const footprint = binFootprint(candidate);
-  try { checkPrintFit(drawer.printArea, footprint.width, footprint.depth, candidate.kind === "insert" ? (candidate.heightUnits ?? 2) * 7 : binTotalHeight({ ...candidate, heightUnits: candidate.heightUnits ?? 2, floor: binFloor(drawer, candidate) }), candidate.label || "Bin"); } catch (error) { return error.message; }
+  try { partPrintFit({ ...candidate, kind: candidate.kind ?? "bin", heightUnits: candidate.heightUnits ?? 2, floor: binFloor(drawer, candidate) }, drawer.printArea, candidate.label || "Bin"); } catch (error) { return error.message; }
   const overlap = (drawer.bins || []).find(bin => bin.id !== ignoreId && bin.x < candidate.x + candidate.columns && bin.x + bin.columns > candidate.x && bin.y < candidate.y + candidate.rows && bin.y + bin.rows > candidate.y);
   return overlap ? `That space is occupied by ${overlap.label || "another bin"}.` : null;
 }
@@ -130,8 +130,8 @@ export function normalizeDrawerLayout(raw) {
     const pockets = normalizeBinPockets(result, bin, entry.pockets);
     if (pockets) bin.pockets = pockets;
     const baseZ = drawerBinBaseZ(result), floor = binFloor(result, bin);
-    if ((bin.kind === "bin" ? binTotalHeight({ ...bin, floor }) : bin.heightUnits * 7) + baseZ > height + 1e-7) fail(`${bin.label} is too tall for the drawer; reduce its height or stacking lip`);
-    if (bin.kind === "bin" && bin.heightUnits * 7 - 7 - floor < 1) fail(`${bin.label} has insufficient space above its floor`);
+    if (partEnvelope({ ...bin, floor }).height + baseZ > height + 1e-7) fail(`${bin.label} is too tall for the drawer; reduce its height or stacking lip`);
+    const depthError = usableDepthError({ ...bin, floor }, bin.label); if (depthError) fail(depthError);
     const error = placementError(result, bin); if (error) fail(`${bin.label}: ${error}`);
     result.bins.push(bin);
   }
@@ -139,7 +139,7 @@ export function normalizeDrawerLayout(raw) {
   if (metrics.columns > 20 || metrics.rows > 20) fail("use at most 20 cells per drawer direction");
   if (metrics.occupied > DRAWER_LIMITS.cells || result.includeBaseplate && metrics.total > DRAWER_LIMITS.cells) fail("preview up to 144 grid cells at a time; divide a larger drawer into sections");
   const tiles = result.includeBaseplate ? baseplateTileLimits(result.printArea, metrics) : { columns: 4, rows: 4 };
-  if (result.includeBaseplate) checkPrintFit(result.printArea, Math.min(tiles.columns, metrics.columns) * 42, Math.min(tiles.rows, metrics.rows) * 42, 5 + magnetCarrierHeight(result.baseplateMagnets), "Baseplate");
+  if (result.includeBaseplate) partPrintFit({ kind: "baseplate", columns: Math.min(tiles.columns, metrics.columns), rows: Math.min(tiles.rows, metrics.rows), magnets: result.baseplateMagnets }, result.printArea, "Baseplate");
   for (const stop of cornerSpacerParts(result, metrics)) checkPrintFit(result.printArea, Math.max(...stop.rectangles.map(rect => rect.width)), Math.max(...stop.rectangles.map(rect => rect.depth)), stop.height, stop.name);
   return result;
 }

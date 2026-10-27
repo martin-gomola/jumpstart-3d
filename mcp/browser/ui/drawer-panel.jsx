@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import { BIN_SIDES, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
+import { BIN_SIDES } from "../../shared/gridfinity-walls.js";
+import { partEnvelope, partPrintFit } from "../../shared/gridfinity-envelope.js";
 import { drawerMetrics, placementError, drawerBinBaseZ, binFloor, binWall } from "../../shared/drawer-layout.js";
 import { normalizeBinLimits } from "../../shared/gridfinity-limits.js";
 import { normalizeCornerSpacers } from "../../shared/drawer-spacers.js";
-import { normalizePrintArea, checkPrintFit } from "../../shared/print-area.js";
+import { normalizePrintArea } from "../../shared/print-area.js";
 import { drawerStatus } from "./drawer-planner.js";
 import { numberValid } from "./field-text.js";
 import { Labelled, NumberField, TextField, MagnetControls, WallControls, DimensionGuide, usePreviewView } from "./controls.jsx";
@@ -295,8 +296,7 @@ function BinInspector({ planner, draft, bin, busy, headerRef, references, onRemo
   const printHeight = normalizePrintArea(draft.printArea)?.height ?? Infinity;
   const stepper = (key, title, mm) => {
     let printable = true;
-    const expanded = binFootprint({ ...bin, [key]: bin[key] + 1 });
-    try { checkPrintFit(draft.printArea, expanded.width, expanded.depth, binTotalHeight({ ...bin, floor: binFloor(draft, bin) }), bin.label); } catch { printable = false; }
+    try { partPrintFit({ ...bin, [key]: bin[key] + 1, floor: binFloor(draft, bin) }, draft.printArea, bin.label); } catch { printable = false; }
     return <div className="drawer-stepper">
       <span>{title}</span>
       <div>
@@ -308,7 +308,7 @@ function BinInspector({ planner, draft, bin, busy, headerRef, references, onRemo
     </div>;
   };
   const heights = [...new Set([2, 3, 5, 7, bin.heightUnits])].sort((a, b) => a - b);
-  const total = binTotalHeight({ ...bin, floor: binFloor(draft, bin) });
+  const envelope = partEnvelope({ ...bin, floor: binFloor(draft, bin) }), total = envelope.height;
   const stackingNote = bin.openSides?.length === 4 ? "All sides are open, so no stacking rim remains." : bin.lip
     ? `The rim adds 4.4 mm. Total bin height: ${total.toFixed(1)} mm. Check the complete stack against the drawer height.`
     : "Adds a 4.4 mm rim to support another Gridfinity bin.";
@@ -323,11 +323,11 @@ function BinInspector({ planner, draft, bin, busy, headerRef, references, onRemo
       </div>
     </div>
     <TextField id="drawer-bin-label" label="Name" value={bin.label} disabled={busy} onCommit={label => planner.updateBin({ label })} />
-    <div className="ai-template-fields">{stepper("columns", "Width", binFootprint(bin).width)}{stepper("rows", "Depth", binFootprint(bin).depth)}</div>
+    <div className="ai-template-fields">{stepper("columns", "Width", envelope.width)}{stepper("rows", "Depth", envelope.depth)}</div>
     <span>Height</span>
     <div className="ai-template-shapes" role="group" aria-label="Bin height">
       {heights.map(units => {
-        const partHeight = binTotalHeight({ ...bin, heightUnits: units, floor: binFloor(draft, bin) });
+        const partHeight = partEnvelope({ ...bin, heightUnits: units, floor: binFloor(draft, bin) }).height;
         return <button key={units} type="button" disabled={busy || partHeight + drawerBinBaseZ(draft) > draft.height || partHeight > printHeight} aria-pressed={String(bin.heightUnits === units)}
           onClick={() => planner.updateBin({ heightUnits: units })}>{`${units * 7} mm`}</button>;
       })}

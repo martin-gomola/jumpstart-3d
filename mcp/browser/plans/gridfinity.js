@@ -53,7 +53,8 @@ SOFTWARE.
 import { findRegions, resolveSketch } from "../../../src/regions.js";
 import { normalizeMagnetPockets, magnetCarrierHeight, magnetCenters, MAGNET_CARRIER_FLOOR } from "../../shared/gridfinity-magnets.js";
 
-import { normalizeOpenSides, normalizeCloseGaps, binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
+import { normalizeOpenSides, normalizeCloseGaps, binFootprint } from "../../shared/gridfinity-walls.js";
+import { partEnvelope, usableDepthError } from "../../shared/gridfinity-envelope.js";
 import { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
 export { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
 const IDENTITY = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
@@ -104,7 +105,7 @@ export function normalizeGridfinity(raw, label = "operation") {
   const y = integer(dividers.y, `${label}.dividers.y`, 0, GRIDFINITY_LIMITS.dividers, 0);
   if (kind !== "bin" && (lip || x || y)) fail(`${label}: stacking lip and dividers are only supported for bins`);
   if (kind === "baseplate" && (raw.heightUnits !== undefined && heightUnits !== 3 || raw.floor !== undefined && floor !== 2 || raw.wall !== undefined && wall !== 1.2)) fail(`${label}: baseplate height is fixed at 5 mm; bin height, floor and wall overrides are unsupported`);
-  if (kind === "bin" && heightUnits * 7 - 7 - floor < 1) fail(`${label}: floor leaves less than 1 mm of usable bin depth`);
+  const depthError = usableDepthError({ kind, heightUnits, floor }, label); if (depthError) fail(depthError);
   return { type: "gridfinity", id: text(raw.id, `${label}.id`), name: text(raw.name, `${label}.name`, `Gridfinity ${kind}`), kind, columns, rows, heightUnits, floor, wall, lip, openSides, closeGaps, dividers: { x, y }, magnets: normalizeMagnetPockets(raw.magnets, `${label}.magnets`), position: triple(raw.position, `${label}.position`, -10000, 10000), rotation: triple(raw.rotation, `${label}.rotation`, -360, 360) };
 }
 
@@ -112,7 +113,7 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
   const op = normalizeGridfinity(operation);
   const width = op.columns * 42 - (op.kind === "baseplate" ? 0 : 0.5);
   const depth = op.rows * 42 - (op.kind === "baseplate" ? 0 : 0.5);
-  const footprint = binFootprint(op);
+  const footprint = binFootprint(op), envelope = partEnvelope(op);
   const carrierHeight = op.kind === "baseplate" ? magnetCarrierHeight(op.magnets) : 0;
   const topZ = op.kind === "baseplate" ? 5 + carrierHeight : op.heightUnits * 7;
   const lipBottom = topZ-3.8;
@@ -268,7 +269,7 @@ export function buildGridfinity(operation, { document, idFactory, nextSeq, clipS
   const referencedSketches = new Set();
   JSON.stringify(node, (key, value) => { if (key === "sketch" && typeof value === "string") referencedSketches.add(value); return value; });
   const sketchSignatures = Object.fromEntries([...referencedSketches].map(id => [id, JSON.stringify(document.sketches.find(sketch => sketch.id === id))]));
-  const recipe = { version: 1, ...op, width: op.closeGaps ? footprint.width : width, depth: op.closeGaps ? footprint.depth : depth, topZ, protectedBaseHeight: op.kind === "baseplate" ? 0 : 7, outerRadius: op.kind === "baseplate" ? 4 : 3.75, totalHeight: op.kind === "bin" ? binTotalHeight(op) : topZ, pitch:42, heightUnit:7, sourceRevision, referenceFit: "unverified", baseplatePlacementZ:carrierHeight + 0.25,
+  const recipe = { version: 1, ...op, width: envelope.width, depth: envelope.depth, topZ, protectedBaseHeight: op.kind === "baseplate" ? 0 : 7, outerRadius: op.kind === "baseplate" ? 4 : 3.75, totalHeight: envelope.height, pitch:42, heightUnit:7, sourceRevision, referenceFit: "unverified", baseplatePlacementZ:carrierHeight + 0.25,
     ...(op.magnets ? { magnetPockets: { ...op.magnets, count: centers.length, centers, carrierHeight, carrierFloor: op.kind === "baseplate" ? MAGNET_CARRIER_FLOOR : null, opening: op.kind === "baseplate" ? "top" : "bottom" } } : {}), ...(op.kind === "baseplate" && clipSlots.length ? { clipSlots: structuredClone(clipSlots) } : {}), nodeSignature:JSON.stringify(node), sketchSignatures };
   return { node, recipe };
 }

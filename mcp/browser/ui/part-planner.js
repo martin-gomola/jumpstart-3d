@@ -1,5 +1,4 @@
-import { binFootprint, binTotalHeight } from "../../shared/gridfinity-walls.js";
-import { magnetCarrierHeight } from "../../shared/gridfinity-magnets.js";
+import { partEnvelope } from "../../shared/gridfinity-envelope.js";
 import { GRIDFINITY_LIMITS } from "../../shared/gridfinity-limits.js";
 import { checkPrintFit } from "../../shared/print-area.js";
 import { numberValid } from "./field-text.js";
@@ -77,15 +76,11 @@ export function partState(draft) {
 
 export function partSummary(draft, magnetsValid = true) {
   const state = partState(draft), { kind, magnets } = state, magnetsReady = !!magnets && magnetsValid;
-  const footprint = binFootprint({ columns: state.columns, rows: state.rows, closeGaps: kind === "bin" && state.closeGaps, openSides: state.openSides });
-  const width = kind === "baseplate" ? state.columns * 42 : footprint.width;
-  const depth = kind === "baseplate" ? state.rows * 42 : footprint.depth;
+  const { width, depth, height } = partEnvelope({ ...state, closeGaps: kind === "bin" && state.closeGaps, magnets: magnetsReady && magnets,
+    dividers: { x: state.compartmentsX - 1, y: state.compartmentsY - 1 } });
   let magneticHeight = "";
-  if (kind === "baseplate" && magnetsValid) magneticHeight = ` Baseplate height ${(5 + magnetCarrierHeight(magnets)).toFixed(1)} mm.`;
+  if (kind === "baseplate" && magnetsValid) magneticHeight = ` Baseplate height ${height.toFixed(1)} mm.`;
   if (magnetsReady) magneticHeight += ` ${state.columns * state.rows * 4} magnet pockets, ${kind === "baseplate" ? "open from the top of the carrier" : "open underneath"}.`;
-  const height = kind === "baseplate" ? 5 + (magnetsReady ? magnetCarrierHeight(magnets) : 0)
-    : kind === "bin" ? binTotalHeight({ heightUnits: state.heightUnits, floor: state.floor, lip: state.lip, openSides: state.openSides, dividers: { x: state.compartmentsX - 1, y: state.compartmentsY - 1 } })
-    : state.heightUnits * 7;
   const valid = name => numberValid(draft.fields[name], PART_LIMITS[name]);
   const validSize = valid("columns") && valid("rows") && (kind === "baseplate" || valid("heightUnits") && valid("floor") && valid("wall")) && magnetsValid;
   return {

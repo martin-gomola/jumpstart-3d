@@ -1,6 +1,7 @@
 # Splitting an oversized part
 
-The X2D safe envelope is **230 × 245 × 245 mm** per part. The question when
+The X2D usable envelope is **252 × 252 × 256 mm** per part (231.5 × 252 ×
+256 mm when both nozzles print one part). The question when
 a part exceeds it is not just "which joint" — it is "where to put the split
 and in what geometry". The wrong split location can halve the strength of
 the whole assembly.
@@ -60,10 +61,10 @@ same supports, same shrinkage behaviour). When a 3-part split is required
 and no load argues against it, aim for **thirds**, not halves plus a
 leftover.
 
-## Example: platform wider than 245 mm
+## Example: platform wider than 252 mm
 
-A laptop platform of 300 × 220 × 12 cannot print in one piece on X2D's safe
-envelope. Candidate splits ranked by stiffness:
+A laptop platform of 300 × 220 × 12 cannot print in one piece on the X2D
+usable envelope. Candidate splits ranked by stiffness:
 
 1. **Two halves (150 × 220 each) + a 50 × 220 central connector.** The
    splice is a sliding dovetail on each half mating with the connector.

@@ -22,6 +22,7 @@ means the force the joint sees during normal use, not during assembly.
 | Load the joint must resist | Pick | Avoid |
 | --- | --- | --- |
 | **Pure tension along the member axis** | Kanawa tsugi, through-wedged tenon, draw-bored M&T | Plain M&T, dowel in Z |
+| **Tension tie between two standing parts** (legs pulled apart) | Flat strip with dovetail heads dropped into pockets open from below; the pull wedges the heads tighter | Rectangular head in a pocket open toward the inside (holds only by friction or glue) |
 | **Racking of a rigid frame** | Haunched tenon, Shachi tsugi, Kabuto ari at the corner | Plain miter, biscuit |
 | **Shear across the joint** | Through dovetail, sliding dovetail, keyed tenon | Dowel, miter |
 | **Sustained vertical compression** (e.g. laptop on top) | Koshikake ari tsugi, half-lap keyed, direct butt with cross-pin | Dovetail oriented inverted, blind mortise with thin ceiling |
@@ -48,3 +49,6 @@ Ask three questions in order:
   on FDM (no ceiling to adapt, visual confirmation of seating).
 - **Decorative joint on a load-bearing surface:** structural joint first,
   cosmetic cover second.
+- **Oversized member for a load carried elsewhere:** a tall crossbar sized
+  for racking that a wide foot and the payload already resist. See
+  [`material-and-load.md`](material-and-load.md).

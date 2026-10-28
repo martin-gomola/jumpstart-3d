@@ -6,14 +6,15 @@ Follows the hard constraints in [`SKILL.md`](../SKILL.md).
 
 ## Design intent
 
-- **Laptop sits on top of a tilted platform.**
-- **Two triangular side legs** carry the load straight to the desk through
-  the triangle hypotenuse (compression, not bending). This is the key
-  decision — a bent-sheet silhouette would fail by racking in weeks.
-- **One central crossbar** ties the two legs together and prevents them
-  from splaying. Doubles as a cable channel.
-- **Three prints, no screws, no glue.** Legs printed flat on their
-  triangular face; crossbar printed flat on its longest face.
+- **Laptop rests on the sloped top edges of two legs.**
+- **Two solid side legs** carry the load straight to the desk in
+  compression, not bending. This is the key decision — a bent-sheet
+  silhouette would fail by racking in weeks.
+- **One upright crossbar near the rear** ties the two legs together and
+  prevents them from splaying sideways.
+- **Three structural prints plus two wedges, no screws, no glue.** Legs
+  print flat on their side face; the crossbar prints flat on the face its
+  tenons are flush with.
 
 Dominant loads to resist:
 
@@ -26,50 +27,40 @@ Dominant loads to resist:
 
 | Parameter | Default | Note |
 | --- | --- | --- |
-| `platform_width_W` | 280 mm | Fits 14–16" laptops |
-| `platform_depth_D` | 180 mm | Front-to-back dimension of the top |
-| `platform_angle_α` | 15° | Typing tilt |
-| `leg_height_H` | 110 mm | Rear lift of the back edge above the desk |
-| `leg_depth_L` | 180 mm | Equal to platform_depth so legs do not overhang |
+| `platform_angle_α` | 15° | Typing tilt of the leg top edge |
+| `leg_depth_L` | 180 mm | Front-to-back length of each leg |
+| `leg_front_h` | 15 mm | Leg height at the front; rear height follows from α |
+| `leg_rear_h` | 63.2 mm | `15 + 180 × tan 15°` |
+| `lip` | 8 × 10 mm | Front stop rising 10 mm above the rest edge |
 | `thickness_T` | 10 mm | Material thickness for all parts |
-| `crossbar_offset_from_front` | 60 mm | Keep crossbar away from the maximum-moment line (close to legs) |
+| `crossbar_body` | 190 × 40 × 10 mm | Between the legs, upright, near the rear |
+| `crossbar_total` | 240 mm | Body plus two 25 mm tenons; must stay ≤ 252 mm |
 
-Build-volume check: `platform_width_W = 280` exceeds the 230 mm safe
-envelope, so the **platform must be split**. The two legs
-(180 × 110 × 10) and the crossbar (280 → split, below) are the two other
-printable bodies.
+There is no separate platform: a 280 mm platform would exceed the 252 mm
+usable envelope and need a splice under the laptop. The laptop rests
+directly on the 10 mm top edges of the two legs, and the crossbar only
+resists racking.
 
-Alternative: **make the platform integral with the crossbar** and skip the
-separate top. The 3 parts become `left_leg + right_leg + crossbar-platform`.
-This is what we build below.
+Check the geometry before modeling. A 180 × 110 mm right triangle slopes at
+31°, not 15°, and a 220 mm crossbar body plus two tenons is 270 mm long and
+does not fit the plate. Both errors appeared in an earlier version of this
+recipe.
 
 ## Part breakdown
 
-Three parts total:
-
-1. **Left leg** (`180 × 110 × 10`): right-triangle silhouette, hypotenuse at
-   15° from horizontal. Prints flat on the triangular face.
-2. **Right leg** (`180 × 110 × 10`): mirror of left leg.
-3. **Crossbar-platform** (`280 × 60 × 10`): long rectangular bar that spans
-   the two legs and provides the top surface the laptop sits on. Length 280
-   exceeds safe envelope → **split transversely into two halves of 140
-   each**, joined with a short connector or a direct Kanawa splice at the
-   midpoint under the laptop's centre of mass. See
-   [`splitting-strategies.md`](splitting-strategies.md).
-
-**Revised 3-part layout to stay within envelope and avoid splice under
-load:** two legs + a shorter crossbar of **220 mm** (fits the envelope),
-with the laptop supported directly by the top edges of the legs rather than
-the crossbar. The crossbar then only resists racking, not vertical load.
-This changes the recipe to:
-
 | Part | Size | Role |
 | --- | --- | --- |
-| Left leg | `180 × 110 × 10` | Carries laptop load in compression; top edge is the actual rest surface |
-| Right leg | `180 × 110 × 10` | Mirror of left |
-| Crossbar | `220 × 60 × 10` | Ties the legs; prevents racking |
+| Left leg | `180 × 63.2 × 10` trapezoid with front lip | Carries the laptop in compression; top edge is the rest surface |
+| Right leg | same | Mirror position |
+| Crossbar | `240 × 40 × 10` including tenons | Ties the legs 190 mm apart; prevents racking |
+| 2× wedge | `18 × 14.6 × 6` | Locks each tenon |
 
-All three parts fit on one plate.
+Leg profile (Y front-to-back, Z up): `(0,0) (180,0) (180,63.2) (8,17.14)
+(8,27) (0,27)`. Place the crossbar upright with its faces at Y 150–160 and
+Z 5–45. The leg top edge there is at 55–58 mm, so the laptop clears the
+crossbar by about 10 mm.
+
+All five parts fit on one 252 × 252 mm plate.
 
 ## Joint choice
 
@@ -84,6 +75,68 @@ Rationale from [`joint-selector.md`](joint-selector.md): T-joint topology
 with racking as primary load → first choice is "keyed tenon through the
 leg".
 
+### Recommended light variant: frame legs and a dovetail tie
+
+Use this variant unless the user asks for the keyed or sliding versions. It
+prints in about 62 g of PLA instead of about 104 g for solid legs and an
+upright crossbar, both at 4 walls and 15 % infill (estimates from
+[`material-and-load.md`](material-and-load.md)). It follows the reference
+15" notebook stand: low frame legs and a thin tie on the desk. Unlike that
+reference, the tie locks by shape instead of glue.
+
+- **Leg:** the same profile extruded 10 mm, with two windows cut through it.
+  Ribs are 5 mm: front strut Y 8–13, mid strut Y 87.5–92.5 above the tie
+  pocket, rear strut Y 175–180, sloped rail 5 mm measured square to the
+  slope. The floor rail stays 8 mm tall to hold the pocket. Window corners
+  are chamfered 2 mm. Front window `(15,8) (85.5,8) (87.5,10) (87.5,31.266)
+  (85.568,32.748) (14.932,13.822) (13,11.304) (13,10)`; rear window
+  `(94.5,8) (173,8) (175,10) (175,54.712) (173.068,56.194) (94.432,35.124)
+  (92.5,32.606) (92.5,10)`.
+- **Foot:** an inward pad 10 mm wide, 56 mm long (Y 62–118) and 8 mm tall
+  on each leg, so the leg is 20 mm wide where the tie enters.
+- **Tie:** a flat strip 4 mm thick lying on the desk, neck 10 mm wide and
+  170 mm long between the feet. Each end has a dovetail head flaring from
+  10 to 24 mm over 16 mm (about 24° per side). Total length 202 mm.
+- **Pocket:** the head offset 0.15 mm on the flanks and the end, 4.1 mm
+  tall, cut up from the underside of the foot and open toward the inside.
+  The outer wall is 3.85 mm and the pocket ceiling 3.9 mm. Press each leg
+  down onto a head; pulling the legs apart wedges the heads tighter.
+- **Fit:** 0.1 mm to the pocket ceiling is the measured tight fit in
+  [`fdm-tolerances.md`](fdm-tolerances.md). Pair checks use
+  `minimumClearance` 0.1 with `distanceTolerance` 0.002 and
+  `maximumOverlapVolume` 0.
+- **Print:** each leg with its outer face on the bed (zero overhang; the
+  pocket flanks lean 24° from vertical); the tie flat.
+- **Limits:** the tie does not resist lifting. Lifting the stand by a leg
+  leaves the tie on the desk unless the ceiling fit holds it by friction.
+  Flank clearance 0.15 mm is a convention, not yet measured; print one foot
+  section and tie end as a coupon first.
+
+### Three-part variant: vertical sliding dovetail
+
+When the user wants exactly three parts, drop the wedges and use a
+**half-dovetail that slides down** into a stopped socket in each leg. The
+joint selector's alternative "sliding dovetail with end key" applies, with
+gravity and the socket floor acting as the key.
+
+- **Crossbar:** one XY profile extruded 40 mm (Z 5–45): body 189.7 × 10 mm
+  between the legs plus a 6 mm tail at each end. The tail is flush with the
+  bed face (Y 150) and flares 1:6 on the other side, from 6 mm at the
+  shoulder to 7 mm at the tip. Total length 201.7 mm.
+- **Leg socket:** the tail profile offset 0.15 mm per side (sliding fit),
+  6 mm deep into the inner face, leaving a 3.85 mm outer wall. It is open at
+  the leg top edge and stopped at Z 4.85, so the crossbar hangs on the
+  socket floor 5 mm above the desk.
+- **Print:** each leg with its outer face on the bed (socket opening up);
+  the crossbar on its flat tail face. Both poses rank first with zero
+  overhang; the opposite faces give 376 and 487 mm².
+- **Checks:** pair `minimumClearance` 0.15 mm with `distanceTolerance`
+  0.002 and `maximumOverlapVolume` 0. The shoulder is held 0.15 mm off the
+  leg face for the same reason as the keyed version.
+- **Limits:** lifting by the legs carries the crossbar; lifting by the
+  crossbar lets the legs slide off. The 1 mm interlock is small, so print a
+  40 mm tall coupon of one socket and tail first.
+
 ## Exact dimensions
 
 Material thickness `T = 10 mm`.
@@ -95,25 +148,38 @@ Material thickness `T = 10 mm`.
   cross-section ≥ 5 × 5 mm → **use 5 mm thickness** instead).
 - `tenon_width = 2 × tenon_thk = 10 mm` → use **20 mm** (crossbar is wider,
   gives more area).
-- `tenon_length = T_leg + wedge_pocket = 10 + 15 = 25 mm` protrusion
-  through the leg.
-- `wedge_pocket` on the protruding tenon: through hole 15 × 5 mm, **offset
-  1.5 mm toward the shoulder** so the wedge pulls the leg tight.
-- `wedge` separate print: `18 × 4 → 6 mm` taper over 18 mm length
-  (ratio 1:9 ≈ 6.3°, below the self-locking limit).
+- **Bare-faced:** the tenon sits flush with the crossbar face that lies on
+  the bed (no-support rule 8). A tenon centred in the 10 mm thickness
+  leaves 400+ mm² of unsupported underside.
+- `tenon_length = T_leg + 15 = 25 mm` protrusion through the leg.
+- `wedge_pocket`: rectangular through slot across the tenon, perpendicular
+  to the bed, **6 mm along the tenon × 15 mm across it**. Its shoulder-side
+  edge sits **1 mm inside the leg's outer face** (draw-bore offset, rule
+  11), so measured from the shoulder the slot spans 9–15 mm. The wedge then
+  bears on the leg face and the slot's far edge, a 5 mm gap. This leaves
+  2.5 mm walls beside the slot and 10 mm of tenon beyond it.
+- `wedge` separate print: **18 mm long, tapering 4 → 6 mm, 14.6 mm wide**
+  (0.2 mm per side in the 15 mm slot). The taper is 1:9 ≈ 6.3°, below the
+  self-locking limit, and the wedge binds at mid-length where it is 5 mm.
 
 ### Leg mortise
 
 - Rectangular through-hole **5.2 × 20.2 mm** (per-side clearance 0.1 mm,
-  friction-fit from [`fdm-tolerances.md`](fdm-tolerances.md)).
+  friction-fit from [`fdm-tolerances.md`](fdm-tolerances.md)), aligned
+  with the bare-faced tenon: 0.1 mm proud of the crossbar's bed face.
 - Internal corners filleted **R 0.5 mm** per no-support rule 5.
-- Bottom entry edge chamfered **0.2 × 45°** per rule 4.
+- All four entry edges chamfered **0.5 mm** on both faces of the leg. On
+  the shoulder side this is required, not cosmetic: a sharp mortise edge
+  sits about 0.02 mm from the R 0.4 shoulder fillet, so the pair check
+  fails. With the chamfer the fillet clears it and the 0.1 mm side gap
+  stays the minimum.
 - Top edge of the leg (where the laptop rests) chamfered **1 mm × 45°**
   as a lead-in and anti-slip bevel.
 
 ### Crossbar
 
-- `220 × 60 × 10` with two 5 × 20 mm tenons centred, one on each short end.
+- `190 × 40 × 10` body with two 5 × 20 mm bare-faced tenons, centred across
+  the 40 mm height and flush with the bed face, one on each short end.
 - Shoulder fillet **R 0.4 mm** per rule 4.
 - Lead-in chamfer on each tenon **1 mm × 20°** per rule 6.
 
@@ -123,8 +189,8 @@ Material thickness `T = 10 mm`.
 | --- | --- | --- | --- |
 | Left leg | Triangular face on plate | **4** | **30 % gyroid** |
 | Right leg | Triangular face on plate | **4** | **30 % gyroid** |
-| Crossbar | 220 × 60 face on plate (lies flat along X) | **4** | **30 % gyroid** |
-| 2× wedge | Long axis along X, driving direction parallel to a layer | **3** | **40 % cubic** |
+| Crossbar | 240 × 40 face flush with the tenons on plate | **4** | **30 % gyroid** |
+| 2× wedge | 18 × 14.6 face on plate, taper facing up | **3** | **40 % cubic** |
 
 Material: PLA Basic acceptable for a desk-use stand. If the stand lives in
 sunlight or warm office, switch to PETG per
@@ -134,44 +200,41 @@ sunlight or warm office, switch to PETG per
 
 1. Insert the crossbar's left tenon through the left leg's mortise from the
    inside. Tap the shoulder flush.
-2. Drive the first wedge into the exposed cross-slot from the top. The
-   draw-bore offset pulls the leg tight to the shoulder.
+2. Drive the first wedge front-to-back through the slot in the protruding
+   tenon. The draw-bore offset pulls the leg tight to the shoulder.
 3. Repeat on the right leg.
-4. Place the laptop on the top edges of the legs. The front edge of the
-   crossbar is 60 mm behind the laptop's front, so no vertical load reaches
-   the crossbar.
-5. To disassemble: tap wedges out from the bottom. No tools, no residue.
+4. Place the laptop on the top edges of the legs, against the front lips.
+   The crossbar sits about 10 mm below the rest line, so no vertical load
+   reaches it.
+5. To disassemble: tap the wedges out from the back. No tools, no residue.
 
-## MCP plan sketch (one keyed tenon)
+## Build order in JumpStart
 
-Call `jumpstart_get_capabilities({includeSchemas:false})` and
-`jumpstart_get_capabilities({schemaPaths:["plan.features","plan.operations"]})`
-for the exact current schemas. The sketch below is illustrative only.
+This recipe gives dimensions, not plan JSON. Read the current operation
+schemas with `jumpstart_get_capabilities({includeSchemas:false})` and then
+only the needed `schemaPaths`; do not copy field names from older examples.
 
-```json
-{
-  "plan": {
-    "name": "crossbar-left-tenon",
-    "features": [
-      {"type":"sketch","id":"base","plane":"XY",
-       "profile":{"type":"polygon","points":[[0,0],[220,0],[220,60],[0,60]]}},
-      {"type":"extrude","id":"body","profile":"base","distance":10}
-    ],
-    "operations": [
-      {"type":"sketch","id":"tenon_profile","plane":"XZ","offset":[0,30,0],
-       "profile":{"type":"polygon","points":[[-2.5,0],[2.5,0],[2.5,10],[-2.5,10]]}},
-      {"type":"extrude","id":"tenon","profile":"tenon_profile","distance":25,"merge":true},
-      {"type":"modifier","target":"tenon","modifier":{"type":"hole",
-        "at":[{"p":[215,30,5],"n":[0,1,0]}],"diameter":5,"depth":60}},
-      {"type":"modifier","target":"body","modifier":{"type":"fillet",
-        "edges":"shoulder_tenon_body","radius":0.4}},
-      {"type":"modifier","target":"tenon","modifier":{"type":"chamfer",
-        "edges":"tenon_lead_in","distance":1.0,"angle":20}}
-    ]
-  }
-}
-```
-
-The `hole` modifier produces the wedge pocket; replace with a true
-rectangular slot using a sketch-and-extrude-cut if the native hole feature
-is round-only in your current MCP capabilities.
+1. Build the crossbar as one native body: the 190 × 40 × 10 bar, the two
+   bare-faced 5 × 20 × 25 mm end tenons joined to it (let each tool overlap
+   the bar by 1 mm instead of touching its end face), and the 6 × 15 mm
+   wedge slots cut with box tools, not round holes.
+2. Build each leg as its own body with the 5.2 × 20.2 mm through mortise.
+3. Build each wedge as its own body.
+4. Add the shoulder fillets and lead-in chamfers from the sections above as
+   modifier operations on the existing bodies.
+5. Pose the crossbar and legs assembled, but hold each shoulder **0.1 mm
+   off** its leg face. The shoulder touches the leg in reality, and a
+   touching pair always measures 0 mm, which hides the mortise clearance.
+   Lay the wedges beside the assembly in their print pose. Preview with
+   these `requirements`: five bodies; per-body world bounds inside
+   252 × 252 × 256 mm; printability on the crossbar and wedges (both already
+   lie in their print pose); `requirements.pairs` for crossbar to each leg
+   (`minimumClearance` 0.1 mm with `distanceTolerance` 0.001,
+   `maximumOverlapVolume` 0). The wedge locks by interference, so check it
+   on the coupon, not with a clearance pair.
+6. Run `jumpstart_inspect_geometry` with `printOrientations: {}` on each
+   leg, which is posed upright for the assembly. The top-ranked pose should
+   lie flat with zero overhang; the upright pose overhangs above the mortise.
+7. Apply only after every check passes. Print a coupon before the full set:
+   a 40 mm crossbar end with its tenon and slot, a 50 × 40 mm leg piece with
+   one mortise, and one wedge.

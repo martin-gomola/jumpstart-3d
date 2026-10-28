@@ -26,8 +26,12 @@ PLA). Rules are ordered so the first applicable one wins.
    recommended 2.0 mm. Below this the key will split the wall.
 8. **Tenon orientation:** the tenon axis must lie parallel to the print bed
    (XY). If the planned orientation puts the axis in Z, rotate the whole
-   part, or split it and add a lap/key to each half.
-9. **Oversized part (> 230 mm in any axis of the safe envelope):** read
+   part, or split it and add a lap/key to each half. On a part printed flat,
+   make the tenon **bare-faced**: flush with the bed-side face. A tenon
+   centred in the thickness leaves its underside as a 90° overhang with
+   nothing below it, and the printability check fails.
+9. **Oversized part (beyond 252 × 252 × 256 mm, or 231.5 mm in X for a
+   dual-nozzle part):** read
    [`splitting-strategies.md`](splitting-strategies.md). The default is to
    split in the lowest-stress zone (farthest from a bending maximum) and to
    choose the split geometry from the load vector, not a fixed joint.

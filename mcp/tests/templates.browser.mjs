@@ -148,7 +148,7 @@ test("drawer setup stays separate from the connection panel at wide and narrow w
 test("new manual workspaces block MCP mutations while preserving document reads", async ({ page }) => {
   const editorId = await editor(page);
   await loadDoc(page, newDoc("Manual workspace guard", "advanced", { bodies: [body("guard-part", "Guard part", prim("box", { w: 20, d: 20, h: 12 }))] }));
-  for (const name of ["arch", "cam", "voxel", "cosforge"]) {
+  for (const name of ["arch", "cam", "voxel", "cosforge", "carve"]) {
     await page.evaluate(name => name === "arch" ? window.__app.setMode("arch") : window.__app[name].open(), name);
     const before = await tool("jumpstart_get_document", { editorId });
     const result = await tool("jumpstart_undo", { editorId, expectedRevision: before.revision }, true);

@@ -165,7 +165,7 @@ export function initBeginner(app) {
       align: () => app.advanced.align(), mirror: (anchor) => mirrorPopover(anchor), pattern: () => app.advanced.pattern(), drop: () => drop(), lock: () => toggleLock(),
       fillet: () => app.advanced.fillet(), shell: () => app.advanced.shell(), texture: () => app.advanced.texture(), facepat: () => app.advanced.facePattern(),
       measure: () => app.advanced.measure(), printsim: () => app.advanced.openPrintSim(),
-      cosforge: () => app.cosforge.open(), lathe: () => app.lathe.open(),
+      cosforge: () => app.cosforge.open(), chipcarve: () => app.carve.open(), lathe: () => app.lathe.open(),
       multi: () => { multi = !multi; updateRibbon(); }, objects: () => $("shapes-tab").click(),
     }, ribbonState());
     renderMirror();

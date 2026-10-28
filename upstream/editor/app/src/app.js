@@ -5,6 +5,7 @@ import { inflate } from "./inflate.js";
 import { CREDITS, LICENSE_TEXTS } from "./licenses.js";
 import { initSketch3D } from "./sketch3d.js";
 import { initLathe } from "./lathe.js";
+import { initCarve } from "./carve.js";
 import { VERSION } from "./version.js";
 import { initBricks } from "./bricks.js";
 import { initVoxel } from "./voxel.js";
@@ -158,6 +159,7 @@ function boot() {
   app.tutorials = initTutorials(app);
   app.sketch3d = initSketch3D(app);
 app.lathe = initLathe(app);
+app.carve = initCarve(app);
 { const sv = document.getElementById("sp-ver"); if (sv) sv.textContent = "Version " + VERSION; }
 app.bricks = initBricks(app);
 app.voxel = initVoxel(app);
@@ -642,6 +644,18 @@ app.showAbout = function () {
         el("button", { class: "btn", id: "ab-check", onclick: (e) => checkForUpdates(e.currentTarget) }, "Check for updates"),
         el("a", { class: "btn primary", id: "ab-site", href: SITE_URL, target: "_blank", rel: "noopener" }, "Visit classyapps.org")),
       el("p", { class: "ab-upmsg", id: "ab-upmsg", role: "status", hidden: true }),
+      sec("New in version 2.7.7", [
+        ["Shell for any shape:", "Shell and Hollow now work on complex shapes: shapes with holes through them, branches and bosses, joined shapes, free-form and organic bodies, tori, and curved openings (open a round side, not just a flat end). When the exact offset can't make the wall, a new distance-field method builds it from the distance to the kept faces, so it works on any closed shape; flat and round shapes keep their own surface exact. It takes a few seconds."],
+        ["Shell options:", "pick opening faces on several shapes at once (each gets its own shell); Hollow can add 1, 2 or 4 drain holes through the bottom (for resin and powder printing) with the size you set; and Method (Auto, Exact offset, Slices, or Any shape with Normal or Fine detail) lets you choose how the wall is made. Auto tries them in turn."],
+      ]),
+      sec("New in version 2.7.6", [
+        ["Shell on lofts:", "Shell and Hollow now work on lofted shapes that the offset engine couldn't handle, such as a loft from a hexagon on one plane to a circle on an offset plane. When a shape has free-form sides, the wall is built from slices across the shape (each slice's outline is offset in its own plane and the slices are lofted back together), with Inside, Outside or Both and openings on flat ends. It is also much quicker to give an answer."],
+        ["Tangent chain fix:", "Shell's Tangent chain no longer takes every face of a curved (lofted) body: curved faces' directions were compared wrongly, which also hid some real edges between curved faces in the view."],
+      ]),
+      sec("New in version 2.7.5", [
+        ["Chip Carving:", "a new woodcraft simulator (Simulate → Woodcraft, Advanced's Create group, Beginner's toolbar and Chisel). Carve a board, a round plate, a log or a shape from your design, in basswood, butternut, white pine, mahogany, cherry, black walnut, hard maple or red oak (harder woods cut less deep). Knives: corner chips (three-corner, four-corner and diamond) that pop out as real chips, V-cut lines, curved sweeps with a stop cut, and a stab knife; plus a pencil and eraser for layout lines, layout guides (square or triangle grid, rosette, border band) and a sanding block. A pen's pressure sets how deep each cut goes and its tilt the blade angle; with a mouse or finger the Pressure slider does. Fingers can carve or, once a pen is used, move the view. A raking light shows the facets. Add the carving to your design or export STL, 3MF or OBJ."],
+        ["Roland MDX-50:", "CAM Studio has Roland MDX-50 profiles (with the 5-tool changer, and with the ZCL-50A rotary axis) and a Roland NC code post processor for MDX-series mills."],
+      ]),
       sec("New in version 2.7.4", [
         ["Sketch line style:", "choose how thick sketch lines are (Hairline, Thin, Medium, Thick or Extra thick) and their colour (the theme's own colour, or black, white, blue, red, green, orange, purple, yellow or cyan) in the theme menu (◐), under Sketch lines. It applies in Advanced, Beginner and Chisel and is remembered. The new default, Thin, is thinner than before."],
         ["Shell → Hollow:", "the Shell tool now has two types. Openings removes the faces you click (an open box or cup); Hollow makes the whole model hollow inside, closed all round, with a 2 mm wall to start that you can change (quick picks 1, 2, 3 and 5 mm). Hollow works on the selected shapes, or click shapes to add them."],

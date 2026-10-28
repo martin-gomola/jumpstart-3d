@@ -138,6 +138,24 @@ checks before accepting the change.
 - MCP mutations require leaving the new manual workspaces. These manual tools
   do not extend the typed MCP modeling API automatically.
 
+## Editor 2.7.7 archive update
+
+- Source: user-supplied `JumpStart-3D-v2.7.7-full-source`, `app/src/`. This is an
+  archive version, not an asserted author Git tag or commit. It includes the
+  2.7.5 and 2.7.6 changes.
+- The 75-file manifest is retained in `test/fixtures/upstream-v277.json`. Its
+  canonical JSON manifest SHA-256 is
+  `615b13ed1472618636ccca229b3f72a41ea05665fe4249da3a604222641bc4a7`.
+  `upstream/editor/` holds this archive as the base for the next update.
+- Three-way merge from the 2.7.4 base. Added the distance-field Shell method
+  (`sdfshell.js`), drain holes and Shell method choice, Shell on lofts, the
+  Chip Carving workspace (`carve.js`) and the CAM Roland MDX-50 profiles.
+- Chip Carve sits in the beginner ribbon's Workshops section. Its choice
+  controls use the shared `tool-choice`, chip shapes have text labels, and MCP
+  mutations require closing it, as for CAM, Voxel and CosForge.
+- Still excluded: the author-hosted update checker and the prebuilt
+  `camworker.bundle.txt`. Notices and `third_party/` are unchanged.
+
 
 ## Flush joins on open Gridfinity edges
 

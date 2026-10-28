@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 const kit = resolve(process.env.CODEX_HOME || `${homedir()}/.codex`, "scripts");
 const output = "exports/editor-v274/gates", harness = "exports/editor-v274/harness/choices.html";
 await mkdir(output, { recursive: true });
-const files = ["src/arch.js", "src/cam.js", "src/cosforge.js", "src/voxel.js", "src/tool-choice.js", "src/tool-window.js", "src/tool-ui.css"];
+const files = ["src/arch.js", "src/cam.js", "src/cosforge.js", "src/voxel.js", "src/carve.js", "src/tool-choice.js", "src/tool-window.js", "src/tool-ui.css"];
 const jobs = [
   ["tokens", "python3", [`${kit}/validate_tokens.py`, "mcp/tokens/ai-status.json"]],
   ["contrast", "python3", [`${kit}/validate_contrast.py`, "exports/ai-panel/theme-contrast.json"]],

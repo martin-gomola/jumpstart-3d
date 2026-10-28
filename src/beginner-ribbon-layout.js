@@ -8,7 +8,7 @@ export const BEGINNER_SECTIONS = [
   { id: "arrange", title: "Arrange", fold: 4, tools: ["align", "mirror", "pattern", "drop", "lock"] },
   { id: "modify", title: "Modify", fold: 3, tools: ["fillet", "shell", "texture", "facepat"] },
   { id: "check", title: "Check", fold: 2, tools: ["measure", "printsim"] },
-  { id: "workshops", title: "Workshops", fold: 0, tools: ["cosforge", "lathe"] },
+  { id: "workshops", title: "Workshops", fold: 0, tools: ["cosforge", "chipcarve", "lathe"] },
 ];
 
 // Folds sections, lowest `fold` first, until the widths fit `available`, then reopens the

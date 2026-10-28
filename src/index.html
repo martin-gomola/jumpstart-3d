@@ -495,6 +495,8 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .tl-item { flex: none; display: grid; place-items: center; width: 30px; height: 28px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--panel-2); color: var(--ink-2); padding: 0; position: relative; }
 .tl-item:hover { border-color: var(--hover-line); color: var(--accent); background: var(--accent-soft); }
 .tl-item.err { border-color: var(--err-line); color: var(--danger); }
+.sh-more { border-top: 1px solid var(--line); padding-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.sh-more > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .tl-item.pt-on { border-color: #2f66c8; color: #fff; background: #2f66c8; box-shadow: 0 0 0 1px #2f66c8; }
 .pt-feats label.check.on { color: var(--accent); font-weight: 600; }
 .tl-item svg { width: 18px; height: 18px; }
@@ -867,6 +869,18 @@ body.s3d-on { overflow: hidden; }
 .lathe-msg[hidden] { display: none; }
 .lathe-pedal.running { background: linear-gradient(#c8432b, #8f2a19); }
 body.s3d-on .tut-panel { z-index: 96; }
+.carve-tray { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: flex-end; }
+.carve-info { padding: 6px 10px; border-radius: 8px; background: rgba(255,255,255,.9); color: #1b1f24; font: 600 12px var(--f-mono, monospace); box-shadow: 0 1px 4px rgba(0,0,0,.15); max-width: 46vw; }
+.carve-info:empty { display: none; }
+.carve-meter { width: 14px; height: 64px; border-radius: 7px; background: rgba(255,255,255,.85); box-shadow: 0 1px 4px rgba(0,0,0,.15); position: relative; overflow: hidden; }
+.carve-meter i { position: absolute; left: 0; right: 0; bottom: 0; height: 50%; background: linear-gradient(#d9480f, #f59f00); }
+.carve-hand { padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font-weight: 700; touch-action: manipulation; }
+.carve-hand[aria-pressed="true"] { background: #ffe8b3; border-color: #c98a00; }
+.carve .s3d-seg button { padding: 6px 9px; white-space: nowrap; }
+.carve-val { font: 600 12px var(--f-mono, monospace); min-width: 44px; }
+.carve .s3d-grp .check { font-size: 11.5px; margin: 0; }
+.carve-lab { max-width: calc(100% - 24px); }
+@media (max-width: 700px) { .carve-info { max-width: 60vw; font-size: 11px; } }
 .lathe-leave-btns { display: flex; flex-direction: column; gap: 8px; }
 .lathe-leave-btns .btn { justify-content: center; padding: 10px; }
 .lathe-leave-btns .btn.danger { color: #b3261e; border-color: #e3b0ab; }
@@ -1158,7 +1172,7 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
     <svg class="sp-logo" viewBox="0 0 24 24" aria-hidden="true"><path class="l1" d="M3 16.5 12 21l9-4.5L12 12z" fill="#2d63c8"/><path class="l2" d="M3 12 12 16.5 21 12 12 7.5z" fill="#6f98d8"/><path class="l3" d="M3 7.5 12 12l9-4.5L12 3z" fill="#e9eef4"/></svg>
     <h1 class="sp-title">JumpStart <b>3D</b></h1>
     <p class="sp-tag">Design it · Build it · Print it</p>
-    <p class="sp-ver" id="sp-ver">Version 2.7.4</p>
+    <p class="sp-ver" id="sp-ver">Version 2.7.7</p>
     <div class="sp-bar"><i id="loading-bar"></i></div>
     <p class="sp-msg" id="loading-msg">Starting the geometry engine…</p>
   </div>

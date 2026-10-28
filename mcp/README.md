@@ -1129,8 +1129,8 @@ This plan exercises the round cross-section, revolve, patterned cuts, preview, a
 
 ## Native CAD compatibility
 
-The adapted 2.7.4 editor includes Architect, CAM, CosForge and Voxel manual
-workspaces. These do not automatically extend the typed MCP API. Document
+The adapted 2.7.7 editor includes Architect, CAM, CosForge, Voxel and Chip
+Carve manual workspaces. These do not automatically extend the typed MCP API. Document
 reads remain available, but leave Architect or close the other workspaces
 before MCP mutations. This prevents tool-owned drafts and Architect’s native
 transfer on exit from racing a preview/apply transaction.

@@ -4186,12 +4186,16 @@ export function initAdvanced(app) {
   // hollow inside with a closed wall, for one or more bodies). Shared with Beginner.
   function shellCmd(editing = null, opts = {}) {
     let hollowPref = false; try { hollowPref = localStorage.getItem("jumpstart3d.shell.type") === "hollow"; } catch (e) {}
-    const st = { faces: [], th: 2, body: null, bodies: [], dir: "in", chain: false, closed: opts.type ? opts.type === "hollow" : app.mode === "beginner" || hollowPref };
+    let drainPref = null; try { drainPref = JSON.parse(localStorage.getItem("jumpstart3d.shell.drain")); } catch (e) {}
+    const st = { faces: [], th: 2, body: null, bodies: [], dir: "in", chain: false, closed: opts.type ? opts.type === "hollow" : app.mode === "beginner" || hollowPref,
+      method: "auto", detail: 1, drain: drainPref || { on: false, n: 1, d: 3 } };
     if (editing) {
       const b = findBody(store.doc, editing.body);
       const m = b.node.mods.find((x) => x.id === editing.mod);
-      Object.assign(st, { th: m.th, body: b.id, keepFaces: m.faces, dir: m.dir || "in", chain: !!m.chain, closed: !(m.faces || []).length });
+      Object.assign(st, { th: m.th, body: b.id, keepFaces: m.faces, dir: m.dir || "in", chain: !!m.chain, closed: !(m.faces || []).length, method: m.method || "auto", detail: m.detail || 1, drain: m.drain ? { on: true, ...m.drain } : { on: false, n: 1, d: 3 } });
     }
+    // the settings every shell made here shares
+    const extra = () => ({ method: st.method === "auto" ? undefined : st.method, detail: st.method === "field" && st.detail !== 1 ? st.detail : undefined, drain: st.closed && st.drain.on ? { n: st.drain.n, d: st.drain.d } : undefined });
     // Hollow starts with the selected shapes (or the only one there is)
     const usable = (b) => b && !b.hole && !b.locked && !b.hidden;
     const preset = () => {
@@ -4202,8 +4206,9 @@ export function initAdvanced(app) {
     };
     if (st.closed) preset();
     let hover = null;
-    const pickable = (b) => !b.hole && !b.locked && (st.closed ? !editing || b.id === st.body : !st.body || b.id === st.body);
-    const targets = () => (editing ? [st.body] : st.closed ? st.bodies : st.body ? [st.body] : []);
+    // openings can be picked on several shapes at once (each gets its own shell)
+    const pickable = (b) => !b.hole && !b.locked && (!editing || b.id === st.body);
+    const targets = () => (editing ? [st.body] : st.closed ? st.bodies : [...new Set(st.faces.map((f) => f.body))]);
     const def = {
       title: (editing ? "Edit " : "") + "Shell",
       valid: () => st.th > 0 && targets().length > 0 && (st.closed || editing || st.faces.length > 0),
@@ -4214,16 +4219,17 @@ export function initAdvanced(app) {
           if (!b) return;
           const faces = st.closed ? [] : st.faces.length ? st.faces.map((f) => ({ c: f.c })) : st.keepFaces || [];
           const m = b.node.mods.find((x) => x.id === editing.mod);
-          Object.assign(m, { th: st.th, faces, dir: st.dir === "in" ? undefined : st.dir, chain: st.chain && !st.closed ? true : undefined });
+          for (const k of ["method", "detail", "drain"]) delete m[k];
+          Object.assign(m, { th: st.th, faces, dir: st.dir === "in" ? undefined : st.dir, chain: st.chain && !st.closed ? true : undefined }, extra());
           return;
         }
         const seq = nextSeq(doc);
         for (const id of targets()) {
           const b = findBody(doc, id);
           if (!b) continue;
-          const faces = st.closed ? [] : st.faces.map((f) => ({ c: f.c }));
+          const faces = st.closed ? [] : st.faces.filter((f) => f.body === id).map((f) => ({ c: f.c }));
           b.node.mods = b.node.mods || [];
-          b.node.mods.push({ id: uid("f"), seq, t: "shell", th: st.th, faces, dir: st.dir === "in" ? undefined : st.dir, chain: st.chain && !st.closed ? true : undefined });
+          b.node.mods.push({ id: uid("f"), seq, t: "shell", th: st.th, faces, dir: st.dir === "in" ? undefined : st.dir, chain: st.chain && !st.closed ? true : undefined, ...extra() });
         }
       },
       ok() { try { localStorage.setItem("jumpstart3d.shell.type", st.closed ? "hollow" : "open"); } catch (e) {} commit(def, st.closed ? "Hollow" : "Shell"); },
@@ -4239,12 +4245,31 @@ export function initAdvanced(app) {
         if (st.closed) {
           const n = targets().length;
           body.append(pickbox(true, n ? (n === 1 ? el("b", {}, findBody(store.doc, targets()[0])?.name || "1 shape") : el("span", {}, el("b", {}, n), " shapes")) : "Click a shape", n && !editing ? () => { st.bodies = []; refresh(); } : null));
-        } else body.append(pickbox(true, st.faces.length ? el("span", {}, el("b", {}, st.faces.length), ` face${st.faces.length > 1 ? "s" : ""} to remove`) : editing && (st.keepFaces || []).length ? "Keeps the original faces" : "Select faces to remove", st.faces.length ? () => { st.faces = []; if (!editing) st.body = null; refresh(); } : null));
+        } else {
+          const nb = targets().length;
+          body.append(pickbox(true, st.faces.length ? el("span", {}, el("b", {}, st.faces.length), ` face${st.faces.length > 1 ? "s" : ""} to remove` + (nb > 1 ? ` on ${nb} shapes` : "")) : editing && (st.keepFaces || []).length ? "Keeps the original faces" : "Select faces to remove", st.faces.length ? () => { st.faces = []; refresh(); } : null));
+        }
         if (!st.closed) body.append(el("label", { class: "check" }, el("input", { type: "checkbox", id: "sh-chain", checked: st.chain, onchange: (e) => { st.chain = e.target.checked; refresh(false); } }), "Tangent chain (take smoothly joined faces too)"));
         body.append(row(st.closed ? "Wall thickness" : "Thickness", app.numField({ value: st.th, id: "sh-th", min: 0.01, step: 0.5, live: true, onCommit: (v) => { st.th = v; refresh(false); } }), "sh-th"));
         if (st.closed) body.append(row("Quick pick", seg([["1", "1 mm"], ["2", "2 mm"], ["3", "3 mm"], ["5", "5 mm"]], String(st.th), (v) => { st.th = +v; refresh(); }, "sh-thq")));
         body.append(row("Direction", seg([["in", "Inside"], ["out", "Outside"], ["both", "Both"]], st.dir, (v) => { st.dir = v; refresh(); }, "sh-dir")));
         body.append(el("div", { class: "hint", style: { padding: 0 } }, st.dir === "in" ? "The outside stays the same size; the wall grows inward." : st.dir === "out" ? "The inside keeps the body's shape; the wall grows outward." : "The wall is centered on the surface."));
+        // drain holes: let resin or powder out of a hollow print
+        if (st.closed) {
+          body.append(el("label", { class: "check", title: "Holes through the bottom wall, so liquid resin or loose powder can drain out of a hollow print" }, el("input", { type: "checkbox", id: "sh-drain", checked: st.drain.on, onchange: (e) => { st.drain.on = e.target.checked; saveDrain(); refresh(); } }), "Drain holes in the bottom"));
+          if (st.drain.on) {
+            body.append(row("Holes", seg([["1", "1"], ["2", "2"], ["4", "4"]], String(st.drain.n), (v) => { st.drain.n = +v; saveDrain(); refresh(); }, "sh-drain-n")));
+            body.append(row("Hole size", app.numField({ value: st.drain.d, id: "sh-drain-d", min: 0.5, max: 50, step: 0.5, onCommit: (v) => { st.drain.d = v; saveDrain(); refresh(false); } }), "sh-drain-d"));
+          }
+        }
+        // how the wall is made (Auto tries them in turn)
+        const det = el("details", { class: "sh-more", open: st.method !== "auto" || undefined });
+        det.append(el("summary", {}, "Method"),
+          row("Method", el("select", { class: "num", id: "sh-method", style: { width: "auto" }, onchange: (e) => { st.method = e.target.value; refresh(); } },
+            ...[["auto", "Auto (best that works)"], ["exact", "Exact offset"], ["slices", "Slices (lofts, vases)"], ["field", "Any shape (distance field)"]].map(([v, l]) => el("option", { value: v, selected: st.method === v }, l))), "sh-method"),
+          el("div", { class: "hint", style: { padding: 0 } }, st.method === "exact" ? "Offsets every face exactly: the cleanest walls, but complex shapes can fail." : st.method === "slices" ? "Builds the wall from slices across the shape: for lofts and vases with flat openings." : st.method === "field" ? "Works on any shape: holes, branches, curved openings, joined shapes. The new wall surfaces are fine triangles; the rest of the shape stays as it is where possible." : "Tries the exact offset, then slices, then the distance field, and uses the first that works."));
+        if (st.method === "field") det.append(row("Detail", seg([["1", "Normal"], ["2", "Fine"]], String(st.detail), (v) => { st.detail = +v; refresh(); }, "sh-detail")));
+        body.append(det);
       },
       start() { refresh(); },
       handler: {
@@ -4263,11 +4288,10 @@ export function initAdvanced(app) {
             if (!editing) { const i = st.bodies.indexOf(f.body); if (i >= 0) st.bodies.splice(i, 1); else st.bodies.push(f.body); }
             refresh(); return true;
           }
-          st.body = f.body;
-          const i = st.faces.findIndex((x) => x.face === f.face);
+          if (editing) st.body = f.body;
+          const i = st.faces.findIndex((x) => x.face === f.face && x.body === f.body);
           const c = f.info && f.info.c ? f.info.c : f.point.clone().applyMatrix4(f.base.m.clone().invert()).toArray();
-          if (i >= 0) st.faces.splice(i, 1); else st.faces.push({ face: f.face, base: f.base, c });
-          if (!st.faces.length && !editing) st.body = null;
+          if (i >= 0) st.faces.splice(i, 1); else st.faces.push({ face: f.face, base: f.base, c, body: f.body });
           refresh();
           return true;
         },
@@ -4275,6 +4299,7 @@ export function initAdvanced(app) {
       cleanup() { scene.setHovered(null); scene.setSelected(app.sel); },
       sceneSel: () => (st.closed ? targets() : app.sel),
     };
+    function saveDrain() { try { localStorage.setItem("jumpstart3d.shell.drain", JSON.stringify(st.drain)); } catch (e) {} }
     function draw() {
       clearOv();
       if (!st.closed) {
@@ -5722,6 +5747,10 @@ export function initAdvanced(app) {
       group("Voxels", "", [
         { id: "sim-voxel", label: "Voxel Studio", title: "Turn the selected objects (or all) into cubes you can paint face by face, then export STL or 3MF or add them to the design (your design is not changed until you add it)", icon: "voxel", fn: () => app.voxel.open() },
       ]);
+      group("Woodcraft", "", [
+        { id: "sim-chipcarve", label: "Chip Carving", title: "Chip carve a board, plate, log or a shape from your design with chip knives, a stab knife, pencil and sanding block. Pen pressure sets the depth. Add it to the design or export STL, 3MF or OBJ.", icon: "chipcarve", fn: () => app.carve.open() },
+        { id: "sim-lathe", label: "Lathe", title: "Turn a body or a wood blank on a virtual lathe", icon: "lathe", fn: () => app.lathe.open() },
+      ]);
       group("Cosplay", "", [
         { id: "sim-cosforge", label: "CosForge", title: "Design cosplay costumes: a mannequin from your measurements, themed parts to shape, sculpt and fit, then cut into printable pieces with joints (opens in its own window)", icon: "cosforge", fn: () => app.cosforge.open() },
       ]);
@@ -5739,6 +5768,7 @@ export function initAdvanced(app) {
       { id: "ad-sketch", label: "Sketch", title: "Create sketch (S)", icon: "sketch", fn: () => createSketchCmd() },
       { id: "ad-extrude", label: "Extrude", title: "Extrude (E)", icon: "extrude", fn: () => extrudeCmd("extrude") },
       { id: "ad-sketch3d", label: "3D Sketch", title: "Draw lines in 3D on a body, a virtual sphere or cube, or in the air, with a split camera view. Works with touch, pen, mouse and trackpad.", icon: "spline", fn: () => app.sketch3d.open() },
+      { id: "ad-chipcarve", label: "Chip Carving", title: "Chip carve a board, plate, log or a shape from your design with knives; pen pressure sets the depth. The result is a mesh body.", icon: "chipcarve", fn: () => app.carve.open() },
       { id: "ad-lathe", label: "Lathe", title: "Turn a body or a wood blank on a virtual lathe with chisels (Space is the pedal), then hollow it out. The result is a mesh body.", icon: "lathe", fn: () => app.lathe.open() },
       { id: "ad-hole", label: "Hole", title: "Hole (H): simple, counterbore, countersink or tapped, with standard screw sizes", icon: "hole", fn: () => holeCmd() },
       { id: "ad-features", label: "Advanced Create", title: "Revolve, sweep, pipe, coil, loft, mirror, hole and thread", icon: "features", dropdown: [

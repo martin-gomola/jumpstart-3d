@@ -35,6 +35,7 @@ const TOOLS = {
   measure: { id: "bb-measure", icon: "measure", label: "Measure", title: "Measure sizes, distances and angles (I)" },
   printsim: { id: "bb-printsim", icon: "printsim", label: "3D Print Sim", title: "Simulate printing it: supports, layers, strength, print time" },
   cosforge: { id: "bb-cosforge", icon: "cosforge", label: "CosForge", title: "Design a cosplay costume on a body built from your measurements, then cut it into printable pieces (opens in its own window)" },
+  chipcarve: { id: "bb-chipcarve", icon: "chipcarve", label: "Chip Carve", title: "Chip carve a board or a shape with knives, like real wood carving (pen pressure sets the depth)" },
   lathe: { id: "bb-lathe", icon: "lathe", label: "Lathe", title: "Turn a shape or a wood blank on a virtual lathe, with chisels, then hollow it out" },
 };
 const CARET = '<svg viewBox="0 0 10 10" width="9" height="9"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';

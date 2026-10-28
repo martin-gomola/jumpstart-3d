@@ -28,8 +28,9 @@ the host proxy described in [the MCP guide](mcp/README.md).
 
 ## Editor version
 
-The editor includes the adapted 2.7.4 source: Architect, CAM Studio, CosForge,
-Voxel Studio, face patterns, sketch styles, and expanded beginner tools. Existing
+The editor includes the adapted 2.7.7 source: Architect, CAM Studio, CosForge,
+Voxel Studio, Chip Carving, Shell for any shape, face patterns, sketch styles,
+and expanded beginner tools. Existing
 Gridfinity generators and local MCP contracts remain available. Manual tool
 features do not automatically become MCP operations. The source identity and
 local adaptations are recorded in [SOURCES.md](SOURCES.md).

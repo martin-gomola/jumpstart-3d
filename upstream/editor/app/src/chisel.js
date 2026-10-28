@@ -77,10 +77,11 @@ export function initChisel(app) {
       levelBar = document.createElement("div");
       levelBar.className = "chisel-level"; levelBar.id = "chisel-level";
       levelBar.setAttribute("role", "group"); levelBar.setAttribute("aria-label", "Chisel level");
-      levelBar.innerHTML = '<button data-level="easy" title="Easy: a few big, simple tools (great for kids and first-timers)">Easy</button><button data-level="pro" title="Pro: every brush, cut and setting">Pro</button><button data-lathe="1" id="chisel-lathe" class="chisel-lathe-btn" title="Turn a body or a wood blank on a virtual lathe">Lathe</button>';
+      levelBar.innerHTML = '<button data-level="easy" title="Easy: a few big, simple tools (great for kids and first-timers)">Easy</button><button data-level="pro" title="Pro: every brush, cut and setting">Pro</button><button data-lathe="1" id="chisel-lathe" class="chisel-lathe-btn" title="Turn a body or a wood blank on a virtual lathe">Lathe</button><button data-carve="1" id="chisel-carve" class="chisel-lathe-btn" title="Chip carve a board or a shape with knives">Chip carve</button>';
       levelBar.addEventListener("click", async (e) => {
         const b = e.target.closest("button"); if (!b) return;
         if (b.dataset.lathe) { await sync(); app.lathe.open(); return; } // your sculpting is saved first
+        if (b.dataset.carve) { await sync(); app.carve.open(); return; }
         setLevel(b.dataset.level);
       });
       document.body.append(levelBar);

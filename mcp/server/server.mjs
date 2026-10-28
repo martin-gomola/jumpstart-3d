@@ -3,8 +3,10 @@ import { createAgentTrace } from "./agent-trace.mjs";
 
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
+import { createGzip } from "node:zlib";
+import { pipeline } from "node:stream/promises";
 import { gridfinityOperationSchema, pocketOperationSchema, drawerLayoutOperationSchema } from "../shared/gridfinity-contracts.js";
 import { basename, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -577,6 +579,33 @@ const MIME = {
   ".json": "application/json; charset=utf-8", ".wasm": "application/wasm", ".png": "image/png", ".svg": "image/svg+xml",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".woff2": "font/woff2", ".woff": "font/woff", ".txt": "text/plain; charset=utf-8",
 };
+// Only gzip text-ish payloads; .wasm is already gzip-compressed internally and
+// images/fonts gain almost nothing from transfer-encoding gzip.
+const GZIP_MIME = new Set([
+  "text/html; charset=utf-8", "text/javascript; charset=utf-8", "text/css; charset=utf-8",
+  "application/json; charset=utf-8", "image/svg+xml", "text/plain; charset=utf-8",
+]);
+
+function clientAcceptsGzip(req) {
+  const header = req.headers["accept-encoding"];
+  if (!header) return false;
+  return header.split(",").some((part) => part.trim().toLowerCase().split(";")[0] === "gzip");
+}
+
+function matchesIfNoneMatch(req, etag) {
+  const header = req.headers["if-none-match"];
+  if (!header) return false;
+  return header.split(",").some((part) => part.trim() === etag);
+}
+
+function matchesIfModifiedSince(req, mtimeMs) {
+  const header = req.headers["if-modified-since"];
+  if (!header) return false;
+  const since = Date.parse(header);
+  if (!Number.isFinite(since)) return false;
+  // HTTP-date has one-second resolution; truncate mtime before comparing.
+  return Math.floor(mtimeMs / 1000) * 1000 <= since;
+}
 
 async function serveStatic(req, res, pathname) {
   if (!allowedLocalRequest(req, true)) {
@@ -590,27 +619,81 @@ async function serveStatic(req, res, pathname) {
   const relative = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
   const file = resolve(DOCS, relative);
   if (file !== DOCS && !file.startsWith(DOCS + sep)) return json(res, 404, { error: "Not found" });
-  try { await access(file); }
+  let fileStat;
+  try { fileStat = await stat(file); }
   catch {
     res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
     return res.end("Build the local JumpStart app first with npm run build.\n");
   }
   const contentType = MIME[extname(file).toLowerCase()] || "application/octet-stream";
-  let shell;
-  if (file === join(DOCS, "index.html") && req.method === "GET") {
+  const isShell = file === join(DOCS, "index.html");
+  let shellBuffer;
+  let etag;
+  let lastModified = fileStat.mtime.toUTCString();
+  if (isShell) {
+    // The bridge meta tag mutates the bytes we send, so the ETag must track
+    // the final shell payload rather than the file on disk.
     try {
-      shell = await readFile(file, "utf8");
+      let shell = await readFile(file, "utf8");
       const bridgeMeta = '<meta name="jumpstart-mcp-bridge" content="1">';
       shell = shell.includes("</head>")
         ? shell.replace("</head>", `${bridgeMeta}\n</head>`)
         : shell.replace("<title>", `${bridgeMeta}\n<title>`);
+      shellBuffer = Buffer.from(shell, "utf8");
     }
     catch { return json(res, 503, { error: "The local app is rebuilding; retry after the build finishes" }); }
+    etag = `W/"${shellBuffer.length.toString(16)}-${createHash("sha1").update(shellBuffer).digest("hex").slice(0, 16)}"`;
+  } else {
+    etag = `W/"${fileStat.size.toString(16)}-${Math.floor(fileStat.mtimeMs).toString(16)}"`;
   }
-  res.writeHead(200, { "Content-Type": contentType, "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" });
-  if (req.method === "HEAD") return res.end();
-  if (shell !== undefined) return res.end(shell);
-  createReadStream(file).on("error", () => { if (!res.headersSent) res.writeHead(404); res.end(); }).pipe(res);
+
+  const headers = {
+    "Content-Type": contentType,
+    "Cache-Control": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+    ETag: etag,
+    "Last-Modified": lastModified,
+    Vary: "Accept-Encoding",
+  };
+
+  if (matchesIfNoneMatch(req, etag) || (!isShell && matchesIfModifiedSince(req, fileStat.mtimeMs))) {
+    res.writeHead(304, headers);
+    return res.end();
+  }
+
+  const gzip = clientAcceptsGzip(req) && GZIP_MIME.has(contentType);
+  if (gzip) headers["Content-Encoding"] = "gzip";
+
+  if (req.method === "HEAD") {
+    if (!gzip) headers["Content-Length"] = String(isShell ? shellBuffer.length : fileStat.size);
+    res.writeHead(200, headers);
+    return res.end();
+  }
+
+  if (shellBuffer !== undefined) {
+    if (gzip) {
+      const encoder = createGzip();
+      res.writeHead(200, headers);
+      encoder.pipe(res);
+      encoder.end(shellBuffer);
+    } else {
+      headers["Content-Length"] = String(shellBuffer.length);
+      res.writeHead(200, headers);
+      res.end(shellBuffer);
+    }
+    return;
+  }
+
+  if (!gzip) headers["Content-Length"] = String(fileStat.size);
+  res.writeHead(200, headers);
+  const stream = createReadStream(file);
+  stream.on("error", () => { if (!res.headersSent) res.writeHead(404); res.end(); });
+  if (gzip) {
+    try { await pipeline(stream, createGzip(), res); }
+    catch { /* client disconnected; nothing more to do */ }
+  } else {
+    stream.pipe(res);
+  }
 }
 
 const server = createServer((req, res) => {

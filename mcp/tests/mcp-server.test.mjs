@@ -161,7 +161,33 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
       headers: { "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" },
     });
     assert.equal(staticPage.status, 200);
+    const shellEtag = staticPage.headers.get("etag");
+    assert.ok(shellEtag && shellEtag.startsWith("W/"), `shell should expose a weak ETag, got ${shellEtag}`);
+    assert.equal(staticPage.headers.get("vary"), "Accept-Encoding");
     assert.match(await staticPage.text(), /<meta name="jumpstart-mcp-bridge" content="1">/);
+    const staticRevalidate = await fetch(`http://127.0.0.1:${port}/?mcp=1`, {
+      headers: { "If-None-Match": shellEtag, "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" },
+    });
+    assert.equal(staticRevalidate.status, 304);
+    assert.equal(staticRevalidate.headers.get("etag"), shellEtag);
+    const appJs = await fetch(`http://127.0.0.1:${port}/app.js`, {
+      headers: { "Accept-Encoding": "gzip", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "script" },
+    });
+    assert.equal(appJs.status, 200);
+    assert.equal(appJs.headers.get("content-encoding"), "gzip");
+    const appEtag = appJs.headers.get("etag");
+    assert.ok(appEtag && appEtag.startsWith("W/"));
+    await appJs.arrayBuffer();
+    const appJsRevalidate = await fetch(`http://127.0.0.1:${port}/app.js`, {
+      headers: { "If-None-Match": appEtag, "Accept-Encoding": "gzip", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "script" },
+    });
+    assert.equal(appJsRevalidate.status, 304);
+    const wasm = await fetch(`http://127.0.0.1:${port}/occt-gz.wasm`, {
+      method: "HEAD", headers: { "Accept-Encoding": "gzip", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "empty" },
+    });
+    assert.equal(wasm.status, 200);
+    assert.equal(wasm.headers.get("content-encoding"), null, "wasm already carries gzip bytes internally");
+    assert.ok(wasm.headers.get("content-length"), "non-gzipped responses expose Content-Length");
     const editors = await send({
       jsonrpc: "2.0", id: 3, method: "tools/call",
       params: { name: "jumpstart_list_editors", arguments: {} },

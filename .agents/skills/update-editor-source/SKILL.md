@@ -16,7 +16,7 @@ It is the merge base. Never edit it by hand; only the `snapshot` command replace
 Script (run from the repo root):
 
 ```bash
-S=.cursor/skills/update-editor-source/scripts/editor-upstream.mjs
+S=.agents/skills/update-editor-source/scripts/editor-upstream.mjs
 node $S status   sources/JumpStart-3D-vX.Y.Z-full-source.zip   # read-only report
 node $S merge    sources/JumpStart-3D-vX.Y.Z-full-source.zip   # copy + 3-way merge into src/, tools/
 node $S snapshot sources/JumpStart-3D-vX.Y.Z-full-source.zip   # make it the new base + manifest

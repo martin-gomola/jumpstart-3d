@@ -38,7 +38,7 @@ are reviewed as source material; their branches are not merged automatically.
 The author now ships versions as full-source zip archives. `upstream/editor/`
 holds the untouched archive that `src/` and `tools/` are based on and is the
 merge base for the next one. Follow the `update-editor-source` agent skill
-(`.cursor/skills/update-editor-source/`) for the report, three-way merge and
+(`.agents/skills/update-editor-source/`) for the report, three-way merge and
 snapshot steps.
 
 For an editor update, compare the author's `app/src/` files

@@ -29,8 +29,10 @@ update policy.
 - Review source changes as file-level patches. Do not merge either repository
   into this repository as a routine update.
 - Author releases arrive as zip archives. Update the editor core with the
-  `update-editor-source` skill; `upstream/editor/` is its merge base and is
-  only replaced by the skill's `snapshot` step.
+  `.agents/skills/update-editor-source` skill; `upstream/editor/` is its merge
+  base and is only replaced by the skill's `snapshot` step.
+- Developer skills for working on this repository live in `.agents/skills/`.
+  The `mcp/plugin/` skills ship to users and cover 3D modeling with the app.
 - Rebuild generated output with `npm run build`. Do not edit `docs/app.js` by
   hand.
 - Keep product documentation focused on standalone installation and operation.

@@ -642,7 +642,7 @@ const SCENES = {
   ...S, tile: S.tile(C.red), tileRound: S.tile(C.gold, true), hole: S.hole(true), holeBox: S.hole(false),
 };
 
-const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const ATTR = { pts: "points", fill: "fill", stroke: "stroke", sw: "stroke-width", op: "opacity", dash: "stroke-dasharray", w: "width", h: "height" };
 const fmtv = (k, v) => (k === "pts" ? v.map((p) => p.join(",")).join(" ") : String(v));
 

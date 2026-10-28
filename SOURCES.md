@@ -155,6 +155,10 @@ checks before accepting the change.
   mutations require closing it, as for CAM, Voxel and CosForge.
 - Still excluded: the author-hosted update checker and the prebuilt
   `camworker.bundle.txt`. Notices and `third_party/` are unchanged.
+- Local security fixes to keep through later merges: `parseSVG` in
+  `importers.js` strips scripts, event-handler attributes, embedded content
+  and non-fragment links before an imported SVG enters the page, and `esc` in
+  `tutorial_anims.js` also escapes quotes.
 
 
 ## Flush joins on open Gridfinity edges

@@ -69,6 +69,12 @@ export function parseSVG(text) {
   const doc = new DOMParser().parseFromString(text, "image/svg+xml");
   const root = doc.documentElement;
   if (!root || root.nodeName.toLowerCase() !== "svg") throw new Error("That file doesn't look like an SVG drawing.");
+  // The file is untrusted and is about to enter the live page: drop anything that can run or load.
+  for (const node of root.querySelectorAll("script, foreignObject, image, iframe, embed, object, audio, video")) node.remove();
+  for (const node of [root, ...root.querySelectorAll("*")]) for (const attr of [...node.attributes]) {
+    const name = attr.name.toLowerCase();
+    if (name.startsWith("on") || ((name === "href" || name.endsWith(":href")) && !attr.value.trim().startsWith("#"))) node.removeAttribute(attr.name);
+  }
   // put it on the page (out of sight) so the browser works out every transform
   const host = document.createElement("div");
   host.style.cssText = "position:absolute;left:-10000px;top:0;width:10px;height:10px;overflow:hidden;visibility:hidden";

@@ -1,10 +1,11 @@
 # FDM clearance table
 
-Tuned for Bambu Lab A1 Mini with a **0.4 mm nozzle** and **0.20 mm layer**
-height on PLA. Values are the **total** gap between two walls (not per side).
-Divide by two for the per-side offset in CAD. These are engineering
-conventions, not quotes from the joinery books — calibrate on a test matrix
-if moving to PETG or ABS.
+Tuned for Bambu Lab X2D with the stock **0.4 mm nozzle** and **0.20 mm
+layer** height on PLA. Values are the **total** gap between two walls (not
+per side). Divide by two for the per-side offset in CAD. These are
+engineering conventions, not quotes from the joinery books — calibrate on a
+test matrix if moving to PETG, ABS, 0.6 mm or 0.8 mm nozzles. For 0.2 mm
+nozzle work, halve both the gap and the minimum geometry below.
 
 | Fit | Use for | Total gap (mm) | Per side (mm) | Notes |
 | --- | --- | --- | --- | --- |

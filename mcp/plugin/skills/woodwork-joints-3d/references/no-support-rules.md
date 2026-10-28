@@ -1,8 +1,8 @@
 # No-support adaptations
 
 The CAD agent applies these rules automatically before issuing
-`jumpstart_preview_model`. Rules are ordered so the first applicable one
-wins.
+`jumpstart_preview_model` on a Bambu Lab X2D (0.4 mm nozzle, 0.20 mm layer,
+PLA). Rules are ordered so the first applicable one wins.
 
 1. **Internal 90° ceiling of a blind mortise:** replace the flat ceiling with
    an interior 45° chamfer at the back wall, or convert the mortise to a
@@ -27,9 +27,10 @@ wins.
 8. **Tenon orientation:** the tenon axis must lie parallel to the print bed
    (XY). If the planned orientation puts the axis in Z, rotate the whole
    part, or split it and add a lap/key to each half.
-9. **Oversized part (> 170 mm in any axis):** split with a **Kanawa tsugi
-   with folding wedges** in the lowest-stress zone (farthest from a bending
-   maximum). Orient both halves to print flat.
+9. **Oversized part (> 230 mm in any axis of the safe envelope):** read
+   [`splitting-strategies.md`](splitting-strategies.md). The default is to
+   split in the lowest-stress zone (farthest from a bending maximum) and to
+   choose the split geometry from the load vector, not a fixed joint.
 10. **Wedges print flat:** always on their side, long axis in X or Y, layers
     parallel to the driving direction. Default taper **1:10 (5.71°)**; for
     opposed folding-wedge pairs (Kanawa) use **1:12 (4.76°)** each.

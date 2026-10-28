@@ -1,6 +1,6 @@
 # Joint catalog
 
-FDM rating 1–5 rates printability on a Bambu Lab A1 Mini (0.4 mm nozzle,
+FDM rating 1–5 rates printability on a Bambu Lab X2D (0.4 mm nozzle,
 0.20 mm layer, PLA): can the joint print flat without supports and does its
 critical load path lie in the XY plane? `T` is the material thickness.
 

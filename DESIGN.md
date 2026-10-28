@@ -185,9 +185,7 @@ terrain and mesh colour choices as object data; interface accents follow the
 host theme. Manual tool lifecycles own their drafts. Leave Architect or close
 CAM, Voxel and CosForge before applying MCP mutations.
 
-The React boundary and staged rollout are recorded in
-[REACT-WORKSPACE-PLAN.md](REACT-WORKSPACE-PLAN.md). Keep the original document,
-workers and native CAD controllers while the maker workspace is ported.
+Keep the original document, workers and native CAD controllers while the maker workspace is ported.
 
 
 ## Drawer orientation

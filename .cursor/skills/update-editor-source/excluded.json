@@ -1,0 +1,3 @@
+{
+  "app/src/camworker.bundle.txt": "our build compiles src/camworker.js; the archive's prebuilt worker text is not shipped"
+}

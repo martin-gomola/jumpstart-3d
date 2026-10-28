@@ -9,3 +9,5 @@ node_modules/
 /imports/
 /test-results/
 /playwright-report/
+/sources
+/documentation/

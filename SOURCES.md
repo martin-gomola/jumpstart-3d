@@ -35,10 +35,16 @@ are reviewed as source material; their branches are not merged automatically.
 
 ## Update process
 
-For an editor update, fetch the author source and compare its `app/src/` files
+The author now ships versions as full-source zip archives. `upstream/editor/`
+holds the untouched archive that `src/` and `tools/` are based on and is the
+merge base for the next one. Follow the `update-editor-source` agent skill
+(`.cursor/skills/update-editor-source/`) for the report, three-way merge and
+snapshot steps.
+
+For an editor update, compare the author's `app/src/` files
 with this repo's `src/`. Port core changes: kernel, sketcher, regions, document
 store, workers and geometry fixes. Interface changes are reference material;
-the product-owned interface is maintained here (see `REACT-WORKSPACE-PLAN.md`).
+the product-owned interface is maintained here.
 Review the changes, port the selected files, then
 reapply and check the integration points listed in `mcp/README.md`. Keep
 `third_party/` pinned and update its notices when dependencies change.

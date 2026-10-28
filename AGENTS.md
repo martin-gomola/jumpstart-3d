@@ -23,10 +23,14 @@ update policy.
 ## Source updates
 
 - Treat `classyapps2026/jumpstart3d` as the source reference for editor core
-  code. Its interface changes are reference only; see `REACT-WORKSPACE-PLAN.md`.
+  code. Its interface changes are reference only; see
+  `documentation/REACT-WORKSPACE-PLAN.md` (local, gitignored).
 - Treat `MaxSikorski/jumpstart-3d` as a feature and implementation reference.
 - Review source changes as file-level patches. Do not merge either repository
   into this repository as a routine update.
+- Author releases arrive as zip archives. Update the editor core with the
+  `update-editor-source` skill; `upstream/editor/` is its merge base and is
+  only replaced by the skill's `snapshot` step.
 - Rebuild generated output with `npm run build`. Do not edit `docs/app.js` by
   hand.
 - Keep product documentation focused on standalone installation and operation.

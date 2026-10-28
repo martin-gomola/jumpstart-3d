@@ -53,7 +53,8 @@ tab open. The AI button in the top bar shows whether an agent is connected.
 | Cursor | `make cursor-install` |
 | Antigravity CLI (Gemini) | Manual setup in the [MCP guide](mcp/README.md#connect-claude-code-or-antigravity-cli) |
 
-Each command registers the MCP server and installs the `3d-model` skill.
+Each command registers the MCP server and installs the `3d-model` skill with its
+`step-parts` and `woodwork-joints-3d` companions.
 
 The server only listens on the server's loopback. To use it from a laptop, open
 an SSH tunnel and keep local port 3210, because the server only accepts

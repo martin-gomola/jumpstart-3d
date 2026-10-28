@@ -21,6 +21,10 @@ test("cursor install merges the MCP server, copies the skill and is repeatable",
   assert.match(await readFile(join(skill, "SKILL.md"), "utf8"), /^---\nname: 3d-model/);
   assert.ok((await readdir(join(skill, "references"))).length > 0);
   for (const omitted of ["tests", "agents"]) await assert.rejects(access(join(skill, omitted)));
+  for (const name of ["step-parts", "woodwork-joints-3d"]) {
+    assert.match(await readFile(join(dir, ".cursor/skills", name, "SKILL.md"), "utf8"), new RegExp(`^---\\nname: ${name}\\n`));
+    await access(join(dir, ".cursor/skills", name, ".jumpstart-3d"));
+  }
   assert.equal((await installCursor({ home: dir })).registered, false);
 });
 
@@ -38,6 +42,12 @@ test("installers refuse custom registrations and unmanaged skills without changi
   const calls = [];
   await assert.rejects(installClaude({ home: other, run: (args) => calls.push(args) }), /not installed by JumpStart/);
   assert.deepEqual(calls, []);
+
+  const companion = await home();
+  await mkdir(join(companion, ".cursor/skills/woodwork-joints-3d"), { recursive: true });
+  await assert.rejects(installCursor({ home: companion }), /woodwork-joints-3d exists and was not installed by JumpStart/);
+  await assert.rejects(access(join(companion, ".cursor/skills/3d-model")));
+  await assert.rejects(access(join(companion, ".cursor/mcp.json")));
 });
 
 test("claude install registers through the CLI once and keeps a matching registration", async () => {

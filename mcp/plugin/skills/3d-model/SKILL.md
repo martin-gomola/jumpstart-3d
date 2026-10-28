@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.15.0"
+  version: "1.16.0"
 ---
 
 # Model a part in JumpStart
@@ -30,6 +30,7 @@ copy the entire tool catalog into working notes.
 | Clearances, mating parts, pair checks, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
 | Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
+| Glue- and screw-free joints or splitting oversized parts; a named purchased part (bearing, motor, board) to model around | Companion skills `woodwork-joints-3d`; `step-parts` (downloads the STEP into managed imports) |
 
 ## Inspect
 
@@ -93,7 +94,5 @@ Never bypass the MCP transport through raw HTTP, arbitrary JavaScript, or UI cli
 An imported STL remains a mesh. A successful CAD build or mesh check does not
 prove installation fit, structural strength, electrical suitability, or printability.
 
-[Sources](sources.yaml) and [grounding](grounding.yaml) record provenance. Trigger
-fixtures and behavior cases in `tests/` are specifications, not evidence that an
-agent passed them; runtime reasoning evals remain unrun. They are excluded from
-installation. [Codex metadata](agents/openai.yaml) declares the required MCP.
+[Sources](sources.yaml) and [grounding](grounding.yaml) record provenance. Trigger fixtures and behavior cases in `tests/` are specifications,
+not evidence that an agent passed them; runtime reasoning evals remain unrun. They are excluded from installation. [Codex metadata](agents/openai.yaml) declares the required MCP.

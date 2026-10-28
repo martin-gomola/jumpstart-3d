@@ -47,7 +47,7 @@ export function commandRunner(cli) {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const result = await installPlugin({ cli: process.argv[2] || 'codex' });
-    console.log(`Installed ${result.id} (${result.version}) with MCP and the 3d-model skill.`);
+    console.log(`Installed ${result.id} (${result.version}) with MCP and the bundled skills.`);
     console.log('Run make up and keep http://localhost:3210/?mcp=1 open. Restart Codex or start a new chat to load the plugin.');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

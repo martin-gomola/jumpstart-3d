@@ -22,6 +22,19 @@ async function files(directory, prefix = "") {
   return result.sort();
 }
 
+// A shipped skill is a directory under mcp/plugin/skills with its own SKILL.md.
+export async function skillNames(root = ROOT) {
+  const directory = join(root, "mcp/plugin/skills");
+  const names = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    try { await lstat(join(directory, entry.name, "SKILL.md")); }
+    catch { throw new Error(`Skill directory ${entry.name} has no SKILL.md`); }
+    names.push(entry.name);
+  }
+  return names.sort();
+}
+
 export async function syncPluginRuntime(root = ROOT) {
   const source = join(root, "mcp/server/stdio-proxy.mjs"), destination = join(root, "mcp/plugin", PROXY);
   await mkdir(join(destination, ".."), { recursive: true });
@@ -39,8 +52,9 @@ export async function buildPlugin({ root = ROOT, output, nodePath } = {}) {
   const manifest = JSON.parse(await readFile(join(source, MANIFEST), "utf8"));
   if (manifest.name !== PLUGIN || !/^\d+\.\d+\.\d+$/.test(manifest.version)) throw new Error("Plugin identity/version is invalid");
   const digest = createHash("sha256");
+  const skills = await skillNames(root);
   for (const path of list) {
-    if (path !== MANIFEST && path !== ".mcp.json" && path !== PROXY && !path.startsWith("skills/3d-model/")) throw new Error(`Unexpected plugin file: ${path}`);
+    if (path !== MANIFEST && path !== ".mcp.json" && path !== PROXY && !skills.some((name) => path.startsWith(`skills/${name}/`))) throw new Error(`Unexpected plugin file: ${path}`);
     digest.update(path).update(await readFile(join(source, path)));
   }
   digest.update(nodePath || "portable-node");

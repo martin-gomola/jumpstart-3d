@@ -285,10 +285,11 @@ Docker rebuild does not terminate its stdio connection. Older custom registratio
 including `docker exec`, require explicit migration before installing.
 
 For Claude Code, run `make claude-install`; for Cursor, run `make cursor-install`.
-Each registers the same host proxy at user level and copies the 3d-model skill
-into `~/.claude/skills/3d-model` or `~/.cursor/skills/3d-model`. Rerun the
-target after pulling to refresh the skill. A custom `jumpstart` server entry or
-a `3d-model` skill that this installer did not create stops the install without
+Each registers the same host proxy at user level and copies every skill in
+`mcp/plugin/skills/` (`3d-model`, `step-parts`, and `woodwork-joints-3d`) into
+`~/.claude/skills/` or `~/.cursor/skills/`. Rerun the target after pulling to
+refresh the skills. A custom `jumpstart` server entry or a skill directory with
+one of those names that this installer did not create stops the install without
 changes.
 
 For clients that use TOML, run `make mcp-config` to print a host-proxy entry.
@@ -1263,9 +1264,11 @@ Run `npm run benchmark:spacer` against a separate blank editor. Set
 ## Codex plugin
 
 `make codex-install` installs the `jumpstart-3d` plugin from a generated local
-marketplace. It bundles the host MCP proxy and the
-[3d-model skill](plugin/skills/3d-model/SKILL.md). Modeling decisions and worked
-examples belong in the skill, rather than the root README.
+marketplace. It bundles the host MCP proxy, the
+[3d-model skill](plugin/skills/3d-model/SKILL.md), and its companions
+[step-parts](plugin/skills/step-parts/SKILL.md) and
+[woodwork-joints-3d](plugin/skills/woodwork-joints-3d/SKILL.md). Modeling
+decisions and worked examples belong in the skills, rather than the root README.
 
 Requirements: host Node.js 22 or newer and a Codex CLI supporting `codex plugin`.
 Start the app separately with `make up` and keep the editor tab open. Restart

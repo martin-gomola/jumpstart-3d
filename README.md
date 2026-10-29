@@ -83,8 +83,9 @@ laptop and run the agent there.
 | Area | What we added |
 | --- | --- |
 | AI modeling | Local MCP server (loopback only) with typed plans: preview, inspect, apply with revision checks, no duplicate applies, undo. |
-| Agent skill | `3d-model` skill in `mcp/plugin/` that teaches the agent how to model, check fit and recover from failures. |
+| Agent skills | `3d-model` in `mcp/plugin/` teaches the agent how to model, check fit and recover from failures. It looks up published product dimensions, builds models from dimensioned drawings, and checks downloaded reference models against the published sizes. `step-parts` fetches STEP files for real screws, bearings, motors and boards from step.parts, `woodwork-joints-3d` designs printable wood joinery, and `bambu-handoff` opens exports in Bambu Studio. |
 | Inspection | Geometry reports, preview images, sections, measurements, solid pair distance and overlap, acceptance requirements. |
+| Exports and drawings | STL, STEP and 3MF of the printable bodies. Dimensioned SVG or PDF drawings with front, top, right and iso views, hidden lines, diameter callouts and a title block on A4 or A3. |
 | Gridfinity | Bins, inserts with measured pockets, baseplates with optional magnet pockets, a drawer layout planner with corner spacers and clips, open-sided bins with flush joins, printer-fit checks. |
 | Parts tools | Fasteners, hole patterns, gears, name plates, knurled knobs and springs. |
 | Model settings | Named parameters, so saved models can be revised later. |

@@ -777,7 +777,7 @@ export class ViewCube {
     g.fillStyle = hot ? "#cfe0f7" : "#f4f6f8";
     g.fillRect(0, 0, 128, 128);
     g.fillStyle = hot ? "#1f4fa8" : "#4a5562";
-    g.font = "600 25px 'Barlow Condensed', 'Arial Narrow', sans-serif";
+    g.font = "600 25px 'Avenir Next Condensed', 'Bahnschrift SemiCondensed', 'Bahnschrift', 'Roboto Condensed', 'Arial Narrow', sans-serif"; // jumpstart-3d: system fonts
     g.textAlign = "center";
     g.textBaseline = "middle";
     g.fillText(label, 64, 66);

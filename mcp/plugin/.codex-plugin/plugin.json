@@ -9,7 +9,7 @@
     "shortDescription": "Design and revise 3D models in the local editor.",
     "developerName": "JumpStart MCP contributors",
     "category": "Productivity",
-    "websiteURL": "https://github.com/martin-gomola/jumpstart-3d",
+    "websiteURL": "https://github.com/martin-gomola/jumpstart-3d-studio",
     "capabilities": ["Interactive", "Read", "Write"],
     "defaultPrompt": ["Create a 3D model", "Revise the current model", "Inspect a model before export"]
   }

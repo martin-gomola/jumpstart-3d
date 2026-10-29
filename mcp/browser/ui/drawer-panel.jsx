@@ -72,12 +72,12 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
     <div className="drawer-measure-fields">
       <div className="ai-template-fields">
         {dimension("width", "Inside width (mm)", widthRef)}{dimension("depth", "Inside depth (mm)")}{dimension("height", "Usable height (mm)")}
-        <button id="drawer-swap-dimensions" type="button" className="drawer-swap-dimensions ai-with-pictogram" disabled={swapDisabled}
-          title="Swap width and depth, rotating the drawer and its bins 90° clockwise. Usable height stays the same." onClick={() => { if (!gesture) planner.swap(); }}>
-          <Labelled icon="rotate">Swap width &amp; depth</Labelled>
-        </button>
       </div>
       <TextField id="drawer-name" label="Drawer name" value={draft.name} disabled={busy} onCommit={planner.setName} />
+      <button id="drawer-swap-dimensions" type="button" className="drawer-swap-dimensions ai-with-pictogram" disabled={swapDisabled}
+        title="Swap width and depth, rotating the drawer and its bins 90° clockwise. Usable height stays the same." onClick={() => { if (!gesture) planner.swap(); }}>
+        <Labelled icon="rotate">Swap width &amp; depth</Labelled>
+      </button>
     </div>
   </details>;
   const saved = <section key="saved" className="drawer-saved" hidden={!state.savedLayouts.length}>
@@ -167,7 +167,7 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
     } else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); planner.select(entry.id, true); }
   };
 
-  return <div ref={rootRef} className="ai-drawer-mode" hidden={hidden} aria-busy={String(busy)} onKeyDown={keydown}>
+  return <div ref={rootRef} className="ai-drawer-mode" data-empty={String(!ready)} hidden={hidden} aria-busy={String(busy)} onKeyDown={keydown}>
     <div className="ai-template-settings">
       <div ref={settingsRef} className="ai-controls drawer-settings">
         <div className="drawer-view-toolbar">
@@ -185,11 +185,11 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
         </button>
       </div>
     </div>
-    <div className="ai-template-review drawer-review">
+    <div className="ai-template-review drawer-review" data-empty={String(!ready)}>
       <ol className="ai-flow" aria-label="Make a drawer organizer">
         {["Measure", "Arrange", "Review"].map((text, index) => <li key={text} aria-current={index === step ? "step" : undefined}>{text}</li>)}
       </ol>
-      <div className="drawer-view-toolbar">
+      <div className="drawer-view-toolbar drawer-review-toolbar" hidden={!ready && !state.undo.length && !state.redo.length}>
         <div className="ai-template-shapes" role="group" aria-label="Drawer view">
           <button type="button" className="ai-with-pictogram" aria-pressed={String(view === "layout")} onClick={() => planner.setView("layout")}><Labelled icon="grid">Layout</Labelled></button>
           <button type="button" className="ai-with-pictogram" aria-pressed={String(view === "preview")} disabled={!preview} onClick={() => planner.setView("preview")}><Labelled icon="box">3D preview</Labelled></button>
@@ -206,7 +206,7 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
       <div className="drawer-layout-view" hidden={view !== "layout"}>
         <div className="drawer-board-area">
           <div className="drawer-empty" hidden={ready}>
-            <DimensionGuide title="Start with the inside measurements" note="Measure the clear space inside your drawer. Leave enough height for it to close." width={draft.width} depth={draft.depth} height={draft.height} kind="drawer" />
+            <DimensionGuide title="Start with the inside measurements" note="Measure the clear space inside your drawer. Leave enough height for it to close." width={draft.width} depth={draft.depth} height={draft.height} kind="drawer" illustration />
             <button type="button" className="drawer-example" hidden={ready} onClick={planner.example}>Try a 336 × 252 mm example</button>
           </div>
           <div ref={boardRef} id="drawer-board" className="drawer-board" role="group" aria-label="Drawer layout. Drag empty cells to draw a bin; drag a bin to move it." hidden={!ready}
@@ -217,7 +217,7 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
           <p className="drawer-front" hidden={!ready}>Front of drawer</p>
         </div>
         <p id="drawer-summary" className="ai-template-note" aria-live="polite">{status.summary}</p>
-        <p className="ai-template-note">Drag to draw or move a bin. Arrow keys move the selected bin; Shift + arrows resize it.</p>
+        <p className="ai-template-note" hidden={!ready}>Drag to draw or move a bin. Arrow keys move the selected bin; Shift + arrows resize it.</p>
       </div>
       <section className="ai-template-preview drawer-3d" tabIndex={-1} hidden={view !== "preview"} aria-label="Drawer 3D preview">
         {preview && <PreviewContent key={preview.seq} preview={preview} createPreviewView={createPreviewView} titleRef={reviewTitleRef} stale={state.stale} />}

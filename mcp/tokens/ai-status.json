@@ -526,5 +526,9 @@
   "toolDesktopBreakpoint": {
     "$type": "dimension",
     "$value": "56.25rem"
+  },
+  "workspaceTitle": {
+    "$type": "dimension",
+    "$value": "2rem"
   }
 }

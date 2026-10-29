@@ -232,3 +232,11 @@ Group each measured axis label with its value in a compact definition-list pair.
 Use Width (X), Depth (Y) and Height (Z), with stronger tabular numbers. Keep the
 summary at its intrinsic width and let pairs wrap on narrow screens or enlarged
 text. Preserve the numeric value and its millimetre unit together.
+
+## Drawer workspace hierarchy
+
+Maker-workspace headings use the system UI family and the shared `workspaceTitle` token. Keep the 28 rem settings column and independent scrolling during active layout/review. In the initial measurement state, let the form card size to its content, place Preview near the inputs, and center the measurement guide in the review area. Group width/depth together, keep usable height and the drawer name on full rows, and place Swap dimensions outside the numeric input grid.
+
+Keep the progress steps visible. Omit the inactive board toolbar and drag instructions before there is a board or undo history; preserve history access after a partial draft or New drawer. The empty-state drawer is an illustration, with persistent measurement labels in the form and an accessible image description. Other generator dimension diagrams retain their labels. Use the existing palette, pictograms and controls; keep field ids, transaction rules and recovery unchanged.
+
+The initial measurement screen stacks using the workspace container width in rem units, so enlarged text can use a full-width form. Short desktop windows use a compact illustration. Keep focused fields and Preview reachable without overlap.

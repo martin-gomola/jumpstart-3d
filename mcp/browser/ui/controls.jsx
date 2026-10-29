@@ -128,7 +128,7 @@ export function WallControls({ id, heading, value = [], closeGaps = false, disab
 }
 
 // A live sizing sketch is deliberately separate from the inspected native preview.
-export function DimensionGuide({ title, note, width, depth, height, kind = "bin", columns = 0, rows = 0, hidden }) {
+export function DimensionGuide({ title, note, width, depth, height, kind = "bin", columns = 0, rows = 0, hidden, illustration = false }) {
   const supplied = [width, depth, height].every(n => Number.isFinite(n) && n > 0);
   const scale = Math.max(width || 1, depth || 1, (height || 1) * 2);
   const w = supplied ? 140 * width / scale : 140, d = supplied ? 140 * depth / scale : 110;
@@ -145,7 +145,7 @@ export function DimensionGuide({ title, note, width, depth, height, kind = "bin"
   const grid = kind === "baseplate" && columns > 0 && rows > 0;
   return <section className="ai-dimension-guide" aria-label={title} hidden={hidden}>
     <h3>{title}</h3>
-    <svg viewBox="0 0 520 340" role="img" aria-label={`${title}: ${widthText}, ${depthText}, ${heightText}`}>
+    <svg viewBox={illustration ? "100 25 340 245" : "0 0 520 340"} role="img" aria-label={`${title}: ${widthText}, ${depthText}, ${heightText}`}>
       <g>
         <polygon points={points([e, c, down(c), down(e)])} className="ai-guide-face" />
         <polygon points={points([c, b, down(b), down(c)])} className="ai-guide-side" />
@@ -154,11 +154,11 @@ export function DimensionGuide({ title, note, width, depth, height, kind = "bin"
         {grid && Array.from({ length: columns - 1 }, (_, i) => <line key={`c${i}`} x1={a[0] + w * (i + 1) / columns} y1={a[1] + w / 2 * (i + 1) / columns} x2={e[0] + w * (i + 1) / columns} y2={e[1] + w / 2 * (i + 1) / columns} className="ai-guide-grid" />)}
         {grid && Array.from({ length: rows - 1 }, (_, i) => <line key={`r${i}`} x1={a[0] - d * (i + 1) / rows} y1={a[1] + d / 2 * (i + 1) / rows} x2={b[0] - d * (i + 1) / rows} y2={b[1] + d / 2 * (i + 1) / rows} className="ai-guide-grid" />)}
       </g>
-      <g className="ai-guide-labels">
+      {!illustration && <g className="ai-guide-labels">
         <text x="150" y="290" textAnchor="middle">{widthText}</text>
         <text x="365" y="290" textAnchor="middle">{depthText}</text>
         <text x="260" y="325" textAnchor="middle">{heightText}</text>
-      </g>
+      </g>}
     </svg>
     <p className="ai-template-note">{note}</p>
   </section>;

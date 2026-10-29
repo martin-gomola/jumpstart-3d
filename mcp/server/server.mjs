@@ -633,14 +633,15 @@ async function serveStatic(req, res, pathname, networkEditor = false) {
   let etag;
   let lastModified = fileStat.mtime.toUTCString();
   if (isShell) {
-    // The bridge meta tag mutates the bytes we send, so the ETag must track
+    // Capability markers mutate the bytes we send, so the ETag must track
     // the final shell payload rather than the file on disk.
     try {
       let shell = await readFile(file, "utf8");
-      const bridgeMeta = '<meta name="jumpstart-mcp-bridge" content="1">';
-      if (!networkEditor) shell = shell.includes("</head>")
-        ? shell.replace("</head>", `${bridgeMeta}\n</head>`)
-        : shell.replace("<title>", `${bridgeMeta}\n<title>`);
+      const capabilityMeta = '<meta name="jumpstart-ar-sharing" content="1">' +
+        (networkEditor ? '' : '<meta name="jumpstart-mcp-bridge" content="1">');
+      shell = shell.includes("</head>")
+        ? shell.replace("</head>", `${capabilityMeta}\n</head>`)
+        : shell.replace("<title>", `${capabilityMeta}\n<title>`);
       shellBuffer = Buffer.from(shell, "utf8");
     }
     catch { return json(res, 503, { error: "The local app is rebuilding; retry after the build finishes" }); }

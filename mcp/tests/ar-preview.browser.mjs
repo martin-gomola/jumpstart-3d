@@ -1,10 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { boot, loadDoc, waitIdle, newDoc, body, prim } from '../../test/helpers.mjs';
 
+async function serverSharing(page) {
+  await page.evaluate(() => { const meta = document.createElement('meta'); meta.name = 'jumpstart-ar-sharing'; meta.content = '1'; document.head.append(meta); });
+}
+
 test('AR dialog exports a model snapshot and presents its QR share link', async ({ page }, info) => {
   await boot(page, info);
   await loadDoc(page, newDoc('AR box', 'beginner', { bodies: [body('ar-box', 'Box', prim('box', { w: 80, d: 60, h: 10, r: 0, c: 0 }))] }));
   await waitIdle(page);
+  await serverSharing(page);
   let bytes;
   await page.route('**/__mcp/ar', async route => {
     bytes = route.request().postDataBuffer();
@@ -38,6 +43,7 @@ test('AR on an HTTPS server creates a QR for the current address without asking 
     await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: 'b'.repeat(48) }) });
   });
   await boot(page, { project: { use: { baseURL: origin } } });
+  await serverSharing(page);
   await loadDoc(page, newDoc('Hosted AR box', 'beginner', { bodies: [body('ar-box', 'Box', prim('box', { w: 80, d: 60, h: 10, r: 0, c: 0 }))] }));
   await page.locator('#btn-export').click(); await page.locator('[data-act="ar"]').click();
   const dialog = page.getByRole('dialog', { name: 'View in AR', exact: true });
@@ -76,4 +82,41 @@ test('AR on an HTTPS server creates a QR for the current address without asking 
   await dialog.getByRole('link', { name: 'Open AR share' }).focus();
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
   await expect(page.locator('#btn-export')).toBeFocused();
+});
+
+test('static demo offers a model download instead of a QR upload or JSON parse error', async ({ page }, info) => {
+  const origin = 'https://demo.example.com'; let posts = 0;
+  await page.route(`${origin}/**`, async route => {
+    const url = new URL(route.request().url());
+    await route.fulfill({ response: await route.fetch({ url: new URL(url.pathname + url.search, info.project.use.baseURL).href }) });
+  });
+  await page.route(`${origin}/__mcp/ar`, route => { posts++; return route.fulfill({ status: 200, body: '' }); });
+  await boot(page, { project: { use: { baseURL: origin } } });
+  await loadDoc(page, newDoc('Static AR', 'beginner', { bodies: [body('ar-box', 'Box', prim('box', { w: 80, d: 60, h: 10, r: 0, c: 0 }))] }));
+  await page.locator('#btn-export').click(); await page.locator('[data-act="ar"]').click();
+  const dialog = page.getByRole('dialog', { name: 'View in AR', exact: true });
+  const create = dialog.getByRole('button', { name: 'Create QR code', exact: true });
+  if (await create.count()) await create.click();
+  await expect(dialog).toContainText('QR sharing is unavailable on this site.', { timeout: 2000 });
+  await expect(create).toHaveCount(0);
+  const downloading = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download USDZ', exact: true }).click();
+  const download = await downloading; expect(download.suggestedFilename()).toMatch(/\.usdz$/);
+  const stream = await download.createReadStream(), chunks = []; for await (const chunk of stream) chunks.push(chunk);
+  expect(Buffer.concat(chunks).readUInt32LE(0)).toBe(0x04034b50);
+  expect(posts).toBe(0); await expect(dialog).not.toContainText('JSON');
+  await page.screenshot({ path: '/tmp/jumpstart-ar-static-fallback.png' });
+});
+
+test('an empty successful upload response gives a useful fallback without a JSON exception', async ({ page }, info) => {
+  await boot(page, info); await serverSharing(page);
+  await loadDoc(page, newDoc('Proxy AR', 'beginner', { bodies: [body('ar-box', 'Box', prim('box', { w: 80, d: 60, h: 10, r: 0, c: 0 }))] }));
+  await page.route('**/__mcp/ar', route => route.fulfill({ status: 200, body: '' }));
+  await page.locator('#btn-export').click(); await page.locator('[data-act="ar"]').click();
+  const dialog = page.getByRole('dialog', { name: 'View in AR', exact: true });
+  await page.locator('#ar-origin').fill('https://cad.example.com');
+  await dialog.getByRole('button', { name: 'Create QR code', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('This address did not return an AR share.');
+  await expect(dialog.getByRole('button', { name: 'Download USDZ', exact: true })).toBeVisible();
+  await expect(dialog).not.toContainText('JSON'); await expect(dialog.locator('a[target="_blank"]')).toHaveCount(0);
 });

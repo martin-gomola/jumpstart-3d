@@ -29,7 +29,9 @@ test('one JumpStart process shares snapshots across local/private and public/rea
     assert.equal((await fetch(`${publicOrigin}/ar/${id}`, { method: 'POST' })).status, 405);
     const lan = `http://127.0.0.1:${lanPort}`;
     const editor = await fetch(lan + '/?mcp=1'); assert.equal(editor.status, 200);
-    assert.doesNotMatch(await editor.text(), /<meta name="jumpstart-mcp-bridge"/);
+    const shell = await editor.text();
+    assert.doesNotMatch(shell, /<meta name="jumpstart-mcp-bridge"/);
+    assert.match(shell, /<meta name="jumpstart-ar-sharing" content="1"/);
     assert.match(await (await fetch(local)).text(), /<meta name="jumpstart-mcp-bridge"/);
     assert.equal((await fetch(lan + '/app.js')).status, 200);
     assert.equal((await fetch(lan + '/__mcp/rpc', { method: 'POST' })).status, 404);

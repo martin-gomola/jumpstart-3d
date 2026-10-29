@@ -81,8 +81,7 @@ laptop and run the agent there.
 
 The editor runs at [jumpstart-3d.onrender.com](https://jumpstart-3d.onrender.com)
 on Render's free static hosting. The first visit downloads about 13 MB, mostly
-the CAD engine, so it takes a few seconds to open. The demo has no AI agent
-connection; run the app locally for that.
+the CAD engine, so it takes a few seconds to open. The demo has no AI agent connection or QR-sharing storage. It can download USDZ models for AR; use a server-hosted installation for QR share links.
 
 ## Commands you will use
 
@@ -113,7 +112,7 @@ connection; run the app locally for that.
 
 ## iPhone AR preview (prototype)
 
-Open **Open/Export → View in AR / QR** and click **Create QR code**. When using an HTTPS editor address, the app uses that same address for the share automatically. Only localhost or plain HTTP asks for a phone-accessible HTTPS address. An optional separate AR hostname can forward to the same container’s read-only port `3211`. MCP remains restricted to localhost. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
+Open **Open/Export → View in AR / QR** and click **Create QR code**. When using an HTTPS editor address, the app uses that same address for the share automatically. Only localhost or plain HTTP asks for a phone-accessible HTTPS address. Static hosting offers a USDZ download instead of QR sharing. An optional separate AR hostname can forward to the same container’s read-only port `3211`. MCP remains restricted to localhost. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
 
 See the [AR setup and verification notes](AR-QR-RESEARCH.md#prototype-implemented). Actual iPhone placement and your HTTPS route still need device verification.
 

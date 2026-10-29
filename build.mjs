@@ -42,6 +42,17 @@ const shell = `<html lang="en">\n${readFileSync(join(src, "index.html"), "utf8")
 if (!shell.includes('<script type="module" src="app.js"></script>\n')) throw new Error("src/index.html is missing the app.js script tag");
 writeFileSync(join(site, "index.html"), shell);
 cpSync(wasm, join(site, "occt-gz.wasm"));
+// Share pages use the same React and theme tokens but ship as HTML, without a client bundle.
+const shareBuild = await build({ ...common, entryPoints: [join(root, "mcp/browser/ui/ar-share-page.jsx")],
+  platform: "node", format: "esm", write: false,
+  alias: { ...common.alias, "react-dom/server": join(tp, "react-dom/cjs/react-dom-server-legacy.browser.production.js") } });
+const { renderArSharePage } = await import("data:text/javascript;base64," + Buffer.from(shareBuild.outputFiles[0].contents).toString("base64"));
+const editorCss = readFileSync(join(src, "index.html"), "utf8");
+const light = editorCss.match(/:root\s*\{([^}]+)\}/)[1];
+const dark = editorCss.match(/:root\[data-ui="dark"\]\s*\{([^}]+)\}/)[1];
+const themeCss = `:root{${light}}@media(prefers-color-scheme:dark){:root{${dark}}}`;
+for (const expired of [false, true]) writeFileSync(join(site, expired ? "ar-expired.html" : "ar-share.html"), renderArSharePage({ themeCss, expired }));
+
 
 const mb = (n) => (n / 1048576).toFixed(2) + " MB";
 console.log("build/site/app.js:", mb(statSync(join(site, "app.js")).size), " build/site/worker.js:", mb(statSync(join(site, "worker.js")).size), " build/site/occt-gz.wasm:", mb(wasmSize));

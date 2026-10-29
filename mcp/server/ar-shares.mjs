@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 const LIMIT = 24 * 1024 * 1024, TTL = 30 * 60 * 1000;
 export function createArShares({ now = Date.now } = {}) {
@@ -27,9 +28,15 @@ export function createArShares({ now = Date.now } = {}) {
     if (!['GET', 'HEAD'].includes(req.method)) return send(405, 'text/plain', 'GET or HEAD required');
     const match = /^\/ar\/([a-f0-9]{48})(\/model\.usdz|\/poster\.svg)?$/.exec(path);
     const share = match && shares.get(match[1]);
-    if (!share) return send(404, 'text/plain', 'AR share not found or expired. Create another QR code in JumpStart.');
+    async function page(expired) {
+      try {
+        const html = await readFile(new URL(`../../build/site/${expired ? 'ar-expired' : 'ar-share'}.html`, import.meta.url), 'utf8');
+        return send(expired ? 404 : 200, 'text/html; charset=utf-8', html.replaceAll('__AR_BASE__', `/ar/${match?.[1] || ''}`));
+      } catch { return send(503, 'text/plain', 'The sharing page is unavailable. Rebuild JumpStart and try again.'); }
+    }
+    if (!share) return page(true);
     if (match[2] === '/model.usdz') return send(200, 'model/vnd.usdz+zip', share.bytes);
-    if (match[2] === '/poster.svg') return send(200, 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="#eeeeee"/><text x="160" y="105" text-anchor="middle" font-size="24">View 3D model</text></svg>');
-    return send(200, 'text/html; charset=utf-8', `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JumpStart AR preview</title><body style="font:18px system-ui;max-width:440px;margin:40px auto;padding:20px"><h1>View in your room</h1><p>On iPhone or iPad, tap the model and choose AR. Move the phone to find a surface.</p><a rel="ar" href="/ar/${match[1]}/model.usdz#allowsContentScaling=0"><img src="/ar/${match[1]}/poster.svg" width="320" height="200" alt="View in your room"></a><p>Original model size. This temporary snapshot expires after 30 minutes.</p><p>Other devices can <a href="/ar/${match[1]}/model.usdz">download the USDZ model</a>.</p></body></html>`);
+    if (match[2] === '/poster.svg') return send(200, 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7" stroke-linejoin="round"><path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/></svg>');
+    return page(false);
   };
 }

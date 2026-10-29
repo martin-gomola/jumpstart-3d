@@ -40,7 +40,7 @@ JumpStart 3D includes the open-source software and fonts below. Their full licen
 
 ## React and React DOM (19.3.1, scheduler 0.28.0)
 
-- Used for: Interface components in the Gridfinity drawer planner. Only the production builds are included (`third_party/react`, `third_party/react-dom`, `third_party/scheduler`).
+- Used for: Interface components in the Gridfinity drawer planner and build-time rendering of AR sharing pages. Only the production builds are included (`third_party/react`, `third_party/react-dom`, `third_party/scheduler`).
 - Copyright (c) Meta Platforms, Inc. and affiliates.
 - License: MIT (`LICENSES/MIT-react.txt`)
 - Project: https://github.com/facebook/react

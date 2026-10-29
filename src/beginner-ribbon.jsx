@@ -14,6 +14,7 @@ const TOOLS = {
   extrude: { id: "bb-extrude", icon: "extrude", label: "Extrude", title: "Extrude a sketch into a shape (E)" },
   import: { id: "bb-import", icon: "import", label: "Import", title: "Import a 3D model (STL, 3MF or STEP), an SVG or DXF drawing (to extrude), or a picture to trace" },
   gridfinity: { id: "bb-gridfinity", icon: "grid", label: "Gridfinity", title: "A Gridfinity bin, insert with measured pockets, or baseplate" },
+  drawer: { id: "bb-drawer", icon: "drawerGrid", label: "Drawer layout", title: "Plan Gridfinity bins and baseplates for a drawer from its inside size" },
   fastener: { id: "bb-fastener", icon: "thread", label: "Fastener", title: "Bolts, nuts, threaded rods and tap cutters, metric and inch" },
   gear: { id: "bb-gear", icon: "gear", label: "Gear", title: "Spur gears, bevel gears and racks by module and tooth count" },
   nameplate: { id: "bb-nameplate", icon: "tag", label: "Name plate", title: "A tag or name plate sized to its text, with raised or cut-in letters" },

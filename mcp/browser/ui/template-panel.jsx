@@ -25,15 +25,19 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   for (const [id, name] of [["ai-templates-tab", "add"], ["ai-connection-tab", "plug"]]) iconLabel(document.getElementById(id), name);
   // Commit each planner change before returning, so chained clicks see current controls.
   const drawer = createDrawerPlanner({ request, notify: flushSync });
+  const view = { choose: null };
   subscribe(kind => { if (!["preview", "version"].includes(kind)) drawer.deactivate(); });
-  flushSync(() => createRoot(root).render(<Workspace root={root} drawer={drawer} createPreviewView={createPreviewView} />));
+  flushSync(() => createRoot(root).render(<Workspace root={root} drawer={drawer} createPreviewView={createPreviewView} view={view} />));
 
-  async function activate(tab) {
+  function select(tab) {
     document.getElementById("ai-setup-panel").dataset.activeTab = tab.id === "ai-templates-tab" ? "templates" : "connection";
     for (const entry of tabs) {
       const active = entry === tab; entry.setAttribute("aria-selected", String(active)); entry.tabIndex = active ? 0 : -1;
       document.getElementById(entry.getAttribute("aria-controls")).hidden = !active;
     }
+  }
+  async function activate(tab) {
+    select(tab);
     if (tab.id === "ai-templates-tab") {
       try { await drawer.refreshDocument(await request("get_document", {})); }
       catch (error) { drawer.announce(error.message, true); }
@@ -51,9 +55,15 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
     const selected = tabs.find(tab => tab.getAttribute("aria-selected") === "true");
     if (selected) void activate(selected);
   });
+  return {
+    show(mode) {
+      select(document.getElementById("ai-templates-tab"));
+      view.choose?.(mode);
+    },
+  };
 }
 
-function Workspace({ root, drawer, createPreviewView }) {
+function Workspace({ root, drawer, createPreviewView, view }) {
   const [mode, setMode] = useState("drawer"), [settingsSeq, setSettingsSeq] = useState(0);
   const drawerBusy = useSyncExternalStore(drawer.subscribe, () => drawer.getState().busy);
   const references = useSyncExternalStore(drawer.subscribe, () => drawer.getState().references);
@@ -63,6 +73,7 @@ function Workspace({ root, drawer, createPreviewView }) {
     flushSync(() => { setMode(next); if (next === "settings") setSettingsSeq(seq => seq + 1); });
     drawer.deactivate();
   };
+  useEffect(() => { view.choose = choose; });
   return <section className="ai-generator" aria-label="Gridfinity">
     <div className="ai-generator-header">
       <div className="ai-workflow-heading"><h3 id="ai-gridfinity-title">{title}</h3><p className="ai-template-note">{note}</p></div>

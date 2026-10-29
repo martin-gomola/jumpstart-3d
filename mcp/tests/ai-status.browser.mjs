@@ -4,7 +4,7 @@ import { resolve, extname } from "node:path";
 import { boot } from "../../test/helpers.mjs";
 
 const inputs = [
-  ["offline", {}], ["checking", { checking: true }], ["waiting", { online: true }],
+  ["offline", {}], ["unavailable", { hosted: true }], ["checking", { checking: true }], ["waiting", { online: true }],
   ["connected", { online: true, connected: true }], ["recent", { online: true, recent: true }],
   ["reading", { action: "get_document" }], ["previewing", { action: "preview_model" }],
   ["editing", { action: "apply_model" }], ["saving", { action: "save_document" }],

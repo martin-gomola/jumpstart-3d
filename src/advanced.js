@@ -5793,6 +5793,7 @@ export function initAdvanced(app) {
         { id: "ad-box", label: "Box", icon: "box", fn: () => primCmd("box") },
         { id: "ad-cyl", label: "Cylinder", icon: "cylinder", fn: () => primCmd("cylinder") },
         { id: "ad-sphere", label: "Sphere", icon: "sphere", fn: () => primCmd("sphere") },
+        { id: "ad-drawer", label: "Drawer layout", title: "Plan Gridfinity bins and baseplates for a drawer from its inside size", icon: "drawerGrid", fn: () => app.mcp?.openWorkspace("drawer") }, // jumpstart-3d: drawer layout
         { id: "ad-torus", label: "Torus", icon: "torus", fn: () => primCmd("torus") },
         { id: "ad-prism", label: "Prism", title: "Prism with 3 to 24 sides", icon: "prism", fn: () => primCmd("prism") },
         { id: "ad-cone", label: "Cone", icon: "cone", fn: () => primCmd("cone") },

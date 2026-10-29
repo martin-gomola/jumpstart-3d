@@ -14,6 +14,7 @@ export const ICON = {
   del: S('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
   box: S('<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8M12 12v8"/>'),
   grid: S('<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M10 4v16"/>'),
+  drawerGrid: S('<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 12h18M9 5v14M15 5v14" stroke="#1f4fa8"/>'), // jumpstart-3d: drawer layout
   add: S('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v8M8 12h8"/>'),
   plug: S('<path d="M8 3v5M16 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>'),
   undo: S('<path d="m8 4-5 5 5 5M3 9h11a6 6 0 0 1 0 12"/>'),

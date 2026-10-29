@@ -61,7 +61,9 @@ test("Parts folds into one menu on a narrow window", async ({ page }, info) => {
   const holder = page.locator('.bribbon [data-holds~="bb-gear"]');
   await expect(holder).toHaveAttribute("aria-label", "Parts tools");
   await holder.click();
-  await expect(page.getByRole("menu", { name: "Parts" }).getByRole("menuitem")).toHaveText(PARTS.map(([, label]) => label));
+  const labels = PARTS.map(([, label]) => label);
+  labels.splice(1, 0, "Drawer layout");
+  await expect(page.getByRole("menu", { name: "Parts" }).getByRole("menuitem")).toHaveText(labels);
 });
 
 test("Gridfinity part dialog previews live, keeps the editor mode and adds a pocketed insert as a saved model", async ({ page }, info) => {

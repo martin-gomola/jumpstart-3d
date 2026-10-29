@@ -65,8 +65,11 @@ JumpStart exposes the running local editor through a stdio MCP server. The serve
 
 ### AI workspace templates
 
-Open **AI → Create** for **Drawer layout** and **Printer & settings**. These
+Open **Drawer layout** from the Parts ribbon (Advanced: Advanced Create), or
+**AI → Create**, for **Drawer layout** and **Printer & settings**. These
 belong to the Gridfinity generator; other generators can have their own controls.
+They also work in a static build without the MCP server, such as the hosted
+demo, where the AI connection tab explains that agents need a local install.
 A single bin, insert or baseplate is made with the editor's **Gridfinity** part
 tool (beginner ribbon Parts section and Advanced Create). It opens a dialog that
 previews the part live in the viewport, checks its overall size against the

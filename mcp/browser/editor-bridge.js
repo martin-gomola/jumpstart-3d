@@ -348,17 +348,13 @@ function previewImages(app, box, section, coordinateFrame = { description: "Worl
 
 export function initMcp(app) {
   // Static and offline builds have no local broker. Only the broker's
-  // served shell or an explicit loopback opt-in should start MCP networking.
+  // served shell or an explicit loopback opt-in should start MCP networking;
+  // the Create workspace and model settings run in the page either way.
   const local = location.protocol === "http:" && ["localhost", "127.0.0.1"].includes(location.hostname);
   const enabled = local && (document.querySelector('meta[name="jumpstart-mcp-bridge"]')?.content === "1" || new URLSearchParams(location.search).get("mcp") === "1");
-  if (!enabled) {
-    const indicator = document.getElementById("ai-status");
-    if (indicator) indicator.hidden = true;
-    return { enabled: false };
-  }
   const tutorials = tutorialSession(app, () => store.doc);
   const drawStatus = initAgentStatus();
-  initAiSetupPanel();
+  const workspace = initAiSetupPanel();
   const status = { checking: true, online: false, connected: false, recent: false };
   let statusTimer;
   const showStatus = (changes) => { Object.assign(status, changes); drawStatus(status); };
@@ -367,7 +363,7 @@ export function initMcp(app) {
     showStatus({ action: null, outcome, error });
     statusTimer = setTimeout(() => showStatus({ outcome: null, error: null }), STATUS_HOLD_MS);
   };
-  showStatus({});
+  showStatus(enabled ? {} : { checking: false, hosted: true });
   let editorId;
   try {
     editorId = sessionStorage.getItem("jumpstart.mcp.editorId") || id();
@@ -886,12 +882,14 @@ export function initMcp(app) {
     if (!preview) throw new Error("Preview expired. Generate it again.");
     return previewViewer(preview.compiled.affectedBodyIds.map(id => preview.geometries.get(id).mesh));
   };
-  initTemplatePanel({ request: localRequest, subscribe: listener => store.on(listener), createPreviewView });
+  const templates = initTemplatePanel({ request: localRequest, subscribe: listener => store.on(listener), createPreviewView });
+  const openWorkspace = view => { templates?.show(view); workspace.open(); };
   const parameterHost = document.createElement("div");
   parameterHost.id = "model-params-root";
   document.getElementById("viewport").append(parameterHost);
   const parameterCard = initParameterCard({ host: parameterHost, request: localRequest, subscribe: listener => store.on(listener), createPreviewView });
   app.uiListeners.add(() => parameterCard.select(app.sel));
+  if (!enabled) return { enabled, openWorkspace };
 
   const poll = async () => {
     if (polling || stopped) return;
@@ -943,4 +941,5 @@ export function initMcp(app) {
     clearTimeout(retryTimer);
     pollAbort?.abort();
   }, { once: true });
+  return { enabled, openWorkspace };
 }

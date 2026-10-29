@@ -37,6 +37,7 @@ export const AI_STATUS_CSS = `
 .ai-setup-current p, .ai-setup-client p, .ai-setup-note { margin: 0; color: var(--ink-2); line-height: var(--ai-status-panelBodyLine); }
 .ai-setup-kicker, .ai-setup-client h3 { color: var(--ink-2); font: 600 var(--ai-status-font)/var(--ai-status-panelSmallLine) var(--f-label); letter-spacing: var(--ai-status-panelKickerTracking); text-transform: uppercase; }
 .ai-setup-note { padding-block-end: var(--ai-status-panelGap); border-block-end: var(--ai-status-panelBorder) solid var(--line-2); }
+.ai-setup-note a { color: var(--accent); }
 .ai-setup-client { display: grid; gap: var(--ai-status-gap); padding-block-end: var(--ai-status-panelGap); border-block-end: var(--ai-status-panelBorder) solid var(--line-2); }
 .ai-setup-client h3 { margin: 0; color: var(--ink); }
 .ai-setup-client pre { box-sizing: border-box; max-width: 100%; margin: 0; padding: var(--ai-status-panelGap); overflow-x: auto; border-radius: var(--ai-status-radius); background: var(--block); color: var(--block-ink); white-space: pre-wrap; overflow-wrap: anywhere; font: 500 var(--ai-status-font)/var(--ai-status-panelBodyLine) var(--f-mono); }
@@ -68,7 +69,8 @@ const ACTIONS = {
   export_drawing: ["exporting", "Exporting drawing", "AI export"],
 };
 
-export function agentStatus({ online = false, checking = false, connected = false, recent = false, action, outcome, error } = {}) {
+export function agentStatus({ hosted = false, online = false, checking = false, connected = false, recent = false, action, outcome, error } = {}) {
+  if (hosted) return { state: "unavailable", label: "AI needs a local install", compact: "AI local", detail: "AI agents connect only to JumpStart running on your own computer. The Create tools work here without one." };
   if (action) {
     const [state, label, compact] = ACTIONS[action] || ["working", "Agent working", "AI busy"];
     return { state, label, compact, detail: `AI agent: ${label.toLowerCase()}.` };
@@ -121,7 +123,7 @@ export function initAgentStatus() {
 export function initAiSetupPanel() {
   const trigger = document.getElementById("ai-status");
   const panel = document.getElementById("ai-setup-panel");
-  if (!trigger || !panel) return () => {};
+  if (!trigger || !panel) return { open() {}, dispose() {} };
   const closeButton = document.getElementById("ai-setup-close");
   const copyStatus = document.getElementById("ai-setup-copy-status");
   const blockedRegions = new Map();
@@ -182,7 +184,8 @@ export function initAiSetupPanel() {
   closeButton?.addEventListener("click", close);
   panel.addEventListener("click", copy);
   window.addEventListener("keydown", onKeyDown, true);
-  return () => {
+  const open = () => { if (panel.hidden) setOpen(true); };
+  const dispose = () => {
     for (const [region, previous] of blockedRegions) region.inert = previous;
     blockedRegions.clear();
     panel.removeEventListener("keydown", isolateWorkspaceKeys);
@@ -193,4 +196,5 @@ export function initAiSetupPanel() {
     panel.removeEventListener("click", chooseClient);
     window.removeEventListener("keydown", onKeyDown, true);
   };
+  return { open, dispose };
 }

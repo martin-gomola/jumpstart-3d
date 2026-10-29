@@ -1,8 +1,8 @@
 ---
 name: 3d-model
-description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
+description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, dimensioned SVG or PDF drawings, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.18.0"
+  version: "1.19.0"
 ---
 
 # Model a part in JumpStart
@@ -24,7 +24,7 @@ copy the entire tool catalog into working notes.
 | Frames, trays, brackets, hooks, cups, parameter models | [Household parts](references/household-parts.md) |
 | Knurled knobs, shaft bores, gears, turned (Lathe) parts | [Knobs, gears and turned parts](references/knobs-gears-and-turned-parts.md) |
 | Phone holders, cradles and cases, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
-| A dimensioned drawing: a product to design around or a part to make | [Dimensioned drawings](references/dimensioned-drawings.md) |
+| A dimensioned drawing to model from, or a drawing (SVG, PDF) of the model | [Dimensioned drawings](references/dimensioned-drawings.md) |
 | Existing native part, feature or interface edits | [Edit existing parts](references/edit-existing-parts.md) |
 | STL/3MF/STEP imports and resizing | [Imported parts](references/imported-parts.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |

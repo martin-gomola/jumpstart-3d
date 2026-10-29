@@ -58,6 +58,16 @@ cases:
     fail_if:
       - "Asks the user for dimensions the published drawing provides."
       - "Treats overall spec-page size or a commercial case's numbers as the phone's fitted geometry."
+  - id: model-to-drawing
+    prompt: "Make a PDF drawing of this bracket for the workshop."
+    setup: "A native bracket with four mounting holes and a slot."
+    expect:
+      - "Renders with jumpstart_render_drawing, fills the title block, and adds hole-position and slot dimensions from datum edges as world points."
+      - "Reviews the image, fixes every warning, then exports PDF with jumpstart_export_drawing and reports the path and measured values."
+      - "Starts the notes with units, do not scale and material, labels parameter-driven dimensions with their codes, and writes TBD for a tolerance the user did not give."
+    fail_if:
+      - "Types dimension values into notes instead of measuring them, or exports with unresolved warnings."
+      - "Invents a general tolerance or a finish the user did not state."
   - id: drawing-to-model
     prompt: "Model this bracket from the attached drawing."
     setup: "A vector PDF with a third-angle title block, general tolerances, ordinate dimensions, a 4X hole callout and one digit too small to read in a detail view."
@@ -67,6 +77,7 @@ cases:
       - "Attaches dimension checks for ledger values and reports each row as checked, unchecked or unreadable."
     fail_if:
       - "Guesses an unreadable digit or measures the picture of a sheet whose scale is NONE."
+      - "Fills a size the drawing does not give with a plausible number instead of marking it TBD, or averages two conflicting values."
       - "Models four separate holes instead of one pattern from the 4X callout."
   - id: gridfinity-photo-shape-unknown
     prompt: "Use this product photo to make an exact fitted Gridfinity pocket."

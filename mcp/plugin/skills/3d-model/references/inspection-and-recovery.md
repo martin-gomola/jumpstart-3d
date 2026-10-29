@@ -21,8 +21,15 @@ not have to request this. Prefer sources in this order:
 2. Manufacturer or attributable CAD (STEP) that the operator places in managed
    imports, or a catalog part through the `step-parts` companion. Check its
    licence before use.
-3. The manufacturer's specification page, which usually gives only overall size.
-4. Commercial accessories for the same product (cases, mounts, holders). Use
+3. Community CAD libraries such as the
+   [GrabCAD Library](https://grabcad.com/library?categories=tech) (its tech
+   category has phones, boards and devices). These models are user-made: check
+   them against published dimensions before relying on them, and mark unchecked
+   values `assumed`. Downloads need a signed-in account, so ask the operator to
+   download the STEP into managed imports; never ask for their login. Check the
+   model's licence and the site's terms.
+4. The manufacturer's specification page, which usually gives only overall size.
+5. Commercial accessories for the same product (cases, mounts, holders). Use
    them for features and style, such as a raised screen lip, open or covered
    buttons and wall thickness. Their numbers are `assumed`, never the product's
    geometry.

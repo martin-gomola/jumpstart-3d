@@ -286,7 +286,8 @@ including `docker exec`, require explicit migration before installing.
 
 For Claude Code, run `make claude-install`; for Cursor, run `make cursor-install`.
 Each registers the same host proxy at user level and copies every skill in
-`mcp/plugin/skills/` (`3d-model`, `step-parts`, and `woodwork-joints-3d`) into
+`mcp/plugin/skills/` (`3d-model`, `step-parts`, `woodwork-joints-3d`, and
+`bambu-handoff`) into
 `~/.claude/skills/` or `~/.cursor/skills/`. Rerun the target after pulling to
 refresh the skills. A custom `jumpstart` server entry or a skill directory with
 one of those names that this installer did not create stops the install without
@@ -1266,8 +1267,9 @@ Run `npm run benchmark:spacer` against a separate blank editor. Set
 `make codex-install` installs the `jumpstart-3d` plugin from a generated local
 marketplace. It bundles the host MCP proxy, the
 [3d-model skill](plugin/skills/3d-model/SKILL.md), and its companions
-[step-parts](plugin/skills/step-parts/SKILL.md) and
-[woodwork-joints-3d](plugin/skills/woodwork-joints-3d/SKILL.md). Modeling
+[step-parts](plugin/skills/step-parts/SKILL.md),
+[woodwork-joints-3d](plugin/skills/woodwork-joints-3d/SKILL.md) and
+[bambu-handoff](plugin/skills/bambu-handoff/SKILL.md). Modeling
 decisions and worked examples belong in the skills, rather than the root README.
 
 Requirements: host Node.js 22 or newer and a Codex CLI supporting `codex plugin`.

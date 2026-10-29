@@ -19,6 +19,9 @@ text-to-cad (earthtojake/text-to-cad), commit
 2f793659fb7bab537e2f00836e06448fc4087cb2.
 Copyright (c) 2026 Thompson Labs LLC. MIT license text is retained in
 third_party/text-to-cad/LICENSE and the source/built worker legal notice.
+The step-parts and bambu-handoff skill workflows and the printing
+process-limits table in the 3d-model skill are adapted from the same project
+under that license.
 
 Gridfinity interface dimensions are adapted from kennetek/gridfinity-rebuilt-openscad,
 commit 910e22d8607fd7f5f51ad5e5cbc5287a76810bfd. Applicable MIT notices cover

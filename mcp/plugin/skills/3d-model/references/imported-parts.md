@@ -10,6 +10,9 @@ Load this reference for managed imports, mesh scaling, or STEP revisions.
   most four imports and 24 MiB total. STL and 3MF remain editable mesh bodies;
   STEP/STP become native STEP bodies. Use `jumpstart_preview_resize_body` for
   resizing an imported body, and do not claim parametric reconstruction.
+  After the preview, compare its dimensions with the object it represents. A
+  part about 25.4 or 1000 times too small or too large usually has the wrong
+  `units`: ask the user to confirm them instead of resizing it to fit.
 - When the user needs a purchased part that is not yet in `imports/`, the
   `step-parts` companion skill finds it in the public catalog and saves a
   checksum-verified STEP file there. Its `assetId` then equals the catalog

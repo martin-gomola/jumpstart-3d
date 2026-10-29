@@ -21,7 +21,7 @@ test("cursor install merges the MCP server, copies the skill and is repeatable",
   assert.match(await readFile(join(skill, "SKILL.md"), "utf8"), /^---\nname: 3d-model/);
   assert.ok((await readdir(join(skill, "references"))).length > 0);
   for (const omitted of ["tests", "agents"]) await assert.rejects(access(join(skill, omitted)));
-  for (const name of ["step-parts", "woodwork-joints-3d"]) {
+  for (const name of ["step-parts", "woodwork-joints-3d", "bambu-handoff"]) {
     assert.match(await readFile(join(dir, ".cursor/skills", name, "SKILL.md"), "utf8"), new RegExp(`^---\\nname: ${name}\\n`));
     await access(join(dir, ".cursor/skills", name, ".jumpstart-3d"));
   }

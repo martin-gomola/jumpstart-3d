@@ -1,9 +1,17 @@
 # Print setup and hardware
 
-Use this reference for printed parts: the default printer profile, print pose,
-printability limits, export for the slicer, and holes or pockets for screws,
-nuts and heat-set inserts. Clearances between mating parts are in
+Use this reference for printed parts: the default printer profile, limits for
+other processes, how to report printability, print pose, export for the slicer,
+and holes or pockets for screws, nuts and heat-set inserts. Clearances between mating parts are in
 [Fit and print checks](fit-and-print-checks.md).
+
+## Contents
+
+- Hand off to the slicer
+- Other processes and printers
+- Report printability findings
+- Choose the print pose
+- Hardware holes and pockets
 
 ## Hand off to the slicer
 
@@ -38,6 +46,47 @@ soft and rigid zones that suggest PLA with TPU on the X2D's two nozzles.
 
 A passing check means no flagged overhang or thin-wall area in the
 tessellation; the slicer preview and a test print remain the authority.
+To open the export in Bambu Studio or Bambu Connect, use the companion
+`bambu-handoff` skill.
+
+## Other processes and printers
+
+When the request names a printer you do not know, or another process, use these
+conservative design-guide defaults instead of the X2D profile. A datasheet the
+user supplies for the machine or material overrides them.
+
+| Limit | FDM, unknown printer | SLA/DLP resin | SLS (PA12) | MJF |
+| --- | --- | --- | --- | --- |
+| `minWall`, supported (mm) | 1.2 | 0.5 | 0.7 | 0.5 |
+| `minWall`, unsupported (mm) | 1.6 | 1.0 | 0.7 | 0.5 |
+| `overhangAngle` (degrees from vertical) | 45 | 60 | not applicable | not applicable |
+| Smallest hole (mm) | 2.0 | 0.5 | 1.5 | 1.0 |
+| Smallest positive feature (mm) | 0.8 | 0.2 | 0.8 | 0.5 |
+| Longest unsupported bridge (mm) | 10 | 5 | not applicable | not applicable |
+
+Powder processes (SLS, MJF) need no supports, so do not report overhangs for
+them. Report enclosed cavities that trap powder instead, and note that escape
+holes are not measured. The resin angle is the guides' 30° from horizontal.
+
+## Report printability findings
+
+Give each limit one of three results, and cite both the limit's source (the
+profile above, this table or the user's datasheet) and the measured field:
+
+- **pass**: a measured value meets the limit.
+- **fail**: a measured value violates it. Give a fix with target numbers, such
+  as "thicken the wall at `thinnestSamples[0]` from 0.6 mm to at least 1.2 mm",
+  then preview again.
+- **not checked**: nothing measured it. Smallest hole, smallest feature, bridge
+  length and trapped powder have no `printability` measurement. Do not infer
+  them from images, the bounding box or the plan's constants.
+
+Report watertightness or `meshValidation` failures first, then walls, then
+overhangs, then orientation. Thin-wall sampling is ray based: treat
+`thinnestWall` as a sample, not an exhaustive minimum. The table is adapted
+from the `dfam-check` skill in
+[earthtojake/text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT),
+which cites the Hubs, Formlabs, HP and EOS design guides and ISO/ASTM 52910.
 
 ## Choose the print pose
 

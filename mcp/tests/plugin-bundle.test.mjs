@@ -26,7 +26,7 @@ test('portable bundle is complete and stable, and excludes evaluation fixtures',
   assert.equal(config.mcpServers.jumpstart.command, 'node');
   assert.equal(config.mcpServers.jumpstart.args[0], 'server/stdio-proxy.mjs');
   assert.ok((await readFile(join(first.pluginRoot, 'skills/3d-model/SKILL.md'), 'utf8')).includes('name: 3d-model'));
-  for (const name of ['step-parts', 'woodwork-joints-3d']) assert.ok((await readFile(join(first.pluginRoot, `skills/${name}/SKILL.md`), 'utf8')).includes(`name: ${name}`));
+  for (const name of ['step-parts', 'woodwork-joints-3d', 'bambu-handoff']) assert.ok((await readFile(join(first.pluginRoot, `skills/${name}/SKILL.md`), 'utf8')).includes(`name: ${name}`));
   const skill = join(root, 'mcp/plugin/skills/3d-model/SKILL.md');
   await writeFile(skill, (await readFile(skill)) + '\nUpdated instructions.\n');
   assert.notEqual((await buildPlugin({ root })).version, first.version);

@@ -2,7 +2,7 @@
 name: 3d-model
 description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.16.0"
+  version: "1.17.0"
 ---
 
 # Model a part in JumpStart
@@ -30,7 +30,7 @@ copy the entire tool catalog into working notes.
 | Clearances, mating parts, pair checks, fit coupons | [Fit and print checks](references/fit-and-print-checks.md) |
 | Printed parts, the default printer profile, print pose, screw, nut and insert holes | [Print setup and hardware](references/print-and-hardware.md) |
 | Acceptance checks, revisions, failures or final export | [Inspection and recovery](references/inspection-and-recovery.md) |
-| Glue- and screw-free joints or splitting oversized parts; a named purchased part (bearing, motor, board) to model around | Companion skills `woodwork-joints-3d`; `step-parts` (downloads the STEP into managed imports) |
+| Glue- and screw-free joints or splitting oversized parts; a named purchased part (bearing, motor, board) to model around; opening an export in Bambu Studio or Bambu Connect | Companion skills `woodwork-joints-3d`; `step-parts` (downloads the STEP into managed imports); `bambu-handoff` |
 
 ## Inspect
 
@@ -40,6 +40,7 @@ copy the entire tool catalog into working notes.
 2. Start with `jumpstart_get_document` and compact capabilities using
    `jumpstart_get_capabilities({includeSchemas:false})`; `planVocabulary` lists type ids (holes and fillets are `modifier` operations).
    Read only the fields the task needs with `schemaPaths`, e.g. `["plan.operations.knurl"]`; generators list only their type in `tools/list`. Use current tool schemas rather than guessing fields or relying on a copied catalog.
+   Resolve "this part" or "the selected one" from `selectedBodyIds`; ask when it is empty or ambiguous. After an apply it holds the applied bodies, not a user choice.
 3. For edits, use the target’s `editing` context to choose parameters, a supported native feature edit or a new operation. Read [Edit existing parts](references/edit-existing-parts.md) for local edits and preservation contracts. Read selected `bodyIds` with `includeGeometry:true`. Turn off
    `includeSelectors`, `includeFeatureTree`, or `includeSketches` when not needed.
    Use MCP geometry for dimensions; use available localhost screenshots for visual context, particularly mating sides, slope, and camera orientation.
@@ -69,10 +70,10 @@ copy the entire tool catalog into working notes.
    document or replacement is requested or authorized.
 3. Inspect complete preview views, dimensions, acceptance results and `changes`; the section image cuts X mid-part unless `section` names the critical cut.
    For edits, check both the requested delta and preserved source definitions.
-   Use `jumpstart_inspect_geometry` for independent sections and mesh checks; require connected support-mesh validation for phone-cradle previews.
+   Use `jumpstart_inspect_geometry` for independent sections and mesh checks; require connected support-mesh validation for phone-cradle previews. Check a requested number by measuring the geometry, never by restating the plan constant behind it. Add an image only when it shows something new.
 4. Correct the plan and preview again when measurements or orientation disagree.
    Stop on critical validation failures or unsupported operations. Failed or
-   unknown attached requirements block apply; do not weaken them to pass.
+   unknown attached requirements block apply; do not weaken them to pass. A retry that drops or shrinks a requested feature (a skipped fillet) is a different design: report it as a departure.
 
 ## Apply and deliver
 

@@ -67,6 +67,13 @@ ssh -N -L 3210:127.0.0.1:3210 <user>@<homelab-host>
 Then open [http://localhost:3210/?mcp=1](http://localhost:3210/?mcp=1) on the
 laptop and run the agent there.
 
+## Try the demo
+
+The editor runs at [jumpstart-3d.onrender.com](https://jumpstart-3d.onrender.com)
+on Render's free static hosting. The first visit downloads about 13 MB, mostly
+the CAD engine, so it takes a few seconds to open. The demo has no AI agent
+connection; run the app locally for that.
+
 ## Commands you will use
 
 | Command | Use it when |

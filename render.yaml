@@ -1,0 +1,13 @@
+# Public editor demo on Render's free static hosting. The MCP server and the
+# agent bridge only accept localhost, so agents still connect to a local copy.
+services:
+  - type: web
+    name: jumpstart-3d
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: build/site
+    autoDeployTrigger: commit
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff

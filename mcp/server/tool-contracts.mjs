@@ -2,6 +2,7 @@ import { featureEditSchema, regionBoxSchema } from "../shared/edit-contracts.js"
 import { pairChecksSchema } from "../shared/pairs.js";
 import { geometryCheckSchema, requirementsSchema } from "../shared/requirements.js";
 import { frameTools } from "./frame-contracts.mjs";
+import { drawingTools } from "./drawing-contracts.mjs";
 import { tutorialTools } from "./tutorial-contracts.mjs";
 
 const number = { type: "number", minimum: -10000, maximum: 10000 };
@@ -46,7 +47,7 @@ export function extendMcpTools(tools, basePlan) {
   extra.find(tool => tool.name === "jumpstart_inspect_geometry").inputSchema.properties.printOrientations = { ...object({ overhangAngle: { type: "number", minimum: 0, maximum: 89 }, baseZone: { type: "number", minimum: 0, maximum: 10 } }), description: "Read-only print pose advice: lay the six axis directions and the largest flat faces on the bed and rank them by overhang area, bed contact and height. Returns rotations; the document is unchanged." };
   extra.find(tool => tool.name === "jumpstart_inspect_geometry").inputSchema.properties.frame = { type: "object", additionalProperties: false, required: ["outerWidth", "outerDepth", "height", "wall"], properties: Object.fromEntries(["outerWidth", "outerDepth", "height", "wall"].map(name => [name, positive])) };
   extra.push({name:"jumpstart_preview_feature_edit",title:"Preview a targeted native feature edit",description:"Update or remove a supported top-level native modifier by feature id, or change a one-sided base extrusion distance ($base). Hole positions are body-local mm. Preserves body identity, role and unrelated source definitions. Managed templates, bound features and ambiguous topology are rejected; use parameter tools first. Inspect editing context and current geometry fingerprint before editing; apply the returned preview id explicitly.",inputSchema:object({editorId,expectedRevision,expectedFingerprint:id,edit:featureEditSchema,includeImage:{type:"boolean"},section},["expectedRevision","expectedFingerprint","edit","requirements"])});
-  const all = [...tools, ...extra, ...tutorialTools, ...frameTools];
+  const all = [...tools, ...extra, ...tutorialTools, ...frameTools, ...drawingTools];
   for (const tool of all.filter(tool => tool.name.startsWith("jumpstart_preview_"))) Object.assign(tool.inputSchema.properties,{requirements:requirementsSchema,detail:regionBoxSchema,
     includeSelectors:{type:"boolean",description:"Default true; false omits body geometrySelectors."},
     includeFeatureTree:{type:"boolean",description:"Default true; false omits body featureTree."}});
@@ -113,6 +114,8 @@ function annotationsFor(name) {
     jumpstart_apply_model: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     jumpstart_undo: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     jumpstart_export_model: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    jumpstart_render_drawing: READ_ONLY,
+    jumpstart_export_drawing: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     jumpstart_save_document: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     jumpstart_reopen_document: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     jumpstart_start_tutorial: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -126,4 +129,5 @@ const OUTPUT_SCHEMAS = {
   jumpstart_undo: { type: "object", required: ["undone", "revision"], properties: { undone: { type: "boolean" }, revision: revisionOut, document: { type: "object" } } },
   jumpstart_save_document: { type: "object", required: ["saved", "documentId", "revision"], properties: { saved: { type: "boolean" }, documentId: { type: "string" }, revision: revisionOut, version: {} } },
   jumpstart_export_model: { type: "object", required: ["format", "revision", "path", "bodyIds", "byteLength", "sha256"], properties: { format: { type: "string" }, revision: revisionOut, path: { type: "string" }, bodyIds: { type: "array", items: { type: "string" } }, byteLength: { type: "integer" }, sha256: { type: "string" }, meshValidation: { type: "object", description: "STL only; bodies holds per-body results for multi-body files." } } },
+  jumpstart_export_drawing: { type: "object", required: ["path", "sha256", "warnings"], properties: { path: { type: "string" }, sha256: { type: "string" }, warnings: { type: "array" } } },
 };

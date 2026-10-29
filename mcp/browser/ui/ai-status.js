@@ -64,6 +64,8 @@ const ACTIONS = {
   reopen_document: ["editing", "Reopening model", "AI open"],
   save_document: ["saving", "Saving model", "AI save"],
   export_model: ["exporting", "Exporting model", "AI export"],
+  render_drawing: ["reading", "Drawing sheet", "AI read"],
+  export_drawing: ["exporting", "Exporting drawing", "AI export"],
 };
 
 export function agentStatus({ online = false, checking = false, connected = false, recent = false, action, outcome, error } = {}) {

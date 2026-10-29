@@ -61,6 +61,8 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
       "jumpstart_start_tutorial",
       "jumpstart_get_tutorial_status",
       "jumpstart_preview_frame",
+      "jumpstart_render_drawing",
+      "jumpstart_export_drawing",
     ]);
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.type, "object");
     assert.equal(listing.result.tools.find((tool) => tool.name === "jumpstart_preview_model").inputSchema.properties.plan.properties.primitives.items.properties.kind.enum.includes("tube"), true);
@@ -102,7 +104,9 @@ test("stdio MCP discovery and localhost registration work through mcp/server/ser
     assert.equal(byName.jumpstart_preview_model.annotations.readOnlyHint, true);
     assert.deepEqual(byName.jumpstart_apply_model.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
     assert.equal(byName.jumpstart_undo.annotations.destructiveHint, true);
-    assert.deepEqual(Object.keys(byName).filter((name) => byName[name].outputSchema), ["jumpstart_list_editors", "jumpstart_apply_model", "jumpstart_undo", "jumpstart_export_model", "jumpstart_save_document"]);
+    assert.deepEqual(Object.keys(byName).filter((name) => byName[name].outputSchema), ["jumpstart_list_editors", "jumpstart_apply_model", "jumpstart_undo", "jumpstart_export_model", "jumpstart_save_document", "jumpstart_export_drawing"]);
+    assert.equal(byName.jumpstart_render_drawing.annotations.readOnlyHint, true);
+    assert.equal(byName.jumpstart_render_drawing.inputSchema.properties.requirements, undefined);
     assert.ok(byName.jumpstart_undo.inputSchema.properties.expectedRevision.description);
     assert.equal(byName.jumpstart_get_document.inputSchema.properties.bodyIds.description.startsWith("Return these"), true);
     const unknownTool = await send({ jsonrpc: "2.0", id: 22, method: "tools/call", params: { name: "jumpstart_invented", arguments: {} } });

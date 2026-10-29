@@ -1,4 +1,5 @@
 import { measureSolidPair, measureRegionDifference, validatePairPlacement } from "./pairGeometry.js";
+import { projectShape } from "./drawingGeometry.js";
 // Geometry kernel: turns the document's node trees into OpenCascade solids
 // and meshes. Runs inside a Web Worker in the app, and directly in Node for tests.
 import * as R from "replicad";
@@ -3456,5 +3457,20 @@ export function inspectSolidPairs(pairs) {
       return { id, status: "unknown", error: error?.message || "Native pair query failed", distanceMm: null, overlapVolumeMm3: null, physicalFit: "unverified" };
     } finally { left?.delete(); right?.delete(); }
   });
+}
+export function projectBodies(bodies, cameras, options) {
+  if (!Array.isArray(bodies) || !bodies.length) throw new Error("Nothing to draw");
+  const shapes = [];
+  try {
+    for (const b of bodies) {
+      let mesh = false;
+      JSON.stringify(b.node, (key, value) => { if (key === "t" && value === "mesh") mesh = true; return value; });
+      if (mesh) throw new Error("Drawings need native CAD or STEP solids; mesh bodies are unsupported");
+      try { shapes.push(transformShape(evalNode(b.node), b.m)); } catch (e) { throw new Error(friendly(e)); }
+    }
+    const comp = shapes.length === 1 ? shapes[0] : R.makeCompound(shapes);
+    if (comp !== shapes[0]) shapes.push(comp);
+    return projectShape(comp, cameras, OC, options);
+  } finally { for (const s of shapes) s.delete?.(); }
 }
 export const _test = { solidFromMesh, safeVolume, shellSolid: (s, t, faces, dir, method) => shellSolid(s, t, new Set(faces.map((f) => f.hashCode)), dir, safeVolume(s), method || "auto") };

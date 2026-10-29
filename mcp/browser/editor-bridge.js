@@ -18,6 +18,7 @@ import { initTemplatePanel } from "./ui/template-panel.jsx";
 import { initParameterCard } from "./ui/parameter-card.jsx";
 import { previewViewer } from "./preview-viewer.js";
 import { checkPrintFit } from "../shared/print-area.js";
+import { composeDrawing, drawingCameras, drawingPDF, drawingSVG, normalizeDrawing } from "../shared/drawing-sheet.js";
 import { summarizeDrawerLayouts } from "./plans/drawer-layout.js";
 
 import { createNativeParametricModel, reviseNativeParameters } from "./native-parameters.js";
@@ -711,6 +712,33 @@ export function initMcp(app) {
     throw new Error("Export format must be stl, step or 3mf");
   }
 
+  async function drawingSheet(p) {
+    assertIdle(); checkRevision(p.expectedRevision);
+    const revision = currentRevision();
+    const drawing = normalizeDrawing({ ...p.drawing, date: p.drawing?.date ?? new Date().toISOString().slice(0, 10) });
+    const bodies = selectExportBodies(store.doc.bodies, { scope: p.scope, bodyIds: p.bodyIds });
+    if (!bodies.length) throw new Error(`No eligible bodies to draw in ${p.scope || "printable"} scope`);
+    const errors = readyBodies(app, bodies.map((body) => body.id)).filter((entry) => entry.error || entry.pending).map((entry) => ({ id: entry.id, error: entry.error || "Geometry is still building" }));
+    if (errors.length) throw new Error(`Cannot draw while geometry errors remain: ${JSON.stringify(errors)}`);
+    const projections = await app.kernel.project(bodies.map((body) => ({ node: resolveNode(body.node, store.doc), m: body.m })), drawingCameras(drawing.views), { hidden: drawing.hiddenLines });
+    checkRevision(revision);
+    return { revision, bodyIds: bodies.map((body) => body.id), sheet: composeDrawing(projections, drawing) };
+  }
+
+  async function drawingImage(svg, { width, height }, pixels = 1600) {
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    try {
+      const image = new Image();
+      await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error("Could not render the drawing image")); image.src = url; });
+      const canvas = document.createElement("canvas");
+      canvas.width = pixels; canvas.height = Math.round((pixels * height) / width);
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    } finally { URL.revokeObjectURL(url); }
+  }
+
   async function execute(command) {
     const p = command.params || {};
     switch (command.action) {
@@ -820,6 +848,17 @@ export function initMcp(app) {
         if (!["stl", "step", "3mf"].includes(p.format)) throw new Error("Unknown export completion format");
         app.onExport && app.onExport(p.format); return { notified: true };
       case "export_model": return exportModel(p.format, p.name || store.doc.name || "design", { scope: p.scope, bodyIds: p.bodyIds });
+      case "render_drawing": {
+        const { revision, bodyIds, sheet } = await drawingSheet(p);
+        return { revision, bodyIds, ...sheet.report, imageDataUrl: await drawingImage(drawingSVG(sheet), sheet.sheet, sheet.sheet.size === "A3" ? 2000 : 1600) };
+      }
+      case "export_drawing": {
+        if (!["svg", "pdf"].includes(p.format)) throw new Error("Drawing format must be svg or pdf");
+        const { revision, bodyIds, sheet } = await drawingSheet(p);
+        const bytes = p.format === "pdf" ? drawingPDF(sheet) : new TextEncoder().encode(drawingSVG(sheet));
+        if (bytes.byteLength > MAX_EXPORT_BYTES) throw new Error("Drawing export exceeds the local export budget");
+        return { format: p.format, revision, bodyIds, report: sheet.report, byteLength: bytes.byteLength, base64: base64(bytes) };
+      }
       default: throw new Error(`Unknown JumpStart MCP action: ${command.action}`);
     }
   }
@@ -862,7 +901,7 @@ export function initMcp(app) {
     try {
       const { command } = await post("/poll", { editorId }, pollAbort.signal);
       if (command) {
-        const reading = ["get_document", "inspect_geometry", "select_geometry", "list_editors", "get_tutorial_status"].includes(command.action);
+        const reading = ["get_document", "inspect_geometry", "select_geometry", "list_editors", "get_tutorial_status", "render_drawing", "export_drawing"].includes(command.action);
         if (!reading) clearTimeout(statusTimer);
         showStatus({ action: command.action, checking: false, online: true, recent: true, ...(reading ? {} : { error: null, outcome: null }) });
         const before = currentRevision();

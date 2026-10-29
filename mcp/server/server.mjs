@@ -411,7 +411,7 @@ async function dispatch(action, params) {
   const command = { id: randomUUID(), action, params: { ...params } };
   delete command.params.editorId;
 
-  const timeoutMs = action === "export_model" ? 60_000 : (action === "preview_model" || action.startsWith("preview_") && (params.requirements?.pairs?.length || params.requirements?.preserveRegions?.length || params.requirements?.intent?.changeRegion)) ? 60_000 : 30_000;
+  const timeoutMs = ["export_model", "render_drawing", "export_drawing"].includes(action) ? 60_000 : (action === "preview_model" || action.startsWith("preview_") && (params.requirements?.pairs?.length || params.requirements?.preserveRegions?.length || params.requirements?.intent?.changeRegion)) ? 60_000 : 30_000;
   const resultPromise = new Promise((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(command.id);
@@ -739,6 +739,7 @@ async function executeTool(name, args) {
       operations: ["native Gridfinity bins, inserts and baseplates with optional aligned magnet pockets", "drawerLayout measured drawer planning with native bins and tiled baseplates", "setRole body metadata", "operator-managed STL/3MF/STEP/STP imports by digest id", "rectangular frame preset", "native bound rectangle/extrusion", "native parameters", "native Lathe profile/hollow/scale", "primitives", "circle/polygon/rounded-rectangle/line-arc-spline contour profiles", "line/arc path sketches", "extrude", "revolve", "loft", "sweep", "pipe", "coil", "linear/circular/path body patterns", "linear/circular patterns of editable hole, emboss, and sketch-backed boolean features", "transforms", "linked or joined body mirrors", "plane-based splitBody operation (two editable outputs)", "booleans", "native ISO/UNC fasteners", "native parametric spur, straight bevel, and rack gears (module, tooth count, pressure angle, face width, bevel cone angle, optional bore, and rack baseDepth)", "native axial knurled knobs (V-groove sketch, editable extrusion, optional round/hex/D bore)", "native phone cradle (thin angled plate, two ribs, and lower stop)", "fitted planar grid/staggered/circular round and shaped hole patterns", "fillet", "chamfer", "signed planar/cylindrical/spherical face offset", "shell", "hole", "thread", "planar emboss", "scale"],
       inspection: ["top/side/isometric/section images with labeled world axes", "tessellated plane sections", "line/solid intervals", "dimensions", "axis-aligned parallel flat-bottom channels", "printability heuristics: downward overhang area and inward-normal thin-wall probes for a +Z build", "read-only print orientation ranking over axis and largest-flat-face poses", "mesh edge incidence and phone-cradle support connectivity", "semantic native signature queries", "targeted native feature edits", "native protected-region and outside-change-region material differences", "paired before/after detail images", "native/STEP single-solid pair distance, witness points and intersection volume"],
       exports: ["stl", "step", "3mf"],
+      drawings: { formats: ["svg", "pdf"], sheets: ["A4", "A3"], views: ["front", "top", "right", "iso"], dimensions: ["measured overall sizes", "grouped diameter callouts", "requested horizontal, vertical, aligned and diameter dimensions with tolerances"], later: ["section and detail views", "angle dimensions", "DXF"] },
       unsupported: ["interactive pedal/chisel session automation", "spiral bevel tooth geometry and automatic gear-pair placement or mating-accuracy certification", "patterning feature types other than holes, embosses, and sketch-backed extrude/revolve/sweep booleans", "Split Face (the editor cannot edit it and its kernel face selector has no distance/ambiguity guard)", "general sketch constraint solver", "independent analytic contour self-intersection checks (preview relies on CAD kernel face construction)", "sweep taper and twist", "pipe paths picked from existing body edges", "dimensional algebra", "automatic stable topological naming", "mesh-to-parametric reconstruction", "exact mesh pair queries and automatic datum mating", "exact minimum wall thickness everywhere (printability probes sample points)", "physical fit or printability certification"],
       parameterExample: { parameters: { diameter: { value: 100, unit: "mm", min: 10, max: 500 } }, numericReference: { $expr: "diameter / 2" }, operators: ["+", "-", "*", "/", "parentheses"], lifecycle: "preview_model -> inspect_geometry(previewId) -> apply_model -> save_document -> preview_parameters; templates survive native save/reopen" },
       validationLayers: ["schema", "CAD construction", "preview-scoped acceptance requirements and source-preservation checks", "requested geometric measurements", "export mesh checks", "physical fit unverified"],
@@ -779,17 +780,9 @@ async function executeTool(name, args) {
       if (!result?.base64 || !["stl", "step", "3mf"].includes(args.format)) throw new Error("Editor returned an invalid export payload");
       const bytes = Buffer.from(result.base64, "base64");
       if (bytes.length !== result.byteLength || bytes.length > 32 * 1024 * 1024) throw new Error("Export payload failed size validation");
-      await mkdir(EXPORTS, { recursive: true });
       const digest = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
       if (args.format === "3mf" && (bytes.length < 30 || bytes.readUInt32LE(0) !== 0x04034b50 || !bytes.includes(Buffer.from("3D/3dmodel.model")))) throw new Error("Malformed 3MF export");
-      const fileName = `${name}-${digest}.${args.format}`;
-      const path = join(EXPORTS, fileName);
-      try { await writeFile(path, bytes, { flag: "wx", mode: 0o600 }); }
-      catch (error) {
-        if (error.code !== "EEXIST") throw error;
-        const existing = await readFile(path);
-        if (!existing.equals(bytes)) throw new Error("Export filename collision; change the export name and retry");
-      }
+      const path = await writeExport(`${name}-${digest}.${args.format}`, bytes);
       let meshValidation;
       if (args.format === "stl") {
         const count = bytes.length >= 84 ? bytes.readUInt32LE(80) : 0;
@@ -815,8 +808,32 @@ async function executeTool(name, args) {
       await run("export_complete", { editorId: host(args), format: args.format, expectedRevision: result.revision });
       return { format: args.format, revision:result.revision, path, scope: result.scope, bodyIds: result.bodyIds, roles: result.roles, byteLength: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), meshValidation, physicalFit: "unverified", manufacturingPerformance: "unverified" };
     }
+    case "jumpstart_render_drawing": return await run("render_drawing", { editorId: host(args), expectedRevision: args.expectedRevision, scope: args.scope, bodyIds: args.bodyIds, drawing: args.drawing });
+    case "jumpstart_export_drawing": {
+      const name = sanitizeName(args.name || args.drawing.title || "drawing");
+      const result = await run("export_drawing", { editorId: host(args), expectedRevision: args.expectedRevision, scope: args.scope, bodyIds: args.bodyIds, drawing: args.drawing, format: args.format });
+      if (!result?.base64 || !["svg", "pdf"].includes(args.format)) throw new Error("Editor returned an invalid drawing payload");
+      const bytes = Buffer.from(result.base64, "base64");
+      if (bytes.length !== result.byteLength || bytes.length > 32 * 1024 * 1024) throw new Error("Drawing payload failed size validation");
+      if (!bytes.subarray(0, 5).equals(Buffer.from(args.format === "pdf" ? "%PDF-" : "<svg "))) throw new Error(`Malformed ${args.format.toUpperCase()} drawing`);
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const path = await writeExport(`${name}-${sha256.slice(0, 12)}.${args.format}`, bytes);
+      return { format: args.format, revision: result.revision, path, bodyIds: result.bodyIds, byteLength: bytes.length, sha256, ...result.report };
+    }
     default: throw new Error(`Unknown tool: ${name}`);
   }
+}
+
+async function writeExport(fileName, bytes) {
+  await mkdir(EXPORTS, { recursive: true });
+  const path = join(EXPORTS, fileName);
+  try { await writeFile(path, bytes, { flag: "wx", mode: 0o600 }); }
+  catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    const existing = await readFile(path);
+    if (!existing.equals(bytes)) throw new Error("Export filename collision; change the export name and retry");
+  }
+  return path;
 }
 
 function sanitizeName(value) {
@@ -829,12 +846,12 @@ function textContent(value) {
   return { type: "text", text: typeof value === "string" ? value : value?.toolSchemas || value?.schemaFragments ? JSON.stringify(value) : JSON.stringify(value, null, 2) };
 }
 
-const EXPORT_MIME = { stl: "model/stl", step: "model/step", "3mf": "model/3mf" };
+const EXPORT_MIME = { stl: "model/stl", step: "model/step", "3mf": "model/3mf", svg: "image/svg+xml", pdf: "application/pdf" };
 function toolResult(value, name) {
   const content = [];
   if (tools.find((tool) => tool.name === name)?.outputSchema) {
     content.push(textContent(value));
-    if (name === "jumpstart_export_model") content.push({ type: "resource_link", uri: pathToFileURL(value.path).href, name: basename(value.path), mimeType: EXPORT_MIME[value.format] });
+    if (["jumpstart_export_model", "jumpstart_export_drawing"].includes(name)) content.push({ type: "resource_link", uri: pathToFileURL(value.path).href, name: basename(value.path), mimeType: EXPORT_MIME[value.format] });
     return { resultType: "complete", content, structuredContent: value, isError: false };
   }
   if (Array.isArray(value?.images)) {

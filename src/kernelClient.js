@@ -149,6 +149,39 @@ export class KernelClient {
       } catch (error) { finish(unknown(error.message || "Could not start pair inspection worker")); }
     });
   }
+  // Hidden-line projections for drawings, isolated like inspectPairs.
+  project(bodies, cameras, { hidden = true, timeoutMs = 45000 } = {}) {
+    return new Promise((resolve, reject) => {
+      let worker, timer, finished = false;
+      const finish = (error, views) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        worker?.terminate();
+        error ? reject(new Error(error)) : resolve(views);
+      };
+      try {
+        worker = new Worker(this.workerUrl, this.workerType === "classic" ? {} : { type: "module" });
+        timer = setTimeout(() => finish("Drawing projection timed out; draw fewer or simpler bodies"), timeoutMs);
+        worker.onerror = () => finish("Drawing projection worker failed");
+        worker.onmessage = ({ data }) => {
+          if (data.type === "ready") {
+            const assetIds = new Set();
+            JSON.stringify(bodies, (key, value) => { if (key === "asset" && typeof value === "string") assetIds.add(value); return value; });
+            for (const id of assetIds) {
+              const asset = this.assets.get(id);
+              if (!asset) { finish("A drawing asset is unavailable"); return; }
+              const bytes = asset.bytes.slice().buffer;
+              worker.postMessage({ type: "asset", id, kind: asset.kind, bytes }, [bytes]);
+            }
+            worker.postMessage({ type: "project", req: 1, bodies, cameras, options: { hidden } });
+          } else if (data.type === "projected") finish(null, data.views);
+          else if (data.type === "error") finish(data.error || "Drawing projection failed");
+        };
+        worker.postMessage({ type: "init", parts: this.parts });
+      } catch (error) { finish(error.message || "Could not start the drawing projection worker"); }
+    });
+  }
   step(bodies) {
     const req = ++this.req;
     return new Promise((resolve, reject) => {

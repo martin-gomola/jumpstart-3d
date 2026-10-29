@@ -387,6 +387,8 @@ apply commits a successful preview as one undoable edit.
 | `jumpstart_save_document` | Save the current document to browser-local project storage; optionally save a version. |
 | `jumpstart_reopen_document` | Reopen the current project's saved document as a recoverable edit. |
 | `jumpstart_export_model` | Export printable design bodies or an explicit design/hardware assembly as STL, STEP, or 3MF. |
+| `jumpstart_render_drawing` | Draw bodies as a dimensioned 2D sheet and return a PNG with the measured dimensions and warnings. |
+| `jumpstart_export_drawing` | Write that sheet to `exports/` as SVG or PDF. |
 | `jumpstart_start_tutorial` | Start native tutorial checks on the current blank document. |
 | `jumpstart_get_tutorial_status` | Read observed tutorial checks; manual steps are not certified. |
 
@@ -428,6 +430,20 @@ Preview images carry an XYZ axis triad and camera-direction labels. For a
 ribs, and stop form one connected mesh. Applying a phone-cradle preview is
 rejected until that check passes. This checks generated-model connectivity only;
 it does not certify vehicle fit, minimum wall thickness, strength, or printability.
+
+### 2D drawings
+
+`jumpstart_render_drawing` projects native CAD and STEP bodies with OpenCascade
+hidden-line removal onto a landscape A4 or A3 sheet: front, top and right views
+in third- or first-angle projection, an isometric view, a title block and notes.
+It adds overall sizes, centre marks and grouped diameter callouts, plus
+requested horizontal, vertical, aligned and diameter dimensions given as world
+points. The sheet measures every value from the projected geometry. Warnings
+flag points off the geometry, zero-length dimensions, overlapping text and
+views that do not fit the scale. `jumpstart_export_drawing` writes the same
+sheet as SVG or PDF. Both use the export body selection below and leave the
+document unchanged. Section and detail views, angle dimensions and mesh bodies
+are not supported.
 
 ### Body roles and export selection
 

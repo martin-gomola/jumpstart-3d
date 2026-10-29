@@ -1,7 +1,7 @@
 // Web Worker hosting the OpenCascade kernel.
 import opencascade from "replicad-opencascadejs";
 import { gunzip } from "./inflate.js";
-import { initKernel, buildBodies, exportStep, clearCache, setAsset, inspectSolidPairs } from "./kernel.js";
+import { initKernel, buildBodies, exportStep, clearCache, setAsset, inspectSolidPairs, projectBodies } from "./kernel.js";
 
 let ready = null;
 
@@ -70,6 +70,9 @@ self.onmessage = async (ev) => {
     } else if (msg.type === "inspectPairs") {
       await ready;
       self.postMessage({ type: "inspectedPairs", req: msg.req, results: inspectSolidPairs(msg.pairs) });
+    } else if (msg.type === "project") {
+      await ready;
+      self.postMessage({ type: "projected", req: msg.req, views: projectBodies(msg.bodies, msg.cameras, msg.options) });
     } else if (msg.type === "asset") {
       setAsset(msg.id, msg.kind, new Uint8Array(msg.bytes));
     } else if (msg.type === "clear") {

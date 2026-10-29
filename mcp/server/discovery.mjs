@@ -61,6 +61,7 @@ export function publishTools(tools) {
     if (tool.name.startsWith("jumpstart_preview_") && tool.name !== "jumpstart_preview_model" && inputSchema.properties?.requirements) {
       inputSchema.properties.requirements = { type: "object", description: `Optional acceptance requirements, same shape as jumpstart_preview_model requirements. Full schema: jumpstart_get_capabilities with toolNames ["${tool.name}"]. The server validates it in full.` };
     }
+    if (inputSchema.properties?.drawing) inputSchema.properties.drawing = { type: "object", required: ["title"], description: 'Full schema: jumpstart_get_capabilities toolNames ["jumpstart_render_drawing"].' };
     const operations = inputSchema.properties?.plan?.properties?.operations?.items;
     if (operations?.oneOf) {
       operations.oneOf = operations.oneOf.map((variant) => {

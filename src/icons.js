@@ -46,6 +46,7 @@ export const ICON = {
   arcc: S('<path d="M20 12a8 8 0 0 0-8-8"/><path d="M12 12V4M12 12h8" stroke-dasharray="1.5 1.5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>'),
   polygon: S('<path d="M12 3l8 5v8l-8 5-8-5V8z"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/>'),
   offset: S('<path d="M4 20h16M4 20V11h16v9" /><path d="M4 11V7h16v4" stroke-dasharray="2 2"/><path d="M12 9V2M9.5 4.5 12 2l2.5 2.5" stroke="#1f4fa8"/>'),
+  fillOpenings: S('<path d="M3 17h18M3 17V9h18v8"/><circle cx="8" cy="13" r="2" stroke="#1f4fa8" fill="#1f4fa8" fill-opacity=".35"/><circle cx="16" cy="13" r="2" stroke-dasharray="1.5 1.5"/>'), // jumpstart-3d: fill openings
   lock: S('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
   unlock: S('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>'),
   magnet: S('<path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 3h4v8a2 2 0 0 0 4 0V3h4" /><path d="M6 7h4M14 7h4"/>'),

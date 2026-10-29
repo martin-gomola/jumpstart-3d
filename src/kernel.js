@@ -1,5 +1,6 @@
 import { measureSolidPair, measureRegionDifference, validatePairPlacement } from "./pairGeometry.js";
 import { projectShape } from "./drawingGeometry.js";
+import { faceOpenings, fillOpenings } from "./fillOpenings.js";
 // Geometry kernel: turns the document's node trees into OpenCascade solids
 // and meshes. Runs inside a Web Worker in the app, and directly in Node for tests.
 import * as R from "replicad";
@@ -1266,6 +1267,7 @@ function applyMod(shape, mod) {
       }
       return cur;
     }
+    case "fillopenings": return fillOpenings(shape, mod, OC); // jumpstart-3d: fill openings
     case "shell": {
       const t = Math.abs(mod.th || 1);
       const dir = mod.dir === "out" || mod.dir === "both" ? mod.dir : "in";
@@ -2816,6 +2818,8 @@ function scaleMod(m, k, o) {
       return { ...m, faces: (m.faces || []).map((f) => ({ ...f, c: P(f.c), n: N(f.n) })) };
     case "thread":
       return { ...m, face: { ...m.face, c: P(m.face.c) } };
+    case "fillopenings": // jumpstart-3d: fill openings
+      return { ...m, face: { c: P(m.face.c), n: N(m.face.n) }, loops: (m.loops || []).map((l) => ({ ...l, c: P(l.c) })) };
     case "facepat":
       return { ...m, p: P(m.p), n: N(m.n) };
     case "bool": {
@@ -3296,6 +3300,7 @@ export function meshShape(shape, quality = 1) {
       else if (t === "PLANE") {
         info.n = unitT(f.normalAt().toTuple());
         info.c = f.center.toTuple();
+        try { const o = faceOpenings(f, OC); if (o.length) info.openings = o; } catch (err) {} // jumpstart-3d: fill openings
       } else {
         info.c = f.center.toTuple();
         if (t === "SPHERE") {

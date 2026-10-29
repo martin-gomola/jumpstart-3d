@@ -4181,6 +4181,82 @@ export function initAdvanced(app) {
     openCmd(def);
   }
 
+  // ------------------------------------------------------------------ Fill openings
+  // jumpstart-3d: fill openings. Pick a flat face; its holes, slots and pockets (the face's inner loops) are filled.
+  function fillOpeningsCmd(editing = null) {
+    const st = { pick: null, on: [], mode: "opening", depth: 5, hot: -1 };
+    let hover = null, keep = null;
+    if (editing) {
+      const b = findBody(store.doc, editing.body);
+      const m = b.node.mods.find((x) => x.id === editing.mod);
+      keep = { body: b.id, face: m.face, loops: m.loops };
+      if (typeof m.depth === "number") { st.mode = "set"; st.depth = m.depth; }
+    }
+    const openings = () => (st.pick ? st.pick.info.openings : []);
+    const loops = () => (st.pick ? openings().filter((_, i) => st.on[i]).map((o) => ({ c: o.c, size: o.size })) : keep ? keep.loops : []);
+    const label = (o) => (o.kind === "round" ? `Round, ${withUnit(o.size[0])} across` : `${o.kind === "slot" ? "Slot" : "Opening"}, ${showLen(o.size[0])} × ${withUnit(o.size[1])}`);
+    const def = {
+      title: (editing ? "Edit " : "") + "Fill openings",
+      valid: () => loops().length > 0 && (st.mode === "opening" || st.depth > 0),
+      canOk: () => def.valid(),
+      apply(doc) {
+        const b = findBody(doc, st.pick ? st.pick.body : keep && keep.body);
+        if (!b) return;
+        const fields = { face: st.pick ? { c: st.pick.info.c, n: st.pick.info.n } : keep.face, loops: loops(), depth: st.mode === "set" ? st.depth : "opening" };
+        if (editing) { Object.assign(b.node.mods.find((x) => x.id === editing.mod), fields); return; }
+        b.node.mods = b.node.mods || [];
+        b.node.mods.push({ id: uid("f"), seq: nextSeq(doc), t: "fillopenings", ...fields });
+      },
+      ok() { commit(def, "Fill openings"); },
+      onDelete: editing ? () => deleteFeature(editing) : null,
+      hint: () => (st.pick ? "Untick the openings to keep. Each one fills as deep as its side walls go, or to the depth you set." : "Click a flat face with holes, slots or pockets in it."),
+      build(body) {
+        body.append(pickbox(true, st.pick ? "1 face" : editing ? "Keeps the original face" : "Select a flat face", st.pick ? () => { st.pick = null; st.on = []; st.hot = -1; refresh(); } : null));
+        if (st.pick) {
+          body.append(el("div", { class: "subhead" }, "Openings"));
+          openings().forEach((o, i) => body.append(el("label", { class: "check", onpointerenter: () => { st.hot = i; draw(); }, onpointerleave: () => { st.hot = -1; draw(); } },
+            el("input", { type: "checkbox", id: "fo-open" + i, checked: st.on[i], onchange: (e) => { st.on[i] = e.target.checked; refresh(false); } }), label(o))));
+        }
+        body.append(row("Fill to", seg([["opening", "Opening depth"], ["set", "Set depth"]], st.mode, (v) => { st.mode = v; refresh(); }, "fo-mode")));
+        if (st.mode === "set") body.append(row("Depth", app.numField({ value: st.depth, id: "fo-depth", step: 0.5, min: 0.01, live: true, onCommit: (v) => { st.depth = v; refresh(false); } }), "fo-depth"));
+      },
+      start() { refresh(); },
+      handler: {
+        hover(e) {
+          const f = pickBaseFace(e, (b) => !b.hole && !b.locked);
+          hover = f && f.info ? f : null;
+          draw();
+          vp.canvas.style.cursor = hover ? "pointer" : "default";
+        },
+        down(e) {
+          const f = pickBaseFace(e, (b) => !b.hole && !b.locked);
+          if (!f) return true;
+          if (!f.info || f.info.t !== "PLANE") { app.toast("Pick a flat face"); return true; }
+          if (!(f.info.openings && f.info.openings.length)) { app.toast("This face has no openings"); return true; }
+          st.pick = f; st.on = f.info.openings.map(() => true); st.hot = -1;
+          refresh();
+          return true;
+        },
+      },
+    };
+    function draw() {
+      clearOv();
+      if (st.pick) drawFace(st.pick.base, st.pick.face, 0x2f66c8);
+      if (hover && !(st.pick && hover.base === st.pick.base && hover.face === st.pick.face)) drawFace(hover.base, hover.face, 0xe8a317);
+      const o = openings()[st.hot];
+      if (!o) return;
+      // a ring around the opening under the pointer in the list
+      const n = new THREE.Vector3(...st.pick.info.n);
+      const u = new THREE.Vector3().crossVectors(n, Math.abs(n.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0)).normalize();
+      const v = new THREE.Vector3().crossVectors(n, u), c = new THREE.Vector3(...o.c), r = Math.max(...o.size) / 2 + 1;
+      const pts = [];
+      for (let i = 0; i <= 48; i++) { const a = (i / 48) * Math.PI * 2; pts.push(c.clone().addScaledVector(u, Math.cos(a) * r).addScaledVector(v, Math.sin(a) * r).applyMatrix4(st.pick.base.m)); }
+      drawLine(pts, 0xe8a317);
+    }
+    function refresh(rerender = true) { if (rerender) def.render(); draw(); schedulePreview(def); }
+    openCmd(def);
+  }
+
   // Shell, like Fusion 360: pick faces to remove (or none, for a closed hollow body), a
   // wall thickness, and whether the wall grows inside, outside or both ways.
   // Shell: Openings (pick faces to remove; the rest becomes a wall), or Hollow (the whole model is
@@ -5610,6 +5686,7 @@ export function initAdvanced(app) {
     else if (m.t === "hole") holeCmd({ body: b.id, mod: m.id });
     else if (m.t === "shell") shellCmd({ body: b.id, mod: m.id });
     else if (m.t === "offset") offsetCmd({ body: b.id, mod: m.id });
+    else if (m.t === "fillopenings") fillOpeningsCmd({ body: b.id, mod: m.id }); // jumpstart-3d: fill openings
     else if (m.t === "thread") threadCmd({ body: b.id, mod: m.id });
     else if (m.t === "scale") scaleCmd({ body: b.id, mod: m.id });
     else if (m.t === "emboss") embossCmd({ body: b.id, mod: m.id });
@@ -5839,6 +5916,7 @@ export function initAdvanced(app) {
           { id: "ad-chamfer", label: "Chamfer", title: "Bevel edges (C)", icon: "chamfer", on: edgeTool === "chamfer", fn: () => { edgeTool = "chamfer"; renderRibbon(); edgeCmd("chamfer"); } },
         ] },
       { id: "ad-offset", label: "Offset face", title: "Offset face / press pull (Q)", icon: "offset", fn: () => offsetCmd() },
+      { id: "ad-fillopen", label: "Fill openings", title: "Fill the holes, slots and pockets that open onto a flat face", icon: "fillOpenings", fn: () => fillOpeningsCmd() }, // jumpstart-3d: fill openings
       { id: "ad-shell", label: "Shell", icon: "shell", fn: () => shellCmd() },
       { id: "ad-advmod", label: "Advanced Modify", title: "Combine, Split body and Split face", icon: "combine", dropdown: [
         { id: "ad-combine", label: "Combine", title: "Join, cut or intersect bodies (B)", icon: "combine", fn: () => combineCmd() },
@@ -6013,7 +6091,7 @@ export function initAdvanced(app) {
   }
 
   // ------------------------------------------------------------------ timeline
-  const TL_ICON = { sketch: "sketch", prim: "prim", extrude: "extrude", revolve: "revolve", fillet: "fillet", chamfer: "chamfer", hole: "hole", shell: "shell", offset: "offset", combine: "combineIcon", bool: "extrude", thread: "thread", scale: "scale", texture: "texture", sweep: "sweep", pipe: "pipe", coil: "coil", loft: "loft", mirror: "mirror", halfspace: "splitBody", sketchsplit: "splitBody", splitface: "splitFace", emboss: "emboss", facepat: "facePattern", plane: "planeOffset", joint: "joint" };
+  const TL_ICON = { sketch: "sketch", prim: "prim", extrude: "extrude", revolve: "revolve", fillet: "fillet", chamfer: "chamfer", hole: "hole", shell: "shell", offset: "offset", fillopenings: "fillOpenings", combine: "combineIcon", bool: "extrude", thread: "thread", scale: "scale", texture: "texture", sweep: "sweep", pipe: "pipe", coil: "coil", loft: "loft", mirror: "mirror", halfspace: "splitBody", sketchsplit: "splitBody", splitface: "splitFace", emboss: "emboss", facepat: "facePattern", plane: "planeOffset", joint: "joint" }; // jumpstart-3d: fill openings
   let lastTl = null, lastTlT = 0;
   function renderTimeline() {
     tl.innerHTML = "";

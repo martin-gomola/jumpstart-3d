@@ -7,7 +7,21 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: build/site
     autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
     headers:
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow, noarchive, nosnippet, noimageindex
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
+      # app.js, worker.js and occt-gz.wasm keep their names across builds, so
+      # browsers revalidate them instead of caching them for a year.
+      - path: /*
+        name: Cache-Control
+        value: no-cache

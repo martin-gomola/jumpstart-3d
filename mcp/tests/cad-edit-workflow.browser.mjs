@@ -73,6 +73,7 @@ test("general native feature editing protects regions, compares before/after det
  expect(part.editing.features.find(f=>f.id==="$base").editable).toBe(true);
  const compact=await tool("jumpstart_get_document",{editorId,bodyIds:[part.id],includeGeometry:true,includeSelectors:false,includeFeatureTree:false});
  expect(compact.bodies[0].geometryFingerprint).toBe(part.geometrySelectors.fingerprint);expect(compact.bodies[0].geometrySelectors).toBeUndefined();expect(compact.bodies[0].featureTree).toBeUndefined();expect(compact.bodies[0].editing.features[0].values.distance).toBe(10);expect(compact.bodies[0].placementMatrix).toHaveLength(16);
+ expect(baseline.selectedBodyIds.length).toBeGreaterThan(0);await page.evaluate(()=>window.__app.select([]));expect((await tool("jumpstart_get_document",{editorId})).selectedBodyIds).toEqual([]);await page.evaluate((id)=>window.__app.select([id]),part.id);const picked=await tool("jumpstart_get_document",{editorId});expect(picked.selectedBodyIds).toEqual([part.id]);expect(picked.revision).toBe(baseline.revision);await page.evaluate(()=>window.__app.select([]));
  await page.click("#unit-toggle"); const inches=await get();expect(inches.units).toBe("mm");expect(inches.displayUnits).toBe("in");expect(inches.revision).toBe(baseline.revision);await page.click("#unit-toggle");
 
  const baseArgs={editorId,expectedRevision:baseline.revision,expectedFingerprint:part.geometrySelectors.fingerprint,edit:{bodyId:part.id,featureId:"$base",action:"update",values:{distance:14}}};

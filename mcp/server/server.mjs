@@ -257,7 +257,7 @@ const tools = extendMcpTools([
   {
     name: "jumpstart_get_document",
     title: "Read the active CAD document",
-    description: "Read document identity, revision, units, sketches, body features, world bounds, local dimensions, volume, triangle counts, and geometry errors. With includeGeometry true, also return capped edge and face selectors in body-local millimeters for fillet, chamfer, shell, hole, thread, and emboss edits. The returned units field is the UI display preference.",
+    description: "Read document identity, revision, units, sketches, body features, world bounds, local dimensions, volume, triangle counts, and geometry errors. selectedBodyIds lists the bodies the user has selected in the editor, so \"this part\" can be resolved without guessing; it is empty when nothing is selected, and jumpstart_apply_model selects the bodies it applied. With includeGeometry true, also return capped edge and face selectors in body-local millimeters for fillet, chamfer, shell, hole, thread, and emboss edits. The returned units field is the UI display preference.",
     inputSchema: { type: "object", additionalProperties: false, properties: { ...commonEditor, includeGeometry: { type: "boolean", description: "Include sketch coordinates and feature nodes so an agent can revise the editable CAD model. Large sketches are capped." } } },
   },
   {

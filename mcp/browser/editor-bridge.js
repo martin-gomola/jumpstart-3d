@@ -147,6 +147,7 @@ function documentSummary(app, editorId, revision, includeGeometry = false, optio
     revision,
     document: { id: doc.id, name: doc.name, mode: doc.mode ?? app.mode },
     units: "mm", displayUnits: getUnit(),
+    selectedBodyIds: (app.sel || []).filter((id) => doc.bodies.some((body) => body.id === id && !body.cutPreview)),
     nativeParameters: (doc.params || []).slice(0, 256).map((parameter) => ({
       id: String(parameter.id || "").slice(0, 120), name: String(parameter.name || "").slice(0, 120),
       expression: String(parameter.expr || "").slice(0, 2000), unit: String(parameter.unit || "mm").slice(0, 30),

@@ -1,0 +1,9 @@
+# Optional Wi-Fi/VPN editor access, in the same container. MCP stays on loopback.
+services:
+  jumpstart:
+    ports:
+      - "${JUMPSTART_LAN_ADDRESS:?Set the server LAN IP}:3210:3212"
+    environment:
+      JUMPSTART_LAN_PORT: "3212"
+      JUMPSTART_LAN_HOST: "0.0.0.0"
+      JUMPSTART_LAN_ORIGINS: "http://${JUMPSTART_LAN_ADDRESS:?Set the server LAN IP}:3210,${JUMPSTART_CAD_ORIGIN:-}"

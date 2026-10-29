@@ -4,10 +4,13 @@ services:
     container_name: jumpstart-3d
     ports:
       - "127.0.0.1:3210:3210"
+      - "${JUMPSTART_AR_BIND_ADDRESS:-0.0.0.0}:3211:3211"
     volumes:
       - "${JUMPSTART_DATA_DIR:?Set JUMPSTART_DATA_DIR in .env}/exports:/app/exports"
       - "${JUMPSTART_DATA_DIR:?Set JUMPSTART_DATA_DIR in .env}/imports:/app/imports:ro"
     environment:
+      JUMPSTART_AR_PORT: "3211"
+      JUMPSTART_AR_HOST: "0.0.0.0"
       JUMPSTART_MCP_TRACE: "${JUMPSTART_MCP_TRACE:-0}"
     restart: unless-stopped
     healthcheck:

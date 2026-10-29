@@ -45,6 +45,14 @@ make up
 Open [http://localhost:3210/?mcp=1](http://localhost:3210/?mcp=1) and keep the
 tab open. The AI button in the top bar shows whether an agent is connected.
 
+## Access from your Wi-Fi or VPN
+
+Set `JUMPSTART_LAN_ADDRESS` to your server's LAN IP and, optionally, `JUMPSTART_CAD_ORIGIN` to your HTTPS CAD hostname in `.env`, then run `make up-lan`.
+
+The same container publishes the editor on `<LAN-IP>:3210` and AR shares on port `3211`. The LAN editor accepts only the configured addresses. A reverse proxy can forward the CAD hostname to `<LAN-IP>:3210` and the AR hostname to `<LAN-IP>:3211`. Use the Wi-Fi network or your VPN on the phone.
+
+The localhost editor and MCP retain `127.0.0.1:3210`. Network editor pages support manual modeling and AR sharing; agent connections remain local, even with `?mcp=1`. Designs are stored per browser origin, so opening the IP address or another hostname does not automatically transfer existing browser-local projects. Save and open a project file to move one.
+
 ## Connect an agent
 
 | Agent | Command |
@@ -104,7 +112,7 @@ connection; run the app locally for that.
 
 ## iPhone AR preview (prototype)
 
-Open **Open/Export → View in AR / QR** to create a temporary USDZ snapshot and QR code. Enter an HTTPS address reachable by your phone, with only `/ar/` forwarded to the local JumpStart server. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
+Open **Open/Export → View in AR / QR** to create a temporary USDZ snapshot and QR code. Enter an HTTPS address reachable by your phone, with Nginx Proxy Manager forwarding to the same JumpStart container’s read-only AR port `3211`. MCP remains restricted to localhost, including when the network editor is enabled. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
 
 See the [AR setup and verification notes](AR-QR-RESEARCH.md#prototype-implemented). Actual iPhone placement and your HTTPS route still need device verification.
 

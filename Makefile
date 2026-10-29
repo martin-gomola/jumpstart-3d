@@ -39,3 +39,9 @@ plugin:
 
 benchmark:
 	npm run benchmark:tutorials
+
+# Publish the editor on the configured LAN IP while keeping MCP on localhost.
+.PHONY: up-lan
+up-lan:
+	mkdir -p exports
+	docker compose -f compose.yaml -f compose.lan.yaml up -d --build --wait

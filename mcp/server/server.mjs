@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createLanEditor } from "./lan-editor.mjs";
 import { createArShares } from "./ar-shares.mjs";
 import { createAgentTrace } from "./agent-trace.mjs";
 
@@ -608,8 +609,8 @@ function matchesIfModifiedSince(req, mtimeMs) {
   return Math.floor(mtimeMs / 1000) * 1000 <= since;
 }
 
-async function serveStatic(req, res, pathname) {
-  if (!allowedLocalRequest(req, true)) {
+async function serveStatic(req, res, pathname, networkEditor = false) {
+  if (!networkEditor && !allowedLocalRequest(req, true)) {
     process.stderr.write(`Rejected local app request: method=${req.method} host=${req.headers.host || ""} origin=${req.headers.origin || ""} site=${req.headers["sec-fetch-site"] || ""} mode=${req.headers["sec-fetch-mode"] || ""} dest=${req.headers["sec-fetch-dest"] || ""}\n`);
     return json(res, 403, { error: "Only localhost requests are accepted" });
   }
@@ -637,7 +638,7 @@ async function serveStatic(req, res, pathname) {
     try {
       let shell = await readFile(file, "utf8");
       const bridgeMeta = '<meta name="jumpstart-mcp-bridge" content="1">';
-      shell = shell.includes("</head>")
+      if (!networkEditor) shell = shell.includes("</head>")
         ? shell.replace("</head>", `${bridgeMeta}\n</head>`)
         : shell.replace("<title>", `${bridgeMeta}\n<title>`);
       shellBuffer = Buffer.from(shell, "utf8");
@@ -705,6 +706,33 @@ const server = createServer((req, res) => {
   if (pathname.startsWith("/__mcp/")) { void handleBridge(req, res, pathname); return; }
   void serveStatic(req, res, pathname);
 });
+
+// The same process owns a separate read-only listener for the phone/proxy.
+const arPort = Number(process.env.JUMPSTART_AR_PORT || 0);
+if (!Number.isInteger(arPort) || arPort < 0 || arPort > 65535) throw new Error("Invalid JUMPSTART_AR_PORT");
+const arServer = arPort ? createServer((req, res) => {
+  const path = new URL(req.url || "/", "http://localhost").pathname;
+  if (path.startsWith("/ar/")) { void handleAr(req, res, path); return; }
+  res.writeHead(404, { "Content-Type": "text/plain", "Cache-Control": "no-store" }); res.end("Not found");
+}) : null;
+if (arServer) {
+  arServer.on("error", error => { process.stderr.write(`JumpStart AR server failed: ${error.message}\n`); process.exitCode = 1; close(); });
+  arServer.listen(arPort, process.env.JUMPSTART_AR_HOST || "127.0.0.1");
+}
+
+const lanPort = Number(process.env.JUMPSTART_LAN_PORT || 0);
+if (!Number.isInteger(lanPort) || lanPort < 0 || lanPort > 65535) throw new Error("Invalid JUMPSTART_LAN_PORT");
+const lanOrigins = (process.env.JUMPSTART_LAN_ORIGINS || "").split(",").map(value => value.trim()).filter(Boolean);
+for (const origin of lanOrigins) {
+  const url = new URL(origin);
+  if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin) throw new Error("LAN origins must be HTTP(S) origins without paths or credentials");
+}
+if (lanPort && !lanOrigins.length) throw new Error("JUMPSTART_LAN_ORIGINS is required for network editor access");
+const lanServer = lanPort ? createLanEditor({ origins: lanOrigins, serveStatic, handleAr }) : null;
+if (lanServer) {
+  lanServer.on("error", error => { process.stderr.write(`JumpStart LAN editor failed: ${error.message}\n`); process.exitCode = 1; close(); });
+  lanServer.listen(lanPort, process.env.JUMPSTART_LAN_HOST || "127.0.0.1");
+}
 
 const host = (args) => typeof args.editorId === "string" ? args.editorId : undefined;
 
@@ -929,6 +957,8 @@ function close() {
   for (const [editorId] of waiters) settleWaiter(editorId, null);
   for (const [commandId] of pending) settlePending(commandId, { ok: false, error: "MCP server is shutting down" });
   server.close();
+  arServer?.close();
+  lanServer?.close();
 }
 
 server.listen(PORT, HOST, () => {

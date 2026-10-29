@@ -2,11 +2,38 @@
 
 ## Contents
 
+- Find product dimensions
 - Attach acceptance requirements
 - Review the proposed change
 - Preview, inspect, then apply
 - Save and hand off
 - Failure recovery
+
+## Find product dimensions
+
+When a part must fit a named commercial product, research it with the client's
+own search and file tools before asking the user for numbers. The user should
+not have to request this. Prefer sources in this order:
+
+1. The manufacturer's dimensioned drawing or accessory guide. Apple, for
+   example, publishes accessory dimensional drawings for each iPhone, iPad and
+   Watch, with camera keep-outs, corner radii and button positions.
+2. Manufacturer or attributable CAD (STEP) that the operator places in managed
+   imports, or a catalog part through the `step-parts` companion. Check its
+   licence before use.
+3. The manufacturer's specification page, which usually gives only overall size.
+4. Commercial accessories for the same product (cases, mounts, holders). Use
+   them for features and style, such as a raised screen lip, open or covered
+   buttons and wall thickness. Their numbers are `assumed`, never the product's
+   geometry.
+
+Read a drawing with [Dimensioned drawings](dimensioned-drawings.md): from
+rendered pages, not extracted PDF text, into a dimension ledger with the source,
+revision, page and view of each `listed` value. Confirm the exact model and
+variant first; similar models differ. Do not copy a proprietary drawing into the
+project. Ask the user only for what the sources leave open, such as their
+variant, or a caliper measurement where the drawing has no dimension.
+Without research tools, say so and ask for the drawing or measurements.
 
 ## Attach acceptance requirements
 

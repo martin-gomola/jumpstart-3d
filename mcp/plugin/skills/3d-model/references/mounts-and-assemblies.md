@@ -5,6 +5,7 @@
 - Assemble and mount imported parts
 - Classify assembly context
 - Vehicle phone holders and the `phoneCradle` recipe
+- Phone cases
 
 ## Assemble and mount imported parts
 
@@ -107,3 +108,18 @@ A charger cover describes a top outline; it does not establish the dimensions of
 the tapered cavity beneath it. Keep conceptual cavity dimensions labeled as
 estimates. Check how the phone is inserted and removed, access to ports, and
 space for the gear selector. Add only requested storage and support material.
+
+## Phone cases
+
+Get the phone's geometry from the manufacturer's drawing first ([Find product
+dimensions](inspection-and-recovery.md)). Model the phone as a `reference` body,
+then build the case around it with named parameters for wall, fit gap, screen
+lip, camera lip and each cut-out, and attach a `requirements.pairs` check
+between case and phone. Keep camera and flash openings outside the drawing's
+keep-out cones, and chamfer the camera opening's trim.
+
+A snap-on case needs a flexible filament such as TPU, with walls of about
+1.2-1.6 mm; a PLA case cannot stretch over the phone and must slide on or split.
+Rounded phone sides are approximated with fillets, so propose a short test print
+of one corner with the camera opening before the full case, and report the
+printed fit as unverified.

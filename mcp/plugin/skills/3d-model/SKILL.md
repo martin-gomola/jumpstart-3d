@@ -1,8 +1,8 @@
 ---
 name: 3d-model
-description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
+description: Creates and revises editable CAD parts, measured drawer layouts, Gridfinity bins, baseplates and custom inserts, household objects, and imported-part assemblies in JumpStart through local MCP. Use for drawer organization, magnet pockets, measured cutouts, trays, brackets, enclosures, hooks, phone holders and cases, spacers, knobs, fit checks, imported STL resizing, and tutorial models. Avoid generic 3D illustration, rendering, website design, and standalone product comparisons.
 metadata:
-  version: "1.17.0"
+  version: "1.18.0"
 ---
 
 # Model a part in JumpStart
@@ -23,7 +23,8 @@ copy the entire tool catalog into working notes.
 | Gridfinity inserts, bins, baseplates, measured cutouts and item-source research for those models | [Gridfinity](references/gridfinity.md) |
 | Frames, trays, brackets, hooks, cups, parameter models | [Household parts](references/household-parts.md) |
 | Knurled knobs, shaft bores, gears, turned (Lathe) parts | [Knobs, gears and turned parts](references/knobs-gears-and-turned-parts.md) |
-| Phone holders and cradles, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
+| Phone holders, cradles and cases, board mounts, imported assemblies | [Mounts and assemblies](references/mounts-and-assemblies.md) |
+| A dimensioned drawing: a product to design around or a part to make | [Dimensioned drawings](references/dimensioned-drawings.md) |
 | Existing native part, feature or interface edits | [Edit existing parts](references/edit-existing-parts.md) |
 | STL/3MF/STEP imports and resizing | [Imported parts](references/imported-parts.md) |
 | A named or pictured JumpStart tutorial | [Tutorial models](references/tutorial-models.md) |
@@ -48,8 +49,7 @@ copy the entire tool catalog into working notes.
 ## Specify
 
 1. State the required dimensions, orientation, body roles, output format, and
-   preserved parts. Separate supplied measurements from assumptions. Ask for missing
-   dimensions that determine intended shape or fit. Keep provisional choices explicit
+   preserved parts. Separate supplied measurements from assumptions. When the part must fit a named product (phone, tool, board, appliance), find its dimensions yourself before asking ([Find product dimensions](references/inspection-and-recovery.md)); ask only for the variant or measurements the sources leave open. Keep provisional choices explicit
    and editable. For printed parts, use the print reference's default printer profile.
 2. Write a measurable acceptance checklist before building. Attach supported
    `requirements` to the preview: document body count, preserved body ids, and

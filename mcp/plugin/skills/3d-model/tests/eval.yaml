@@ -48,6 +48,26 @@ cases:
       - "Uses available client research tools without introducing an MCP URL-fetch tool or bypassing managed imports."
     fail_if:
       - "Uses a similar product's overall dimensions as a verified fitted outline."
+  - id: phone-case-self-sourced
+    prompt: "Design a case for my iPhone 15 Pro."
+    setup: "Client research tools are available; the user gave no dimensions."
+    expect:
+      - "Finds the manufacturer's dimensional drawing without being asked, and reads it from rendered pages."
+      - "Records source, page and view for listed values and keeps the phone as a reference body."
+      - "Uses commercial cases only for features and style, labels their numbers as assumed, and proposes TPU with a test print."
+    fail_if:
+      - "Asks the user for dimensions the published drawing provides."
+      - "Treats overall spec-page size or a commercial case's numbers as the phone's fitted geometry."
+  - id: drawing-to-model
+    prompt: "Model this bracket from the attached drawing."
+    setup: "A vector PDF with a third-angle title block, general tolerances, ordinate dimensions, a 4X hole callout and one digit too small to read in a detail view."
+    expect:
+      - "Reads the title block, notes and views before the numbers, and renders and crops the pages instead of using extracted PDF text."
+      - "Builds a dimension ledger with view, kind, tolerance and status, maps the datums to model axes, and marks the small digit unreadable."
+      - "Attaches dimension checks for ledger values and reports each row as checked, unchecked or unreadable."
+    fail_if:
+      - "Guesses an unreadable digit or measures the picture of a sheet whose scale is NONE."
+      - "Models four separate holes instead of one pattern from the 4X callout."
   - id: gridfinity-photo-shape-unknown
     prompt: "Use this product photo to make an exact fitted Gridfinity pocket."
     setup: "Only an oblique photograph and overall width/length/height are available."

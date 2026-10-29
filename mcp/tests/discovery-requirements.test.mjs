@@ -136,7 +136,7 @@ test("the skill routes directly to focused references and packages no broken loc
   assert.ok(core.split("\n").length <= 110);
   assert.match(core, /includeSchemas:false/);
   const refs = await readdir(new URL("references/", root));
-  assert.equal(refs.length, 12);
+  assert.equal(refs.length, 13);
   for (const ref of refs) assert.ok(core.includes(`references/${ref}`), `${ref} must be discoverable directly`);
   for (const file of ["SKILL.md", ...refs.map((file) => `references/${file}`)]) {
     const contents = await readFile(new URL(file, root), "utf8");

@@ -8,7 +8,7 @@ import { normalizeCornerSpacers } from "../../shared/drawer-spacers.js";
 import { normalizePrintArea } from "../../shared/print-area.js";
 import { drawerStatus } from "./drawer-planner.js";
 import { numberValid } from "./field-text.js";
-import { Labelled, NumberField, TextField, MagnetControls, WallControls, DimensionGuide, usePreviewView } from "./controls.jsx";
+import { Labelled, NumberField, TextField, MagnetControls, WallControls, usePreviewView } from "./controls.jsx";
 import { PocketForm, CompartmentFields, ThicknessFields, THICKNESS_LIMITS } from "./part-options.jsx";
 import { COMPARTMENT_LIMITS, MAX_POCKETS, newPocketDraft, nextPocketIndex, pocketDraftValid, pocketFromDraft, draftFromPocket, referencePatch } from "./pocket-draft.js";
 
@@ -28,12 +28,13 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
   const [texts, setTexts] = useState(() => fieldTexts(draft)), [touched, setTouched] = useState({});
   const [baseMagnetsValid, setBaseMagnetsValid] = useState(true);
   const [gesture, setGesture] = useState(null), [ghost, setGhost] = useState(null);
-  const rootRef = useRef(null), settingsRef = useRef(null), boardRef = useRef(null), widthRef = useRef(null), undoRef = useRef(null), redoRef = useRef(null);
-  const previewButtonRef = useRef(null), addBinRef = useRef(null), reviewTitleRef = useRef(null);
+  const rootRef = useRef(null), settingsRef = useRef(null), layoutRef = useRef(null), boardRef = useRef(null), widthRef = useRef(null), undoRef = useRef(null), redoRef = useRef(null);
+  const previewButtonRef = useRef(null), measurePreviewRef = useRef(null), addBinRef = useRef(null), reviewTitleRef = useRef(null);
 
   useLayoutEffect(() => { setTexts(fieldTexts(planner.getState().draft)); setTouched({}); }, [state.fieldsVersion]);
   useLayoutEffect(() => { if (state.scrollSeq) settingsRef.current.scrollTop = 0; }, [state.scrollSeq]);
   useEffect(() => { if (preview) reviewTitleRef.current?.focus(); }, [preview?.seq]);
+  useLayoutEffect(() => { if (!ready) layoutRef.current?.scrollTo(0, 0); }, [ready]);
 
   // Reordering the measurements or rebuilding a bin inspector can blur its control.
   function history(kind) {
@@ -116,10 +117,19 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
     <p className="ai-template-note" hidden={!draft.baseplateMagnets}>{status.carrierNote}</p>
   </details>;
   const message = <p key="message" id="drawer-message" className="ai-template-message" role="status" aria-live="polite" data-error={state.message.error ? "true" : undefined}>{state.message.text}</p>;
-  const sections = bin ? [measureDetails, inspector, saved, fit, spacerGroup, construction, message] : [saved, measureDetails, fit, spacerGroup, inspector, construction, message];
 
   const previewDisabled = busy || !!error || !baseMagnetsValid || !!draft.cornerSpacers && !spacersValid || state.editing;
   const step = view === "preview" ? 2 : ready ? 1 : 0;
+  const previewAction = ref => <button ref={ref} type="button" className={`${!state.cached && !state.continueVisible ? "ai-template-primary " : ""}ai-with-pictogram`} disabled={previewDisabled} title={error || ""} onClick={planner.preview}>
+    <Labelled icon="eye">{busy ? "Building preview…" : "Preview layout"}</Labelled>
+  </button>;
+  const measurements = <section key="measure-card" className="drawer-measure-card">
+    {measureDetails}
+    {!ready && fit}
+    <div className="drawer-measure-submit" hidden={ready}>{previewAction(measurePreviewRef)}</div>
+  </section>;
+  const outerFit = ready ? fit : null;
+  const sections = bin ? [measurements, inspector, saved, outerFit, spacerGroup, construction, message] : [saved, measurements, outerFit, spacerGroup, inspector, construction, message];
 
   const cell = event => {
     const rect = boardRef.current.getBoundingClientRect();
@@ -171,19 +181,15 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
     <div className="ai-template-settings">
       <div ref={settingsRef} className="ai-controls drawer-settings">
         <div className="drawer-view-toolbar">
-          <h3 className="ai-with-pictogram"><Labelled icon="grid">Your drawer</Labelled></h3>
+          <h3>Your drawer</h3>
           <button type="button" className="ai-with-pictogram" disabled={busy} title="Clear the draft and enter new drawer measurements. Undo layout restores the previous draft."
             onClick={() => { setGesture(null); setGhost(null); if (flushSync(() => planner.newDrawer())) widthRef.current.focus(); }}>
-            <Labelled icon="add">New drawer</Labelled>
+            <Labelled icon="plus">New drawer</Labelled>
           </button>
         </div>
         {sections}
       </div>
-      <div className="ai-template-submit">
-        <button ref={previewButtonRef} type="button" className={`${!state.cached && !state.continueVisible ? "ai-template-primary " : ""}ai-with-pictogram`} disabled={previewDisabled} title={error || ""} onClick={planner.preview}>
-          <Labelled icon="eye">{busy ? "Building preview…" : "Preview layout"}</Labelled>
-        </button>
-      </div>
+      <div className="ai-template-submit" hidden={!ready}>{previewAction(previewButtonRef)}</div>
     </div>
     <div className="ai-template-review drawer-review" data-empty={String(!ready)}>
       <ol className="ai-flow" aria-label="Make a drawer organizer">
@@ -203,10 +209,14 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
           <button ref={redoRef} type="button" className="ai-with-pictogram" disabled={busy || !state.redo.length} onClick={() => history("redo")}><Labelled icon="redo">Redo</Labelled></button>
         </div>
       </div>
-      <div className="drawer-layout-view" hidden={view !== "layout"}>
+      <div ref={layoutRef} className="drawer-layout-view" hidden={view !== "layout"}>
         <div className="drawer-board-area">
           <div className="drawer-empty" hidden={ready}>
-            <DimensionGuide title="Start with the inside measurements" note="Measure the clear space inside your drawer. Leave enough height for it to close." width={draft.width} depth={draft.depth} height={draft.height} kind="drawer" illustration />
+            <section className="drawer-measure-guide" aria-label="Start with the inside measurements">
+              <div className="drawer-measure-art"><img src="drawer-measurement.png" alt="Open drawer showing its inner floor and walls" width="1448" height="1086" loading="lazy" /></div>
+              <h3>Start with the inside measurements</h3>
+              <p className="ai-template-note">Measure the clear space inside your drawer.<br />Leave enough height for it to close.</p>
+            </section>
             <button type="button" className="drawer-example" hidden={ready} onClick={planner.example}>Try a 336 × 252 mm example</button>
           </div>
           <div ref={boardRef} id="drawer-board" className="drawer-board" role="group" aria-label="Drawer layout. Drag empty cells to draw a bin; drag a bin to move it." hidden={!ready}
@@ -226,7 +236,7 @@ export function DrawerPlanner({ planner, hidden, createPreviewView, references =
           <p className="ai-template-note">{`${preview.parts} editable parts. Printed fit remains unverified.`}</p>
           <div className="ai-template-actions">
             <button type="button" className="ai-template-primary" disabled={busy || !state.cached} onClick={planner.apply}>{preview.replaceExisting ? "Update layout in document" : "Add layout to document"}</button>
-            <button type="button" disabled={busy} onClick={() => { flushSync(() => planner.cancelPreview()); previewButtonRef.current.focus(); }}>Cancel preview</button>
+            <button type="button" disabled={busy} onClick={() => { flushSync(() => planner.cancelPreview()); (ready ? previewButtonRef : measurePreviewRef).current.focus(); }}>Cancel preview</button>
             <button type="button" className="ai-template-primary" hidden={!state.continueVisible} onClick={() => document.getElementById("ai-setup-close").click()}>Continue in editor</button>
           </div>
         </div>}

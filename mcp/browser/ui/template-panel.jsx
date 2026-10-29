@@ -10,7 +10,7 @@ import { DrawerPlanner } from "./drawer-panel.jsx";
 import { Labelled, NumberField, DimensionGuide, revealInvalid } from "./controls.jsx";
 import { iconLabel } from "./pictograms.js";
 
-const MODES = [["drawer", "Drawer layout", "grid"], ["settings", "Printer & settings", "printer3d"]];
+const MODES = [["drawer", "Drawer layout", "grid"], ["settings", "Printer & settings", "gear"]];
 const HEADINGS = {
   drawer: ["Organize your drawer", "Measure the inside, arrange your bins, then review your printable parts."],
   settings: ["Set up your printer", "Check that each part fits your build area. These defaults are remembered in this browser."],
@@ -23,6 +23,7 @@ export function initTemplatePanel({ request, subscribe, createPreviewView }) {
   const tabs = [...document.querySelectorAll('.ai-workspace-tabs [role="tab"]')];
   if (!root || !tabs.length) return;
   for (const [id, name] of [["ai-templates-tab", "add"], ["ai-connection-tab", "plug"]]) iconLabel(document.getElementById(id), name);
+  iconLabel(document.getElementById("ai-setup-close"), "arrowLeft");
   // Commit each planner change before returning, so chained clicks see current controls.
   const drawer = createDrawerPlanner({ request, notify: flushSync });
   const view = { choose: null };

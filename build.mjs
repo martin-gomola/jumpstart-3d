@@ -47,6 +47,7 @@ if (!shell.includes('<script type="module" src="app.js"></script>\n')) throw new
 writeFileSync(join(site, "index.html"), shell);
 writeFileSync(join(site, "version.json"), JSON.stringify(productInfo, null, 2) + "\n");
 cpSync(wasm, join(site, "occt-gz.wasm"));
+cpSync(join(src, "assets/drawer-measurement.png"), join(site, "drawer-measurement.png"));
 // Share pages use the same React and theme tokens but ship as HTML, without a client bundle.
 const shareBuild = await build({ ...common, entryPoints: [join(root, "mcp/browser/ui/ar-share-page.jsx")],
   platform: "node", format: "esm", write: false,

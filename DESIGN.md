@@ -235,8 +235,14 @@ text. Preserve the numeric value and its millimetre unit together.
 
 ## Drawer workspace hierarchy
 
-Maker-workspace headings use the system UI family and the shared `workspaceTitle` token. Keep the 28 rem settings column and independent scrolling during active layout/review. In the initial measurement state, let the form card size to its content, place Preview near the inputs, and center the measurement guide in the review area. Group width/depth together, keep usable height and the drawer name on full rows, and place Swap dimensions outside the numeric input grid.
+The user-approved 1586 × 992 drawer-workspace reference is the visual contract for this screen. Use system UI type, the shared 32 rem `workspaceSettingsWidth` column, aligned full-height outer panels, and a bordered measurement card containing the initial Preview action. Width/depth share a row; usable height and drawer name have full rows. Swap remains a secondary action. The completed-layout Preview action stays in the existing fixed action footer.
 
-Keep the progress steps visible. Omit the inactive board toolbar and drag instructions before there is a board or undo history; preserve history access after a partial draft or New drawer. The empty-state drawer is an illustration, with persistent measurement labels in the form and an accessible image description. Other generator dimension diagrams retain their labels. Use the existing palette, pictograms and controls; keep field ids, transaction rules and recovery unchanged.
+Create/AI connection use text tabs with an active underline; retain labels, keyboard navigation and ids. Drawer/printer settings use one quiet segmented group. The three progress labels sit below numbered circles, connected between steps. Place the large open-drawer illustration, guidance and labelled example at a stable offset beneath the steps; never vertically center the whole guide in an arbitrarily tall pane.
 
-The initial measurement screen stacks using the workspace container width in rem units, so enlarged text can use a full-width form. Short desktop windows use a compact illustration. Keep focused fields and Preview reachable without overlap.
+Use the generated open-drawer asset as an illustration, not validated model geometry. Preserve the actual Studio branding and working CAD app bar, the native plan/preview/apply/undo contracts, saved layouts, field ids, and selected-bin inspection. Input boundaries retain the existing accessible contrast even where the visual reference is fainter. Other generator dimension diagrams are unchanged.
+
+Stack the workspace based on its container width in rem units. Narrow screens and enlarged text use content scrolling; short windows must allow each field and Preview to be scrolled into view without overlap. Both preview buttons share one renderer and only the action appropriate to the current measurement state is visible.
+
+The narrow header owns both rows of navigation; keep tab/close labels on one line and allow whole groups to wrap at enlarged text sizes. Progress and layout controls stay outside the scrolling board area, so they cannot be clipped or cover one another. Reset the guide scroll only when measurement readiness becomes false; do not move the board when selecting bins. At shorter desktop heights, use compact field spacing and a bottom scroller inset to keep Preview reachable.
+
+The CAD toolbar height consumes the same `panelTop` token as the workspace overlay, so enlarged text cannot leave the ribbon visible between them. Normal-size toolbar geometry remains 46 px.

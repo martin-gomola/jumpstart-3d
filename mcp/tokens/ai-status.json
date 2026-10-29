@@ -529,6 +529,62 @@
   },
   "workspaceTitle": {
     "$type": "dimension",
-    "$value": "2rem"
+    "$value": "3rem"
+  },
+  "workspaceGutter": {
+    "$type": "dimension",
+    "$value": "2.125rem"
+  },
+  "workspaceHeaderHeight": {
+    "$type": "dimension",
+    "$value": "4.5rem"
+  },
+  "workspaceSettingsWidth": {
+    "$type": "dimension",
+    "$value": "32rem"
+  },
+  "workspaceControlHeight": {
+    "$type": "dimension",
+    "$value": "3rem"
+  },
+  "workspaceCardTitle": {
+    "$type": "dimension",
+    "$value": "1.375rem"
+  },
+  "workspaceGuideWidth": {
+    "$type": "dimension",
+    "$value": "31.75rem"
+  },
+  "workspaceCardRadius": {
+    "$type": "dimension",
+    "$value": ".5rem"
+  },
+  "workspaceArtRadius": {
+    "$type": "dimension",
+    "$value": "1.25rem"
+  },
+  "workspaceFieldGap": {
+    "$type": "dimension",
+    "$value": "1.5rem"
+  },
+  "workspaceCardPadding": {
+    "$type": "dimension",
+    "$value": "1.25rem"
+  },
+  "workspaceActionHeight": {
+    "$type": "dimension",
+    "$value": "3.5rem"
+  },
+  "workspaceGuideOffset": {
+    "$type": "dimension",
+    "$value": "2.75rem"
+  },
+  "workspaceLeadFont": {
+    "$type": "dimension",
+    "$value": "1.3125rem"
+  },
+  "workspaceDisabledOpacity": {
+    "$type": "number",
+    "$value": 0.35
   }
 }

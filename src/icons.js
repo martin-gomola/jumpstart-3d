@@ -2,6 +2,8 @@
 const S = (body, extra = "") => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" ${extra}>${body}</svg>`;
 
 export const ICON = {
+  plus: S('<path d="M12 5v14M5 12h14"/>'),
+  arrowLeft: S('<path d="M20 12H4m7-7-7 7 7 7"/>'),
   sketch: S('<rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="2 2"/><path d="M7 16 12 7l5 9z"/>'),
   extrude: S('<path d="M5 17h10l4-3H9z" fill="#c9d8f2"/><path d="M5 17V9h10v8M15 9l4-3v8M5 9l4-3h10"/><path d="M12 3v4M10.5 4.5 12 3l1.5 1.5" stroke="#1f4fa8"/>'),
   revolve: S('<ellipse cx="12" cy="17" rx="7" ry="3"/><path d="M5 17V9M19 17V9"/><ellipse cx="12" cy="9" rx="7" ry="3"/><path d="M12 3v18" stroke-dasharray="2 2" stroke="#1f4fa8"/>'),

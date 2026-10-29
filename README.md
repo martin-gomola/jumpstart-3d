@@ -9,6 +9,7 @@
 ![Editor 2.7.7](https://img.shields.io/badge/Editor-JumpStart%203D%202.7.7-365F40)
 [![MIT License](https://img.shields.io/badge/License-MIT-6B7D5C.svg)](LICENSE)
 
+[Try the demo](https://jumpstart-3d.onrender.com) ·
 [Start the app](#start-the-app) · [Connect an agent](#connect-an-agent) ·
 [Read the guides](#guides)
 

@@ -2,9 +2,6 @@
 
 ## Ownership and layout
 
-The [SOMA/text-to-cad adoption checklist](ADOPTION-CHECKLIST.md) records the
-implemented fit-check slice, verification evidence, and the remaining feature backlog.
-
 This is the MCP interface for the self-hosted JumpStart build. MCP code, tests,
 benchmarks, fixtures, and status tokens live here. The editor source is in
 `src/`, based on the author source snapshot documented in [SOURCES.md](../SOURCES.md).

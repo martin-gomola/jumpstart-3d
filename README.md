@@ -1,11 +1,12 @@
 <div align="center">
 
-# JumpStart 3D Self-Hosted
+# JumpStart 3D Studio
 
 **A browser CAD editor on your homelab that your AI agent can model with.**
 
 ![Docker Compose](https://img.shields.io/badge/Run-Docker%20Compose-2496ED?logo=docker&logoColor=white)
 ![MCP](https://img.shields.io/badge/AI-Local%20MCP-477652)
+![Studio 0.1.0](https://img.shields.io/badge/Studio-0.1.0-1f4fa8)
 ![Editor 2.7.7](https://img.shields.io/badge/Editor-JumpStart%203D%202.7.7-365F40)
 [![MIT License](https://img.shields.io/badge/License-MIT-6B7D5C.svg)](LICENSE)
 
@@ -149,3 +150,7 @@ third_party/      Pinned libraries and their licenses
 
 MIT. Based on JumpStart 3D; see [NOTICE.md](NOTICE.md) and
 [third-party notices](THIRD-PARTY-NOTICES.md).
+
+## Versions and builds
+
+Studio has its own release version in `package.json` (currently 0.1.0), separate from the upstream editor version in `src/version.js` (currently 2.7.7). About, the loading screen and `version.json` show both plus the build's short Git revision. `make up` and `make up-lan` pass the revision into Docker; development builds are marked `-dirty` when the checkout has changes. Builds without Git or an explicit revision show `unversioned`. For a direct Docker build, pass `JUMPSTART_BUILD_REVISION` as a build argument. Use `npm version patch --no-git-tag-version` to bump the Studio release and lockfile together.

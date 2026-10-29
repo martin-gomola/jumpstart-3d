@@ -1,4 +1,4 @@
-<title>JumpStart 3D</title>
+<title>__JUMPSTART_PRODUCT_NAME__</title>
 <style>
 /* Layout: a drafting-table workspace. Dark title-block bar on top, white panels, a light viewport.
    Deliberately a single light theme, like a drawing sheet. */
@@ -532,9 +532,9 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .sp-logo path { opacity: 0; animation: sp-drop .55s cubic-bezier(.2,.9,.3,1.2) forwards; }
 .sp-logo .l1 { animation-delay: .05s; } .sp-logo .l2 { animation-delay: .22s; } .sp-logo .l3 { animation-delay: .39s; }
 @keyframes sp-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-.sp-title { margin: 14px 0 4px; font: 700 52px/1 var(--f-label); letter-spacing: .08em; text-transform: uppercase; color: #fff; }
+.sp-title { max-width: 90vw; margin: 14px 0 4px; font: 700 clamp(28px, 6vw, 52px)/1.15 var(--f-label); letter-spacing: .08em; text-transform: uppercase; color: #fff; }
 .sp-title b { color: #6f98d8; }
-.sp-ver { margin: -16px 0 24px; font: 600 13px/1.2 var(--f-label); letter-spacing: .14em; text-transform: uppercase; color: #7f93a8; }
+.sp-ver { max-width: 40ch; margin: 12px auto 24px; font: 600 13px/1.2 var(--f-label); letter-spacing: .14em; text-transform: uppercase; color: #7f93a8; }
 .sp-tag { margin: 0 0 26px; font: 500 15px/1.2 var(--f-label); letter-spacing: .22em; text-transform: uppercase; color: #9fb0c2; }
 .sp-bar { width: min(300px, 70vw); height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
 .sp-bar i { display: block; height: 100%; width: 6%; border-radius: 4px; background: linear-gradient(90deg, #2d63c8, #6f98d8); transition: width .3s ease; }
@@ -624,8 +624,9 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .modal.about { width: min(680px, 100%); }
 .about .ab-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .about .ab-head svg { width: 44px; height: 44px; flex: none; }
+.about .ab-head > div { min-inline-size: 0; }
 .about .ab-head b { font: 700 24px/1 var(--f-label); letter-spacing: .06em; text-transform: uppercase; }
-.about .ab-head span { display: block; color: var(--ink-3); font-size: 12.5px; margin-top: 3px; }
+.about .ab-head span { display: block; color: var(--ink-2); font-size: 12.5px; margin-top: 3px; }
 .about h3 { font: 600 13px/1.2 var(--f-label); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 16px 0 6px; }
 .about ul { margin: 0; padding-left: 18px; color: var(--ink-2); line-height: 1.5; }
 .about li { margin: 2px 0; }
@@ -641,8 +642,9 @@ input[type=range] { accent-color: var(--accent); width: 100%; min-width: 0; }
 .about .ab-lic pre { max-height: 220px; overflow: auto; white-space: pre-wrap; font: 11px/1.45 var(--f-mono, monospace); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 4px 0 0; color: var(--ink-2); }
 .about .ab-update { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 12px 0 2px; flex-wrap: wrap; }
 .about .ab-hver { font: 600 12px/1 var(--f-label); color: var(--ink-3); margin-left: 6px; letter-spacing: .04em; }
-.about .ab-ver { font: 500 13px/1 var(--f-mono, monospace); color: var(--ink-3); }
+.about .ab-ver { font: 500 13px/1.5 var(--f-mono, monospace); color: var(--ink-2); overflow-wrap: anywhere; text-align: center; }
 .about .ab-update .btn { text-decoration: none; }
+.about .ab-update.ab-top .ab-ver { text-align: start; }
 .about .ab-update.ab-top { justify-content: flex-start; margin: 4px 0 4px 56px; }
 .about .ab-upmsg { margin: 8px 0 0; text-align: center; color: var(--ink-2); font-size: 13px; }
 .about .ab-upmsg a { color: var(--accent); font-weight: 600; }
@@ -997,9 +999,9 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
 
 <div id="app" data-mode="beginner">
   <header class="topbar">
-    <div class="brand">
+    <div class="brand" title="__JUMPSTART_VERSION_LABEL__">
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16.5 12 21l9-4.5L12 12z" fill="#2d63c8"/><path d="M3 12 12 16.5 21 12 12 7.5z" fill="#6f98d8"/><path d="M3 7.5 12 12l9-4.5L12 3z" fill="#e9eef4"/></svg>
-      <span>JumpStart 3D</span>
+      <span>__JUMPSTART_PRODUCT_NAME__</span>
     </div>
     <input id="docname" class="docname" aria-label="Design name" value="Untitled design">
     <span id="docver" class="docver" hidden>v1</span>
@@ -1043,7 +1045,7 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
       </div>
     </div>
     <button class="tb-btn tut-btn" id="btn-tutorials" title="Tutorials: step-by-step projects for Beginner and Advanced"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5"/><path d="M22 9v6"/></svg><span class="lbl">Tutorials</span></button>
-    <button class="tb-btn about-btn" id="btn-about" title="About JumpStart 3D: features and help">About</button>
+    <button class="tb-btn about-btn" id="btn-about" title="About __JUMPSTART_PRODUCT_NAME__: versions, features and help">About</button>
     <button class="tb-btn" id="btn-keys" title="Keyboard shortcuts (?)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
     <button class="tb-btn" id="btn-full" title="Full screen" aria-label="Full screen" aria-pressed="false"><svg class="fs-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><svg class="fs-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg><span class="fs-lbl">Exit full screen</span></button>
     <button class="tb-btn" id="btn-projects" title="Your designs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="lbl">Designs</span></button>
@@ -1171,9 +1173,9 @@ html.ios .topbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padd
   <div class="sp-grid" aria-hidden="true"></div>
   <div class="sp-center">
     <svg class="sp-logo" viewBox="0 0 24 24" aria-hidden="true"><path class="l1" d="M3 16.5 12 21l9-4.5L12 12z" fill="#2d63c8"/><path class="l2" d="M3 12 12 16.5 21 12 12 7.5z" fill="#6f98d8"/><path class="l3" d="M3 7.5 12 12l9-4.5L12 3z" fill="#e9eef4"/></svg>
-    <h1 class="sp-title">JumpStart <b>3D</b></h1>
+    <h1 class="sp-title">__JUMPSTART_PRODUCT_NAME__</h1>
     <p class="sp-tag">Design it · Build it · Print it</p>
-    <p class="sp-ver" id="sp-ver">Version 2.7.7</p>
+    <p class="sp-ver" id="sp-ver">__JUMPSTART_VERSION_LABEL__</p>
     <div class="sp-bar"><i id="loading-bar"></i></div>
     <p class="sp-msg" id="loading-msg">Starting the geometry engine…</p>
   </div>

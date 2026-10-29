@@ -1,3 +1,8 @@
+ifndef JUMPSTART_BUILD_REVISION
+JUMPSTART_BUILD_REVISION := $(shell git rev-parse --short=8 HEAD 2>/dev/null)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
+endif
+export JUMPSTART_BUILD_REVISION
+
 .PHONY: up down logs mcp-config codex-install claude-install cursor-install plugin benchmark
 
 NODE_CHECK = @command -v node >/dev/null 2>&1 || { echo 'Host Node.js 22 or newer is required for MCP. The app can still run with Docker only.' >&2; exit 1; }

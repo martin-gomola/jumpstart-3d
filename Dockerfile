@@ -3,12 +3,14 @@ FROM node:22-alpine AS build
 WORKDIR /workspace
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY build.mjs react-build.mjs ./
+COPY build.mjs build-revision.mjs react-build.mjs ./
 COPY src ./src
 COPY third_party ./third_party
 COPY mcp/browser ./mcp/browser
 COPY mcp/shared ./mcp/shared
 COPY mcp/tokens ./mcp/tokens
+ARG JUMPSTART_BUILD_REVISION
+ENV JUMPSTART_BUILD_REVISION=${JUMPSTART_BUILD_REVISION}
 RUN npm run build
 
 FROM node:22-alpine

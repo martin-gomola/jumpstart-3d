@@ -1,6 +1,9 @@
 services:
   jumpstart:
-    build: .
+    build:
+      context: .
+      args:
+        JUMPSTART_BUILD_REVISION: "${JUMPSTART_BUILD_REVISION:-}"
     container_name: jumpstart-3d
     ports:
       - "127.0.0.1:3210:3210"

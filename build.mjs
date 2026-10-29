@@ -4,12 +4,16 @@ import { join } from "node:path";
 import { build } from "esbuild";
 import { renderToolCss } from "./mcp/tokens/render-tool-css.mjs";
 import { AI_STATUS_CSS } from "./mcp/browser/ui/ai-status.js";
+import { buildRevision } from "./build-revision.mjs";
+import { PRODUCT_NAME, STUDIO_VERSION, EDITOR_VERSION } from "./src/product-info.js";
 import { reactBuildOptions } from "./react-build.mjs";
 
 const root = new URL(".", import.meta.url).pathname;
 const src = join(root, "src");
 const tp = join(root, "third_party");
 const site = join(root, "build", "site");
+const productInfo = { name: PRODUCT_NAME, version: STUDIO_VERSION, editorVersion: EDITOR_VERSION, build: buildRevision(root) };
+const versionLabel = `Studio ${STUDIO_VERSION} · Editor ${EDITOR_VERSION} · Build ${productInfo.build}`;
 
 const alias = {
   replicad: join(tp, "replicad/src/index.ts"),
@@ -22,7 +26,7 @@ const alias = {
   three: join(tp, "three/build/three.module.js"),
 };
 const react = reactBuildOptions(root);
-const common = { bundle: true, minify: true, legalComments: "eof", target: "es2020", alias: { ...alias, ...react.alias }, jsx: react.jsx, logLevel: "warning" };
+const common = { define: { __JUMPSTART_BUILD_REVISION__: JSON.stringify(productInfo.build) }, bundle: true, minify: true, legalComments: "eof", target: "es2020", alias: { ...alias, ...react.alias }, jsx: react.jsx, logLevel: "warning" };
 const wasm = join(src, "occt-gz.wasm");
 const wasmSize = statSync(wasm).size;
 
@@ -35,12 +39,13 @@ await build({ ...common, entryPoints: [join(src, "app.js")], format: "esm", outf
     builder.onResolve({ filter: /^jumpstart:camworker$/ }, () => ({ path: "camworker", namespace: "cam-worker" }));
     builder.onLoad({ filter: /.*/, namespace: "cam-worker" }, () => ({ contents: camWorker.outputFiles[0].text, loader: "text" }));
   } }],
-  loader: { ".html": "text" }, define: { __WASM_PARTS__: JSON.stringify([{ url: "occt-gz.wasm", gz: true, size: wasmSize }]) } });
+  loader: { ".html": "text" }, define: { ...common.define, __WASM_PARTS__: JSON.stringify([{ url: "occt-gz.wasm", gz: true, size: wasmSize }]) } });
 await build({ ...common, entryPoints: [join(src, "worker.js")], format: "esm", outfile: join(site, "worker.js"), external: ["node:*"] });
 
-const shell = `<html lang="en">\n${readFileSync(join(src, "index.html"), "utf8").replace("<style>", () => `<style>\n${AI_STATUS_CSS}\n${readFileSync(join(root, "mcp/browser/ui/templates.css"), "utf8")}`).replace("</style>", () => `\n${renderToolCss(readFileSync(join(src, "tool-ui.css"), "utf8"))}\n</style>`)}\n</html>`;
+const shell = `<html lang="en">\n${readFileSync(join(src, "index.html"), "utf8").replaceAll("__JUMPSTART_PRODUCT_NAME__", PRODUCT_NAME).replaceAll("__JUMPSTART_VERSION_LABEL__", versionLabel).replace("<style>", () => `<style>\n${AI_STATUS_CSS}\n${readFileSync(join(root, "mcp/browser/ui/templates.css"), "utf8")}`).replace("</style>", () => `\n${renderToolCss(readFileSync(join(src, "tool-ui.css"), "utf8"))}\n</style>`)}\n</html>`;
 if (!shell.includes('<script type="module" src="app.js"></script>\n')) throw new Error("src/index.html is missing the app.js script tag");
 writeFileSync(join(site, "index.html"), shell);
+writeFileSync(join(site, "version.json"), JSON.stringify(productInfo, null, 2) + "\n");
 cpSync(wasm, join(site, "occt-gz.wasm"));
 // Share pages use the same React and theme tokens but ship as HTML, without a client bundle.
 const shareBuild = await build({ ...common, entryPoints: [join(root, "mcp/browser/ui/ar-share-page.jsx")],

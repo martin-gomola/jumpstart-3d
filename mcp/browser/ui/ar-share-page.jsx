@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import { PRODUCT_NAME } from '../../../src/product-info.js';
 import tokens from '../../tokens/ai-status.json';
 
 const css = `
@@ -32,9 +33,9 @@ export function renderArSharePage({ themeCss, expired = false }) {
   const base = '__AR_BASE__';
   return '<!doctype html>' + renderToStaticMarkup(<html lang="en"><head>
     <meta charSet="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>{expired ? 'Link expired' : 'View in AR'} · JumpStart 3D</title><style>{themeCss + css}</style>
+    <title>{expired ? 'Link expired' : 'View in AR'} · {PRODUCT_NAME}</title><style>{themeCss + css}</style>
   </head><body><main>
-    <header className="brand"><Cube /><span>JumpStart 3D</span></header>
+    <header className="brand"><Cube /><span>{PRODUCT_NAME}</span></header>
     <h1>{expired ? 'This link has expired' : <>See it in your<br />space</>}</h1>
     <p className="intro">{expired ? 'Create a new QR code in JumpStart, then scan it again.' : 'Place your model on a table or the floor.'}</p>
     <figure><Illustration expired={expired} /><figcaption>{expired ? 'Temporary model share' : 'Actual size · AR preview'}</figcaption></figure>

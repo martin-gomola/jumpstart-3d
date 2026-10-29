@@ -7,7 +7,7 @@ import { CREDITS, LICENSE_TEXTS } from "./licenses.js";
 import { initSketch3D } from "./sketch3d.js";
 import { initLathe } from "./lathe.js";
 import { initCarve } from "./carve.js";
-import { VERSION } from "./version.js";
+import { PRODUCT_NAME, STUDIO_VERSION, EDITOR_VERSION, VERSION_LABEL } from "./product-info.js";
 import { initBricks } from "./bricks.js";
 import { initVoxel } from "./voxel.js";
 import { initArch } from "./arch.js";
@@ -164,7 +164,7 @@ function boot() {
   app.sketch3d = initSketch3D(app);
 app.lathe = initLathe(app);
 app.carve = initCarve(app);
-{ const sv = document.getElementById("sp-ver"); if (sv) sv.textContent = "Version " + VERSION; }
+{ const sv = document.getElementById("sp-ver"); if (sv) sv.textContent = VERSION_LABEL; }
 app.bricks = initBricks(app);
 app.voxel = initVoxel(app);
   // Save makes a new version (v1, v2...); the number shows next to the name
@@ -617,46 +617,52 @@ app.showAbout = function () {
   const sec = (title, items) => el("section", {}, el("h3", {}, title), el("ul", {}, ...items.map(([b, t]) => el("li", {}, el("b", {}, b), " " + t))));
   const back = el("div", { class: "modal-back", onclick: (e) => { if (e.target === back) back.remove(); } });
   const logo = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16.5 12 21l9-4.5L12 12z" fill="#2d63c8"/><path d="M3 12 12 16.5 21 12 12 7.5z" fill="#6f98d8"/><path d="M3 7.5 12 12l9-4.5L12 3z" fill="#c9d3df"/></svg>';
-  const modal = el("div", { class: "modal about", role: "dialog", "aria-label": "About JumpStart 3D" },
+  const modal = el("div", { class: "modal about", role: "dialog", "aria-label": "About " + PRODUCT_NAME },
     el("header", {}, el("h2", {}, "About"), el("button", { class: "xbtn", "aria-label": "Close", html: ICON.close, onclick: () => back.remove() })),
     el("div", { class: "mbody", id: "about-body" },
-      el("div", { class: "ab-head", html: logo }, el("div", {}, el("b", {}, "JumpStart 3D ", el("span", { class: "ab-hver" }, "Version " + VERSION)), el("span", {}, "3D design for the browser: start simple, grow into real CAD, then 3D print it."))),
-      sec("New in version 2.7.7", [
+      el("div", { class: "ab-head", html: logo }, el("div", {}, el("b", {}, PRODUCT_NAME + " ", el("span", { class: "ab-hver" }, "v" + STUDIO_VERSION)), el("span", {}, `Independent self-hosted CAD, built on J.Siwek’s JumpStart 3D editor ${EDITOR_VERSION}.`))),
+      el("div", { class: "ab-update ab-top" }, el("span", { class: "ab-ver", id: "ab-ver" }, VERSION_LABEL)),
+      sec("Studio additions", [
+        ["AI modeling:", "local MCP clients can preview, inspect and apply editable models."],
+        ["Maker workspace:", "drawer layouts, Gridfinity parts, measured pockets and printer-fit settings."],
+        ["AR sharing:", "temporary QR links open models at actual size with iPhone AR Quick Look."],
+      ]),
+      sec("Editor core 2.7.7 changes", [
         ["Shell for any shape:", "Shell and Hollow now work on complex shapes: shapes with holes through them, branches and bosses, joined shapes, free-form and organic bodies, tori, and curved openings (open a round side, not just a flat end). When the exact offset can't make the wall, a new distance-field method builds it from the distance to the kept faces, so it works on any closed shape; flat and round shapes keep their own surface exact. It takes a few seconds."],
         ["Shell options:", "pick opening faces on several shapes at once (each gets its own shell); Hollow can add 1, 2 or 4 drain holes through the bottom (for resin and powder printing) with the size you set; and Method (Auto, Exact offset, Slices, or Any shape with Normal or Fine detail) lets you choose how the wall is made. Auto tries them in turn."],
       ]),
-      sec("New in version 2.7.6", [
+      sec("Editor core 2.7.6 changes", [
         ["Shell on lofts:", "Shell and Hollow now work on lofted shapes that the offset engine couldn't handle, such as a loft from a hexagon on one plane to a circle on an offset plane. When a shape has free-form sides, the wall is built from slices across the shape (each slice's outline is offset in its own plane and the slices are lofted back together), with Inside, Outside or Both and openings on flat ends. It is also much quicker to give an answer."],
         ["Tangent chain fix:", "Shell's Tangent chain no longer takes every face of a curved (lofted) body: curved faces' directions were compared wrongly, which also hid some real edges between curved faces in the view."],
       ]),
-      sec("New in version 2.7.5", [
+      sec("Editor core 2.7.5 changes", [
         ["Chip Carving:", "a new woodcraft simulator (Simulate → Woodcraft, Advanced's Create group, Beginner's toolbar and Chisel). Carve a board, a round plate, a log or a shape from your design, in basswood, butternut, white pine, mahogany, cherry, black walnut, hard maple or red oak (harder woods cut less deep). Knives: corner chips (three-corner, four-corner and diamond) that pop out as real chips, V-cut lines, curved sweeps with a stop cut, and a stab knife; plus a pencil and eraser for layout lines, layout guides (square or triangle grid, rosette, border band) and a sanding block. A pen's pressure sets how deep each cut goes and its tilt the blade angle; with a mouse or finger the Pressure slider does. Fingers can carve or, once a pen is used, move the view. A raking light shows the facets. Add the carving to your design or export STL, 3MF or OBJ."],
         ["Roland MDX-50:", "CAM Studio has Roland MDX-50 profiles (with the 5-tool changer, and with the ZCL-50A rotary axis) and a Roland NC code post processor for MDX-series mills."],
       ]),
-      sec("New in version 2.7.4", [
+      sec("Editor core 2.7.4 changes", [
         ["Sketch line style:", "choose how thick sketch lines are (Hairline, Thin, Medium, Thick or Extra thick) and their colour (the theme's own colour, or black, white, blue, red, green, orange, purple, yellow or cyan) in the theme menu (◐), under Sketch lines. It applies in Advanced, Beginner and Chisel and is remembered. The new default, Thin, is thinner than before."],
         ["Shell → Hollow:", "the Shell tool now has two types. Openings removes the faces you click (an open box or cup); Hollow makes the whole model hollow inside, closed all round, with a 2 mm wall to start that you can change (quick picks 1, 2, 3 and 5 mm). Hollow works on the selected shapes, or click shapes to add them."],
         ["Shell and Fillet in Beginner:", "Beginner's toolbar has Fillet (click edges or a face, or Round all edges of the shape) and Shell (Hollow to start). The shape's panel lists its fillets and shells with Edit and Remove, plus Round edges and Make hollow buttons. Fillet and Chamfer in Advanced have the all-edges button too."],
         ["Hollow in Chisel:", "a new Hollow tool (in Easy and full Chisel) makes a sculpted model hollow inside with the wall thickness you choose."],
       ]),
-      sec("New in version 2.7.3", [
+      sec("Editor core 2.7.3 changes", [
         ["No more stray planes:", "fixed flat \"planes\" that could appear across a model after an extrude, offset or cut and couldn't be removed. They were a drawing fault on some round faces (a cylinder band, for example), not part of the solid; those faces are now checked and redrawn correctly, on screen and in exports. Files that showed them look right as soon as they are opened."],
         ["Pattern features, like Fusion 360:", "with Objects set to Features, click a face of a cut, boss, hole or text on the model to pick that feature (click again to unpick), or click it in the timeline. The whole body is no longer selected: picked features are outlined in blue and marked in the timeline, and the feature under the pointer is outlined in orange. Ticking features in the list still works."],
       ]),
-      sec("New in version 2.7.2", [
+      sec("Editor core 2.7.2 changes", [
         ["Thinner sketch lines:", "sketch lines are now about half as thick, in the sketch editor and on the model, so small or narrow profiles are easier to see and click when you extrude, revolve or pick a profile. Selected and highlighted lines stay a little bolder."],
       ]),
-      sec("New in version 2.7.1", [
+      sec("Editor core 2.7.1 changes", [
         ["Modern Sci-Fi armor:", "a new CosForge style with 27 original templates to build from: Vanguard, Interceptor, Sentinel, Strike Team and Flight helmets, a Night Watch cowl and a visor mask; Vanguard, Hex Core and Tactical chest pieces; back plates and a Jet Pack Mk II; pauldrons, arm guards, bracers, a Pulse Gauntlet and hand plates; thigh plates, knees, greaves, boots and toe caps; a collar, belt, hip plates and an Energy Shield. Add the whole Vanguard set at once."],
         ["Sharper shapes:", "the new templates start with angled form cages (keeled chests, jutting jaws, ridged limbs) that you can keep reshaping in the Form step."],
         ["Light lines:", "panel lines and emblems can glow in the accent colour (Surface details → Light lines and Glowing emblem), and 3MF exports keep the colours for multi-colour printing. A new angled-eyes helmet opening, too."],
       ]),
-      sec("New in version 2.7", [
+      sec("Editor core 2.7 changes", [
         ["CosForge Form tool:", "a new Form step puts a control cage over any costume part, like the form tools in CAD. Pick points, edges, faces, rows or columns (Shift adds), then drag the arrows (X, Y, Z, or yellow to push and pull along the surface) or the white ball, or use Pull out, Push in, Move, Scale, Rotate, Flatten and Make smooth. Symmetry keeps left and right matched, soft selection blends the edit into nearby points, and the cage can be smooth or creased, with fewer or more points or subdivided. The outline, details, add-ons, cuts and joints all follow the new shape."],
         ["26 more templates:", "Recon Helmet, Space Bubble Helmet, Jet Pack, Power Gauntlet, Armored Collar, Armored Hand Plate and Riot Shield (Sci-Fi); Dragon Helm, Dragon Pauldron, Dragon Gauntlet, King's Crown, Knight Hand Plate, Gorget and Wing Back Plate (Fantasy); High Collar, Lightning Helm, Star Gauntlet and Hero Shield (Comic Hero); Respirator Mask, Clockwork Gauntlet, Riveted Collar and Riveted Plate Pauldron (Steampunk); Menpo Face Guard, Nodowa Throat Guard, Horned Kabuto and Tekko Hand Guard (Samurai). Almost 100 templates in all."],
         ["New part types:", "collars (gorgets) that sit on the shoulders around the neck, and a lower-face mask style."],
       ]),
-      sec("New in version 2.6", [
+      sec("Editor core 2.6 changes", [
         ["CosForge:", "a new cosplay costume designer that opens in its own window (Simulate → CosForge in Advanced, or the CosForge button in Beginner). Enter the wearer's measurements and a mannequin is built to match, in an arms-down, A or T pose."],
         ["Costume templates:", "over 70 parts in Sci-Fi, Fantasy, Comic Hero, Steampunk and Samurai styles, plus plain forms: helmets with visors, slits or cowls, masks, crowns, chest and back plates, belts, tassets, pauldrons, arm guards, bracers, hand plates, thigh plates, knee guards, greaves, boot covers, toe caps and shields. Add one part or a whole set."],
         ["Shape and sculpt:", "every part is a form you can change: coverage, openings, edges (rolled, trimmed, flared), ridges, panel lines, hex plates, dragon scales, overlapping plates, muscles, emblems and rivets, plus add-ons like horns, spikes, fins, ears, wings, gems, antennas, goggles and thrusters. Sculpt with bulge, push, emboss, engrave and smooth brushes."],
@@ -664,13 +670,13 @@ app.showAbout = function () {
         ["Cut and join:", "cut parts anywhere with flat cuts, or let Auto-cut split them until every piece fits your printer (eight bed sizes). Joints go on the inside of each cut: pegs, snap clips, slide-in dovetails or magnet cups."],
         ["Export or keep editing:", "save pieces as STL (a .zip of pieces), 3MF with colours or OBJ, as worn or laid out ready to print, or add them to your design to edit in the other modes. Import your own STL or 3MF parts, or objects from your design, to fit and cut them too. The costume is kept with the design."],
       ]),
-      sec("New in version 2.5.1", [
+      sec("Editor core 2.5.1 changes", [
         ["CAM Studio machines:", "48 machine profiles, grouped from desktop and hobby routers, benchtop and knee mills, pro and shop routers, to industrial nesting routers, vertical machining centers and lasers, plus 7 with a 4th (rotary) axis. Your own machines can now have a rotary axis and a tool changer."],
         ["Industrial G-code:", "new Fanuc-style and Haas-style posts: program number, G54, tool changes with length offsets (G43 H), coolant, and a safe return home at the end."],
         ["More materials and bits:", "steels, stainless, cast iron, titanium, 7075 aluminium, copper, acetal, polycarbonate and carbon fiber; carbide end mills up to 3/4\", a face mill, bull and ball noses, a chamfer mill and a tap drill."],
         ["No more freezing:", "CAM Studio now works out the toolpaths, G-code and the whole cutting simulation in the background, so the window keeps responding while it works and you can keep changing settings. Scrubbing and replaying are spread over frames too. While it works, the model stays on screen with a progress bubble, and 4th-axis jobs are about ten times faster."],
       ]),
-      sec("New in version 2.5", [
+      sec("Editor core 2.5 changes", [
         ["Log cabins:", "new Log cabin wall types in Architect: round logs (8\", 10\" or 250 mm) that cross past each corner, and hewn square logs (6\", 8\" or 200 mm) with chinking between them. Pick one before drawing, or turn any wall into logs with Build as. They go to Beginner and Advanced as real logs you can print."],
         ["Simulate:", "a new Simulate tool in Architect (press S) with the weather, moving water and a flood test. Run a rainstorm (light to hurricane, 1 hour to a day): rain runs off the roof, soaks into the ground (grass and gravel soak it up, paving doesn't) and flows downhill. Or let a river or the sea rise from the edges of the land. It shows where the water collects, whether it gets above the floor at each door, and can fix it by raising the house on ground that slopes away."],
         ["CAM Studio 4th axis:", "Setup → 4th axis (rotary) mills round parts: the stock is a bar held between a chuck and a tailstock that turns (A axis) while the bit cuts from above, so handles, chess pieces, figures and cylinders are carved all the way around. Rotary roughing and finishing, a turning simulation, and G-code with A moves for grblHAL / FluidNC, LinuxCNC and Mach3, with four new machines that have a rotary axis."],
@@ -679,37 +685,37 @@ app.showAbout = function () {
         ["Floor plans:", "the Floor plan button saves the plan as a drawing: PDF or SVG on Letter, Tabloid, A4 or A3 at a standard scale (1/4\" = 1', 1:50…), or DXF at full size for CAD. Solid walls, door swings, windows and dimensions, one level or all of them."],
         ["7 new Architect tutorials:", "a round-log cabin, a square-log workshop, a corner café, landscape basics, a pond garden, a flood test, and a house and landscape ready to 3D print (12 Architect tutorials in all)."],
       ]),
-      sec("New in version 2.4", [
+      sec("Editor core 2.4 changes", [
         ["Architect:", "the mode is now called Architect. Going back to Beginner or Advanced brings the house along by itself, scaled down to fit the standard 256 × 256 mm build plate, and the camera goes back to the home view near the origin. Back in Architect it is full size again."],
         ["Landscape:", "make the ground around the house, then raise hills, dig valleys, smooth and flatten it, dig ponds, lakes and streams that fill with water, paint 22 kinds of ground (grass, meadow, dry grass, moss, beach, dune and desert sand, gravel, river stones, stone and brick paths, slate, rock, clay, mud, mulch, flower beds, snow, paving…), and place 39 trees, shrubs, grasses, flowers and stones (oak, willow, cypress, blue fir, cherry blossom, apple, aspen, palms, cactus, boxwood, lavender, roses, hydrangea, ferns, pampas grass, cattails, wildflowers, tulips, lily pads, boulders, rock piles, stepping stones, pebbles…). The landscape stays in Architect; only the house goes to the other modes."],
         ["Weather and water:", "a weather simulator (sunny, cloudy, rain, thunderstorm with lightning, snow, fog) with wind that sways the plants, and moving water with waves on ponds and lakes. Each can be turned on or off; they are only for looking at."],
         ["Finishes:", "give walls, roofs and floors a colour and a texture from the library (brick, siding, stucco, stone, shingles, slate, metal roofing, wood and more), and walls a raised or cut face pattern. They become real texture layers and face patterns when the house goes to Beginner or Advanced."],
         ["Export:", "export the house with its landscape (ground, water, trees), scaled down together to fit the build plate, as 3MF or OBJ with colours, or STL."],
       ]),
-      sec("New in version 2.3", [
+      sec("Editor core 2.3 changes", [
         ["CAM Studio:", "Advanced → Simulate → CAM Studio plans how a CNC router, mill or laser cuts your design and simulates it, cut by cut: roughing, finishing, facing, cutouts with tabs, laser cutting and engraving. Basic mode asks a few questions (machine, material, bits, quality) and works out feeds and speeds; Pro mode shows every operation and setting, with your own machine and bit profiles. Machines from a desktop 3018 to a 4'×8' router and a laser; flat, ball, bull-nose, V-bits, drills and laser heads. It warns about crashes and too-deep cuts, estimates the time, saves G-code for GRBL, LinuxCNC, Mach3 or Marlin, and can send it over USB to GRBL and Marlin machines (Chrome or Edge). Built with openly published methods (drop-cutter toolpaths as in OpenCAMLib, height-field simulation as in CAMotics)."],
         ["Architect:", "a feet-and-inches / metric switch in the toolbar (with standard wall sizes and grid for each), and 5 step-by-step tutorials, from a garden shed to a two-story house ready to 3D print."],
       ]),
-      sec("New in version 2.2", [
+      sec("Editor core 2.2 changes", [
         ["Architect:", "a new mode for houses and buildings. Draw a floor plan with Wall (corner by corner, typing exact lengths like 12' 6\") or Room, then raise the walls to the height you need. Put in doors and windows from a catalog of common sizes (interior, front, double, sliding patio, bifold, garage; single hung, slider, casement, picture, transom, round) by pointing at a wall, or type exact positions on the wall's own grid. Click a wall to edit it and the rest of the building turns see-through. Add gable, hip, shed, pyramid, barrel or flat roofs with slope and overhang presets, floors and more levels, then Send to design: the building becomes editable shapes in Beginner or Advanced at a scale you choose (1:24, 1:48, 1:50, 1:87, 1:100, 1:200 or full size)."],
       ]),
-      sec("New in version 2.1.3", [
+      sec("Editor core 2.1.3 changes", [
         ["Pattern on face:", "a new tool in Beginner (Face pattern) and Advanced (Decorate → Pattern on face). Click a flat face and raise or cut hexagons, diamond plate, screen mesh, circles, triangles, knurl or ribs into it, or the lines between them. Set the pattern size, gap, height or depth, direction (angle), border and an offset; keep whole shapes or trim them at the edge. It is a real feature, not a texture: it stays editable (timeline in Advanced, the shape panel in Beginner) and follows the face when the shape is resized."],
         ["26 new textures:", "new Wood, Building and Fabric groups: oak, knotty pine, fine grain, end grain, floor planks, bamboo, weathered wood; roof shingles, slate roof, fish-scale shingles, clapboard siding, barrel roof tiles, corrugated metal, floor tiles, tread plate; blue jean (denim), canvas, burlap, corduroy, quilted, window screen, rope; plus leaf veins, pineapple, rough rock and golf ball dimples. Each starts at a tile size that suits it."],
       ]),
-      sec("New in version 2.1.2", [
+      sec("Editor core 2.1.2 changes", [
         ["Voxel Studio:", "Advanced → Simulate → Voxel Studio opens in its own window and turns the selected objects (or all of them) into cubes, 16 to 64 across, solid or hollow. Paint single faces or whole cubes, fill flat areas, pick colors, add and remove cubes (with left-right mirroring), undo and redo, then export STL or a colored 3MF, or add it to the design (one part per color)."],
         ["Moving things:", "the arrow keys now move objects the way they look on screen, whichever way the camera is turned and however the object is rotated: Left and Right go across the screen, Up and Down go away and toward you (or up and down when you look from the side), and Ctrl+Up/Down always goes straight up and down. In Beginner, Advanced and the Move tool; , and . turn by 1° after picking a rotation arc."],
       ]),
-      sec("New in version 2.1.1", [
+      sec("Editor core 2.1.1 changes", [
         ["20 new tutorials:", "10 more for Beginner (bookmark, plant marker, cookie cutter, tic-tac-toe, trinket tray, Tower of Hanoi, phone amplifier, marble maze, box with a lid, pencil box) and 10 more for Advanced (washers, luggage tag, spring toy, plant pot, cable organizer, gear spinner, chess rook, bangle, bolt and nut, press-fit box), from Easy to a new Expert level."],
       ]),
-      sec("New in version 2.1", [
+      sec("Editor core 2.1 changes", [
         ["3D text:", "Advanced → Create → 3D text: text that lies on any face or the workplane and reads upright. Drag it anywhere and it follows the faces, snapping to face centers and the grid; turn Snap off (or hold Alt while dragging) to move it freely. Arrow keys nudge it, Across / Up place it exactly, Center puts it in the middle, and Angle and Turn spin it."],
         ["Emboss text:", "drag the text across the body to move it (the letters update as you go), with the same snapping, Across / Up offsets from the face center, a Center button and arrow-key nudging."],
         ["Sketch text:", "dragging keeps where you grabbed it, and the text's middle snaps to the face center, the origin, points, shape centers and the grid (hold Alt while dragging to move it freely). New Center on face buttons and arrow-key nudging."],
       ]),
-      sec("New in version 2.0", [
+      sec("Editor core 2.0 changes", [
         ["3D Sketch:", "draw lines in 3D on a body, a virtual sphere, egg or cube, or in the air, with a split screen: turn the camera with one hand while you draw with the other (touch, pen, mouse or trackpad). Freehand or nodes, undo and redo; every line becomes a solid tube."],
         ["Lathe:", "turn a body (or a copy of it) or a square or round blank on a virtual wood lathe: pick the speed, a foot pedal (Space) that you hold or that stays on, seven chisels you can twist, flying chips, then hollow it out and add it to the design or export STL, 3MF or OBJ. In Beginner, Advanced and Chisel."],
         ["Jump Brick Builder:", "in Advanced → Simulate, rebuild objects out of printable stud-and-tube building bricks (classic 8 mm or jumbo 16 mm) with a parts list and layer-by-layer building steps, built in place or laid out on print beds."],
@@ -773,7 +779,7 @@ app.showAbout = function () {
           el("summary", {}, "Full license texts"),
           ...[["MIT License: fflate", "mit-fflate"], ["MIT License: QR Code Generator", "mit-qr"], ["MIT License: three.js", "mit-three"], ["MIT License: replicad", "mit-replicad"], ["MIT License: opentype.js", "mit-opentype"], ["ISC License: Flatbush", "isc"], ["GNU Lesser General Public License 2.1: Open CASCADE Technology / opencascade.js / replicad-opencascadejs", "lgpl"], ["SIL Open Font License 1.1: Poppins, Liberation, IBM Plex", "ofl"]]
             .map(([t, k]) => el("div", { class: "ab-lic" }, el("b", {}, t), el("pre", {}, LICENSE_TEXTS[k]))))),
-      el("div", { class: "ab-update" }, el("span", { class: "ab-ver", id: "ab-ver" }, "Version " + VERSION))));
+    ));
   back.append(modal);
   document.body.append(back);
   back.addEventListener("keydown", (e) => { if (e.key === "Escape") back.remove(); });

@@ -5,7 +5,10 @@ import { arSnapshot, shareBase } from './ar-snapshot.js';
 import { openToolWindow, closeToolWindow } from './tool-window.js';
 
 function Panel({ app, store, close }) {
-  const [base, setBase] = useState(location.protocol === 'https:' ? location.origin : '');
+  const [automaticBase] = useState(() => {
+    try { return shareBase(location.origin); } catch { return ''; }
+  });
+  const [base, setBase] = useState(automaticBase);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [result, setResult] = useState(null);
   async function create() {
     if (busy) return;
@@ -22,13 +25,16 @@ function Panel({ app, store, close }) {
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
-  return <div className="modal ar-panel" style={{ width: 'min(440px, 94vw)', padding: 24, overflowY: 'auto', maxHeight: '90vh', gap: 8 }}>
+  return <div className="modal ar-panel" style={{ width: 'min(440px, calc(100vw - 32px))', minWidth: 0, boxSizing: 'border-box', padding: 24, overflowY: 'auto', maxHeight: '90vh', gap: 8 }}>
     <style>{`.ar-panel p { margin: 4px 0; } .ar-panel h2 { margin: 0 0 8px; } .ar-panel input { padding: 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); border-radius: 4px; }`}</style>
     <h2 id="ar-title">View in AR</h2>
     <p>Place a snapshot of your selected printable bodies, or all printable bodies, in your room with iPhone AR Quick Look.</p>
-    <label htmlFor="ar-origin">Phone-accessible HTTPS address</label>
-    <input id="ar-origin" type="url" placeholder="https://cad.example.com" value={base} onChange={e => setBase(e.target.value)} style={{ width: '100%' }} />
-    <p className="hint">Your server must forward /ar/ from this address to JumpStart. Links last 30 minutes and can be opened by anyone who has the link.</p>
+    {!automaticBase && <>
+      <label htmlFor="ar-origin">Phone-accessible HTTPS address</label>
+      <input id="ar-origin" type="url" placeholder="https://cad.example.com" value={base} onChange={e => setBase(e.target.value)} style={{ width: '100%' }} />
+      <p className="hint">Open JumpStart through its HTTPS address, or enter an address your phone can reach.</p>
+    </>}
+    <p className="hint">Keep your phone on the same Wi-Fi or VPN. Links last 30 minutes and can be opened by anyone with the link and network access.</p>
     <p className="hint">This prototype preserves size and body colors. Face paints and image textures are not included.</p>
     <button className="btn primary" aria-disabled={busy} onClick={create}>{busy ? 'Creating snapshot…' : 'Create QR code'}</button>
     <div role="status" aria-live="polite">{error}{result && <><p>Scan with your iPhone camera, then tap “View in your room”.</p><img width="180" height="180" src={result.qr} alt="QR code for this AR model" /><p><a href={result.url} target="_blank" rel="noreferrer">Open AR share</a></p><p>Expires in 30 minutes, or when the server restarts.</p></>}</div>

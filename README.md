@@ -112,7 +112,7 @@ connection; run the app locally for that.
 
 ## iPhone AR preview (prototype)
 
-Open **Open/Export → View in AR / QR** to create a temporary USDZ snapshot and QR code. Enter an HTTPS address reachable by your phone, with Nginx Proxy Manager forwarding to the same JumpStart container’s read-only AR port `3211`. MCP remains restricted to localhost, including when the network editor is enabled. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
+Open **Open/Export → View in AR / QR** and click **Create QR code**. When using an HTTPS editor address, the app uses that same address for the share automatically. Only localhost or plain HTTP asks for a phone-accessible HTTPS address. An optional separate AR hostname can forward to the same container’s read-only port `3211`. MCP remains restricted to localhost. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
 
 See the [AR setup and verification notes](AR-QR-RESEARCH.md#prototype-implemented). Actual iPhone placement and your HTTPS route still need device verification.
 

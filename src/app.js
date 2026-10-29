@@ -1,3 +1,4 @@
+import { initArPanel } from "./ar-panel.jsx";
 // App core: wiring, modes, selection, keyboard, shared UI helpers.
 import { initProjector } from "./projector.js";
 import { initMedia } from "./media.js";
@@ -158,6 +159,7 @@ function boot() {
   app.media = initMedia(app);
   app.projector = initProjector(app);
   app.projects = initProjects(app);
+  initArPanel(app, store);
   app.tutorials = initTutorials(app);
   app.sketch3d = initSketch3D(app);
 app.lathe = initLathe(app);
@@ -769,7 +771,7 @@ app.showAbout = function () {
           c.src ? el("div", { class: "ab-oss-meta" }, c.src) : null))),
         el("details", { class: "ab-oss-texts", id: "ab-licenses" },
           el("summary", {}, "Full license texts"),
-          ...[["MIT License: three.js", "mit-three"], ["MIT License: replicad", "mit-replicad"], ["MIT License: opentype.js", "mit-opentype"], ["ISC License: Flatbush", "isc"], ["GNU Lesser General Public License 2.1: Open CASCADE Technology / opencascade.js / replicad-opencascadejs", "lgpl"], ["SIL Open Font License 1.1: Poppins, Liberation, IBM Plex", "ofl"]]
+          ...[["MIT License: fflate", "mit-fflate"], ["MIT License: QR Code Generator", "mit-qr"], ["MIT License: three.js", "mit-three"], ["MIT License: replicad", "mit-replicad"], ["MIT License: opentype.js", "mit-opentype"], ["ISC License: Flatbush", "isc"], ["GNU Lesser General Public License 2.1: Open CASCADE Technology / opencascade.js / replicad-opencascadejs", "lgpl"], ["SIL Open Font License 1.1: Poppins, Liberation, IBM Plex", "ofl"]]
             .map(([t, k]) => el("div", { class: "ab-lic" }, el("b", {}, t), el("pre", {}, LICENSE_TEXTS[k]))))),
       el("div", { class: "ab-update" }, el("span", { class: "ab-ver", id: "ab-ver" }, "Version " + VERSION))));
   back.append(modal);

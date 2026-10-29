@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createArShares } from "./ar-shares.mjs";
 import { createAgentTrace } from "./agent-trace.mjs";
 
 import { createServer } from "node:http";
@@ -696,8 +697,10 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
+const handleAr = createArShares();
 const server = createServer((req, res) => {
   const pathname = new URL(req.url || "/", `http://${req.headers.host || `${HOST}:${PORT}`}`).pathname;
+  if (pathname === "/__mcp/ar" || pathname.startsWith("/ar/")) { void handleAr(req, res, pathname, allowedLocalRequest(req)); return; }
   if (pathname === "/__mcp/rpc") { void handleHttpRpc(req, res); return; }
   if (pathname.startsWith("/__mcp/")) { void handleBridge(req, res, pathname); return; }
   void serveStatic(req, res, pathname);

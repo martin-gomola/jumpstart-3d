@@ -102,6 +102,12 @@ connection; run the app locally for that.
 | Self-hosting | Docker Compose setup with a persistent data folder and local save and reopen. |
 | Editor updates | `upstream/editor/` base and the `update-editor-source` skill for merging new author zips. |
 
+## iPhone AR preview (prototype)
+
+Open **Open/Export → View in AR / QR** to create a temporary USDZ snapshot and QR code. Enter an HTTPS address reachable by your phone, with only `/ar/` forwarded to the local JumpStart server. Scan the QR with the iPhone camera and tap the model to open AR Quick Look. Shares expire after 30 minutes or a server restart. The prototype preserves physical size and body colors; face paints and image textures are not included.
+
+See the [AR setup and verification notes](AR-QR-RESEARCH.md#prototype-implemented). Actual iPhone placement and your HTTPS route still need device verification.
+
 ## Editor updates
 
 The author publishes new JumpStart 3D versions as zip archives in a

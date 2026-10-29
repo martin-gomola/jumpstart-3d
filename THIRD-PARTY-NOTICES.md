@@ -76,3 +76,9 @@ JumpStart 3D includes the open-source software and fonts below. Their full licen
 ## Build tool (not included in the app)
 
 - esbuild 0.28.2, MIT license, https://github.com/evanw/esbuild — only used to build the app, not shipped inside it.
+
+## AR preview export dependencies
+
+- Three.js USDZExporter and TextureUtils: r169 (0.169.0), MIT (`LICENSES/MIT-three.js.txt`), https://github.com/mrdoob/three.js/tree/r169/examples/jsm. Pinned to the editor's Three.js version.
+- fflate: 0.8.2, copyright (c) 2023 Arjun Barrett, MIT (`LICENSES/MIT-fflate.txt`), https://github.com/101arrowz/fflate. Included from Three.js r169 for USDZ packaging.
+- QR Code Generator: 1.4.4, copyright (c) 2009 Kazuhiko Arase, MIT (`LICENSES/MIT-qrcode-generator.txt`), https://github.com/kazuhikoarase/qrcode-generator. Bundled locally; no remote QR service receives model links.

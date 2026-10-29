@@ -15,7 +15,10 @@
     "benchmark:trace": "node mcp/benchmarks/trace-report.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.28.2",
-    "@playwright/test": "1.62.1"
+    "@playwright/test": "1.62.1",
+    "esbuild": "0.28.2"
+  },
+  "dependencies": {
+    "qrcode-generator": "1.4.4"
   }
 }

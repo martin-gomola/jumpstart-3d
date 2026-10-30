@@ -466,6 +466,12 @@ test("printer settings size baseplate tiles for the selected nozzle and preserve
   await page.getByRole("button", { name: /^Main nozzle ·/ }).click();
   await expect(page.locator("#ai-template-print-width")).toHaveValue("256");
   await expect(page.locator("#ai-template-print-height")).toHaveValue("260");
+  const guide = page.locator(".ai-dimension-guide svg");
+  await expect(guide).toHaveAttribute("aria-label", /open printer frame and build plate, 256 mm wide, 256 mm deep, 260 mm tall/);
+  await expect(guide.locator(".ai-printer-frame line")).toHaveCount(4);
+  await expect(guide.locator(".ai-printer-build-plate polygon:not([stroke-dasharray])")).toHaveCount(3);
+  expect(await guide.locator(".ai-printer-build-plate line").count()).toBeGreaterThan(0);
+  await expect(guide.locator(".ai-printer-build-plate polygon[stroke-dasharray]")).toHaveCount(1);
   await page.getByRole("button", { name: "Save settings", exact: true }).click();
   await expect(page.getByRole("form", { name: "Gridfinity settings" })).toContainText("Settings saved");
   await page.getByRole("button", { name: "Drawer layout", exact: true }).click();

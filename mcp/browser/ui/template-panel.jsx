@@ -105,7 +105,7 @@ function PrinterSettings({ drawer, hidden }) {
   let note, guide = {};
   try {
     const area = readPrinterArea(), tile = baseplateTileLimits(area);
-    guide = { width: area?.width, depth: area?.depth, height: area?.height };
+    guide = { width: area?.width, depth: area?.depth, height: area?.height, edgeMargin: area?.edgeMargin };
     note = area ? `Usable area ${area.width - 2 * area.edgeMargin} × ${area.depth - 2 * area.edgeMargin} × ${area.height} mm. Baseplate tiles up to ${tile.columns} × ${tile.rows} cells (${tile.columns * 42} × ${tile.rows * 42} mm); may rotate 90° for fewer tiles.` : "No printer area configured. Baseplates use the existing 4 × 4 tiling.";
   } catch (error) { note = error.message; }
   const limitsValid = numberValid(limits.columns, BIN_LIMITS.columns) && numberValid(limits.rows, BIN_LIMITS.rows);
@@ -148,6 +148,6 @@ function PrinterSettings({ drawer, hidden }) {
       </div>
       <div className="ai-template-submit"><button type="submit" className="ai-template-primary">Save settings</button></div>
     </div>
-    <DimensionGuide title="Your printer’s build area" note="Each generated part is checked separately. Arrange the exported parts on print plates in your slicer." {...guide} />
+    <DimensionGuide title="Your printer’s build area" kind="printer" note="Each generated part is checked separately. Arrange the exported parts on print plates in your slicer." {...guide} />
   </form>;
 }

@@ -128,9 +128,10 @@ export function WallControls({ id, heading, value = [], closeGaps = false, disab
 }
 
 // A live sizing sketch is deliberately separate from the inspected native preview.
-export function DimensionGuide({ title, note, width, depth, height, kind = "bin", columns = 0, rows = 0, hidden }) {
+export function DimensionGuide({ title, note, width, depth, height, edgeMargin = 0, kind = "bin", columns = 0, rows = 0, hidden }) {
   const supplied = [width, depth, height].every(n => Number.isFinite(n) && n > 0);
-  const scale = Math.max(width || 1, depth || 1, (height || 1) * 2);
+  const printer = kind === "printer";
+  const scale = printer ? Math.max(width || 1, depth || 1) : Math.max(width || 1, depth || 1, (height || 1) * 2);
   const w = supplied ? 140 * width / scale : 140, d = supplied ? 140 * depth / scale : 110;
   const h = supplied ? Math.max(6, 140 * height / scale) : 64;
   const a = [260, 65], b = [260 + w, 65 + w / 2], c = [260 + w - d, 65 + (w + d) / 2], e = [260 - d, 65 + d / 2];
@@ -139,21 +140,49 @@ export function DimensionGuide({ title, note, width, depth, height, kind = "bin"
   const center = [260 + (w - d) / 2, 65 + (w + d) / 4];
   const format = n => new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
   const drawer = kind === "drawer";
+  const printerA = [260, 118], printerB = [260 + w, 118 + w / 2], printerE = [260 - d, 118 + d / 2], printerC = [260 + w - d, 118 + (w + d) / 2];
+  const printerRise = supplied ? 82 + 18 * Math.min(1, height / Math.max(width, depth)) : 90;
+  const up = point => [point[0], point[1] - printerRise], between = (from, to, ratio) => from.map((value, axis) => value + (to[axis] - value) * ratio);
+  const printerTop = [printerA, printerB, printerC, printerE].map(up), printerMidLeft = between(up(printerA), up(printerE), .5), printerMidRight = between(up(printerB), up(printerC), .5);
+  const printerCenter = [260 + (w - d) / 2, 118 + (w + d) / 4], marginW = supplied ? Math.min(.45, Math.max(0, edgeMargin / width)) : 0, marginD = supplied ? Math.min(.45, Math.max(0, edgeMargin / depth)) : 0;
+  const bedPoint = (u, v) => printerA.map((value, axis) => value + (printerB[axis] - value) * u + (printerE[axis] - value) * v);
+  const bedInset = [bedPoint(marginW, marginD), bedPoint(1 - marginW, marginD), bedPoint(1 - marginW, 1 - marginD), bedPoint(marginW, 1 - marginD)];
+  const printerGrid = printer ? Array.from({ length: 5 }, (_, index) => (index + 1) / 6).flatMap(ratio => [
+    [between(printerA, printerB, ratio), between(printerE, printerC, ratio)],
+    [between(printerA, printerE, ratio), between(printerB, printerC, ratio)],
+  ]) : [];
   const widthText = supplied ? `${format(width)} mm wide` : drawer ? "Inside width" : "Width";
   const depthText = supplied ? `${format(depth)} mm deep` : drawer ? "Inside depth" : "Depth";
   const heightText = supplied ? `${format(height)} mm tall` : drawer ? "Usable height" : "Height";
   const grid = kind === "baseplate" && columns > 0 && rows > 0;
   return <section className="ai-dimension-guide" aria-label={title} hidden={hidden}>
     <h3>{title}</h3>
-    <svg viewBox="0 0 520 340" role="img" aria-label={`${title}: ${widthText}, ${depthText}, ${heightText}`}>
-      <g>
-        <polygon points={points([e, c, down(c), down(e)])} className="ai-guide-face" />
-        <polygon points={points([c, b, down(b), down(c)])} className="ai-guide-side" />
-        <polygon points={points([a, b, c, e])} className="ai-guide-top" />
-        {(kind === "bin" || drawer) && <polygon points={points([a, b, c, e].map(p => p.map((value, axis) => center[axis] + (value - center[axis]) * .84)))} className="ai-guide-opening" />}
-        {grid && Array.from({ length: columns - 1 }, (_, i) => <line key={`c${i}`} x1={a[0] + w * (i + 1) / columns} y1={a[1] + w / 2 * (i + 1) / columns} x2={e[0] + w * (i + 1) / columns} y2={e[1] + w / 2 * (i + 1) / columns} className="ai-guide-grid" />)}
-        {grid && Array.from({ length: rows - 1 }, (_, i) => <line key={`r${i}`} x1={a[0] - d * (i + 1) / rows} y1={a[1] + d / 2 * (i + 1) / rows} x2={b[0] - d * (i + 1) / rows} y2={b[1] + d / 2 * (i + 1) / rows} className="ai-guide-grid" />)}
+    <svg viewBox="0 0 520 340" role="img" aria-label={`${title}: ${printer ? "open printer frame and build plate, " : ""}${widthText}, ${depthText}, ${heightText}`}>
+      {printer && <g className="ai-printer-frame" fill="none" aria-hidden="true">
+        {[printerA, printerB, printerE].map((point, index) => <line key={`post${index}`} x1={point[0]} y1={point[1]} x2={up(point)[0]} y2={up(point)[1]} className="ai-guide-grid" />)}
+        <polygon points={points(printerTop)} className="ai-guide-grid" />
+        <line x1={printerMidLeft[0]} y1={printerMidLeft[1]} x2={printerMidRight[0]} y2={printerMidRight[1]} className="ai-guide-grid" />
+      </g>}
+      <g className={printer ? "ai-printer-build-plate" : undefined}>
+        {printer ? <>
+          <polygon points={points([printerE, printerC, [printerC[0], printerC[1] + 7], [printerE[0], printerE[1] + 7]])} className="ai-guide-face" />
+          <polygon points={points([printerC, printerB, [printerB[0], printerB[1] + 7], [printerC[0], printerC[1] + 7]])} className="ai-guide-side" />
+          <polygon points={points([printerA, printerB, printerC, printerE])} className="ai-guide-top" />
+          {printerGrid.map((line, index) => <line key={`printer-grid-${index}`} x1={line[0][0]} y1={line[0][1]} x2={line[1][0]} y2={line[1][1]} className="ai-guide-grid" />)}
+          {marginW + marginD > 0 && <polygon points={points(bedInset)} fill="none" stroke="currentColor" strokeDasharray="4 3" className="ai-guide-grid" />}
+        </> : <>
+          <polygon points={points([e, c, down(c), down(e)])} className="ai-guide-face" />
+          <polygon points={points([c, b, down(b), down(c)])} className="ai-guide-side" />
+          <polygon points={points([a, b, c, e])} className="ai-guide-top" />
+          {(kind === "bin" || drawer) && <polygon points={points([a, b, c, e].map(p => p.map((value, axis) => center[axis] + (value - center[axis]) * .84)))} className="ai-guide-opening" />}
+          {grid && Array.from({ length: columns - 1 }, (_, i) => <line key={`c${i}`} x1={a[0] + w * (i + 1) / columns} y1={a[1] + w / 2 * (i + 1) / columns} x2={e[0] + w * (i + 1) / columns} y2={e[1] + w / 2 * (i + 1) / columns} className="ai-guide-grid" />)}
+          {grid && Array.from({ length: rows - 1 }, (_, i) => <line key={`r${i}`} x1={a[0] - d * (i + 1) / rows} y1={a[1] + d / 2 * (i + 1) / rows} x2={b[0] - d * (i + 1) / rows} y2={b[1] + d / 2 * (i + 1) / rows} className="ai-guide-grid" />)}
+        </>}
       </g>
+      {printer && <g className="ai-printer-head" aria-hidden="true">
+        <rect x={printerCenter[0] - 13} y={printerMidLeft[1] - 1} width="26" height="20" rx="2" fill="var(--panel)" stroke="currentColor" strokeWidth="2" />
+        <path d={`M${printerCenter[0] - 4} ${printerMidLeft[1] + 19}h8l-4 8z`} fill="var(--accent-soft)" stroke="currentColor" strokeWidth="1.5" />
+      </g>}
       <g className="ai-guide-labels">
         <text x="150" y="290" textAnchor="middle">{widthText}</text>
         <text x="365" y="290" textAnchor="middle">{depthText}</text>

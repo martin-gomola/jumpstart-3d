@@ -46,7 +46,9 @@ export async function arSnapshot(app) {
   finally { disposeArScene(scene); }
 }
 export function shareBase(value) {
-  const url = new URL(value);
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('Enter a phone-accessible HTTPS origin, such as https://cad.example.com.');
+  const message = 'Enter a phone-accessible HTTPS address, such as https://cad.example.com.';
+  let url;
+  try { url = new URL(value); } catch { throw new Error(message); }
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error(message);
   return url.origin;
 }

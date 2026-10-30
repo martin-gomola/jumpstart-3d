@@ -20,6 +20,11 @@ export const AI_STATUS_CSS = `
 .modeswitch .ai-status[aria-expanded="true"] { background: var(--block-ink); color: var(--block); }
 :root .modeswitch:has(.ai-status[aria-expanded="true"]) button[aria-pressed="true"] { background: transparent; color: var(--ai-status-muted); }
 :root[data-ui="contrast"] .modeswitch .ai-status[aria-expanded="true"] { background: var(--accent); color: var(--block); }
+@media (max-width: 40rem) {
+  .topbar .modeswitch { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; padding-inline-end: 0; }
+  .modeswitch .ai-status { position: sticky; inset-inline-end: 0; background: inherit; }
+  .modeswitch .ai-status:focus-visible { outline-offset: calc(-1 * var(--ai-status-stroke)); }
+}
 .ai-status-tooltip { display: none; box-sizing: border-box; position: fixed; inset-block-start: calc(var(--ai-status-anchor-bottom, 0rem) + var(--ai-status-tooltipOffset)); inset-inline-start: max(var(--ai-status-tooltipOffset), calc(min(var(--ai-status-anchor-right, 100vw), 100vw) - min(var(--ai-status-tooltipWidth), calc(100vw - var(--ai-status-target))))); width: var(--ai-status-tooltipWidth); max-width: min(var(--ai-status-tooltipWidth), calc(100vw - var(--ai-status-target))); padding: var(--ai-status-tooltipPadding); border-radius: var(--ai-status-radius); background: var(--ai-status-surface); color: var(--ai-status-ink); white-space: normal; z-index: 100; pointer-events: auto; }
 .ai-status:not([data-tooltip-dismissed]):hover .ai-status-tooltip, .ai-status:not([data-tooltip-dismissed]):focus .ai-status-tooltip { display: block; }
 .ai-status[data-setup-open="true"]:not([data-tooltip-dismissed]):hover .ai-status-tooltip, .ai-status[data-setup-open="true"]:not([data-tooltip-dismissed]):focus .ai-status-tooltip { display: none; }

@@ -20,7 +20,7 @@ test('AR dialog exports a model snapshot and presents its QR share link', async 
   const dialog = page.getByRole('dialog', { name: 'View in AR', exact: true });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Create QR code' }).click();
-  await expect(dialog.getByRole('status')).toContainText('Invalid URL');
+  await expect(dialog.getByRole('status')).toContainText('Enter a phone-accessible HTTPS address');
   await page.locator('#ar-origin').fill('https://cad.example.com');
   await dialog.getByRole('button', { name: 'Create QR code' }).click();
   await expect(dialog.getByRole('link', { name: 'Open AR share' })).toHaveAttribute('href', 'https://cad.example.com/ar/' + 'a'.repeat(48));

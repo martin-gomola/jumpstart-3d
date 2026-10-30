@@ -16,7 +16,7 @@ async function share(request) {
   return origin + '/ar/' + (await response.json()).id;
 }
 
-test('iPhone share page has an obvious native AR link and adapts without JavaScript', async ({ browser, request, browserName }) => {
+test('iPhone share page has an obvious native AR link and adapts without JavaScript', async ({ browser, request }) => {
   const url = await share(request);
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 760 } });
   const page = await context.newPage(); await page.goto(url);
@@ -26,7 +26,7 @@ test('iPhone share page has an obvious native AR link and adapts without JavaScr
   expect((await primary.boundingBox()).height).toBeGreaterThanOrEqual(44);
   await expect(primary).toBeInViewport(); await expect(page.locator('script')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Download 3D model' })).toHaveAttribute('href', /model\.usdz$/);
-  await page.keyboard.press(browserName === 'webkit' ? 'Alt+Tab' : 'Tab'); await expect(primary).toBeFocused();
+  await page.keyboard.press('Tab'); await expect(primary).toBeFocused();
   expect(await primary.evaluate(el => getComputedStyle(el).outlineStyle)).not.toBe('none');
   await page.screenshot({ path: '/tmp/jumpstart-ar-share-keyboard.png', fullPage: true });
   await primary.evaluate(el => el.blur());

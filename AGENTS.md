@@ -43,6 +43,14 @@ Build with `npm run build`. Run `npm test` when a change affects code contracts,
 geometry, editor behavior, browser integration, or MCP transactions. Report the
 commands actually run and any skipped checks.
 
+JumpStart is a desktop browser app. Browser tests run in the configured
+Chromium project only. Do not install or run WebKit or Firefox, and do not add
+Playwright device profiles such as iPhone or iPad emulation; every page boots
+the WebGL kernel in software, and emulated high-density screens multiply that
+cost. Cover narrow layouts with `page.setViewportSize` inside an existing
+Chromium test. Native iPhone behavior, such as AR Quick Look, needs a physical
+device and is reported as unverified rather than emulated.
+
 New and reworked product UI uses React (`*.jsx`, pinned builds in
 `third_party/react*`). Keep draft logic in plain modules without DOM access.
 React owns its mount subtree; do not mutate its children from DOM code. Keep

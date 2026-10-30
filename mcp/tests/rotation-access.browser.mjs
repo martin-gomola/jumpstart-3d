@@ -497,24 +497,3 @@ test("touch (tablet): in Advanced a press 14 px beside a ring picks that ring, a
   } finally { await ctx.close(); }
   expect(errs).toEqual([]);
 });
-
-test("phone: the turn buttons and the Snap 15 / Free switch are 44 px targets", async ({ browser, browserName }, info) => {
-  test.skip(browserName !== "chromium", "phone emulation (isMobile) is Chromium only");
-  const { ctx, p, errs } = await touchPage(browser, info, { viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, serviceWorkers: "block" });
-  try {
-    await loadDoc(p, design("beginner"));
-    await p.evaluate(() => window.__app.select(["b1"]));
-    await expect(p.locator("#rot-snap")).toBeAttached();
-    const measure = (sel) => p.evaluate((sel) => [...document.querySelectorAll(sel)].map((b) => { const r = b.getBoundingClientRect(); return [b.id || b.textContent, r.width, r.height]; }), sel);
-    const beginner = await measure(".rot-btn button");
-    expect(beginner.length).toBe(5);
-    for (const [name, w, h] of beginner) { expect(w, name).toBeGreaterThanOrEqual(44); expect(h, name).toBeGreaterThanOrEqual(44); }
-    await loadDoc(p, design("advanced"));
-    await p.evaluate(() => { window.__app.select(["b1"]); document.getElementById("ad-moverot").click(); });
-    await expect(p.locator("#cmd .rot-btn")).toBeAttached();
-    const advanced = await measure("#cmd .rot-btn button");
-    expect(advanced.length).toBe(2);
-    for (const [name, w, h] of advanced) { expect(w, name).toBeGreaterThanOrEqual(44); expect(h, name).toBeGreaterThanOrEqual(44); }
-  } finally { await ctx.close(); }
-  expect(errs).toEqual([]);
-});

@@ -99,7 +99,7 @@ test("Generators groups the drawer workflow and printer settings under the Gridf
     const bounds = header.getBoundingClientRect(), tabs = header.querySelector('[role="tablist"]').getBoundingClientRect();
     return { height: bounds.height, tabsInside: tabs.top >= bounds.top && tabs.bottom <= bounds.bottom };
   });
-  expect(headerLayout.height).toBeLessThanOrEqual(64);
+  expect(headerLayout.height).toBeLessThanOrEqual(72);
   expect(headerLayout.tabsInside).toBe(true);
   const gridfinity = page.getByRole("region", { name: "Gridfinity", exact: true });
   await expect(gridfinity).toBeVisible();

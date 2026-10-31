@@ -8,6 +8,7 @@ import { initSketch3D } from "./sketch3d.js";
 import { initLathe } from "./lathe.js";
 import { initCarve } from "./carve.js";
 import { PRODUCT_NAME, STUDIO_VERSION, EDITOR_VERSION, VERSION_LABEL } from "./product-info.js";
+import { initStainedGlass } from "./stainedglass.js";
 import { initBricks } from "./bricks.js";
 import { initVoxel } from "./voxel.js";
 import { initArch } from "./arch.js";
@@ -16,6 +17,8 @@ import { initTutorials } from "./tutorials.js";
 import * as THREE from "three";
 import { Viewport, ViewCube } from "./viewport.js";
 import { KernelClient } from "./kernelClient.js";
+import "./fonts_more.js";
+import { extraFonts } from "./fonts.js";
 import { SceneSync } from "./scene.js";
 import { Sketcher } from "./sketcher.js";
 import { store, findBody } from "./store.js";
@@ -30,6 +33,7 @@ import { initBeginner } from "./beginner.js";
 import { initAdvanced } from "./advanced.js";
 import { initProjects } from "./projects.js";
 import { initFlexiGen } from "./flexigen.js";
+import { initFloorPlan } from "./floorplan.js";
 import { initMeshStep } from "./meshstep.js";
 import { initCosForge } from "./cosforge.js";
 import { initChisel } from "./chisel.js";
@@ -134,6 +138,7 @@ function boot() {
     },
   }));
   kernel.onBusy = () => app.status();
+  for (const [k, b] of extraFonts()) kernel.addAsset("font:" + k, "font", b);
   kernel.start();
   const scene = (app.scene = new SceneSync(vp, kernel));
   vp.zoomTargets = () => scene.meshes();
@@ -165,6 +170,7 @@ function boot() {
 app.lathe = initLathe(app);
 app.carve = initCarve(app);
 { const sv = document.getElementById("sp-ver"); if (sv) sv.textContent = VERSION_LABEL; }
+app.stainedGlass = initStainedGlass(app);
 app.bricks = initBricks(app);
 app.voxel = initVoxel(app);
   // Save makes a new version (v1, v2...); the number shows next to the name
@@ -172,6 +178,7 @@ app.voxel = initVoxel(app);
   $("btn-save").onclick = () => app.projects.saveVersion();
   $("btn-tutorials").onclick = () => app.tutorials.open();
   app.flexigen = initFlexiGen(app);
+  app.floorplan = initFloorPlan(app);
   app.meshstep = initMeshStep(app);
   app.cosforge = initCosForge(app);
   app.chisel = initChisel(app);
@@ -379,16 +386,56 @@ app.switchMode = function (mode) {
   if (mode !== "chisel" && mode !== "arch") app.toast(mode === "advanced" ? "Advanced mode: sketches, features and the timeline" : "Beginner mode: drag shapes, group and cut with holes");
 };
 
+// Slice (like Fusion's sketch palette option): when a sketch plane runs through a body, the part
+// of the bodies between the camera and the plane is cut away (view only), so the sketch can be
+// seen and drawn on. It stays on through an Extrude started from the sketch.
+function planeCutsBodies(plane) {
+  const P = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(...plane.n).normalize(), new THREE.Vector3(...plane.o));
+  const v = new THREE.Vector3();
+  for (const view of app.scene.views.values()) {
+    if (!view.mesh || !view.body || view.body.hidden || view.group.visible === false) continue;
+    const pos = view.mesh.geometry.attributes.position;
+    if (!pos) continue;
+    view.mesh.updateMatrixWorld();
+    let above = false, below = false;
+    const step = Math.max(1, Math.floor(pos.count / 20000));
+    for (let i = 0; i < pos.count; i += step) {
+      const d = P.distanceToPoint(v.fromBufferAttribute(pos, i).applyMatrix4(view.mesh.matrixWorld));
+      if (d > 0.05) above = true; else if (d < -0.05) below = true;
+      if (above && below) return true;
+    }
+  }
+  return false;
+}
+app.sketchSlice = { on: false, auto: false, plane: null };
+app.setSketchSlice = function (on) {
+  const sk = app.sketcher.sketch;
+  const sec = app.section;
+  if (!sec) return;
+  if (on && sk) {
+    const only = new Map();
+    for (const view of app.scene.views.values()) if (view.body) only.set(view.body.id, view.dataVer);
+    app.sketchSlice = { on: true, plane: sk.plane };
+    sec.set({ ref: { n: sk.plane.n, o: sk.plane.o }, d: -0.05, flip: false, hatch: false, cap: false, only, slice: true }); // just behind the plane, so the sketch draws over the cut
+  } else {
+    if (sec.info && sec.info.slice) sec.clear();
+    app.sketchSlice = { on: false, plane: null };
+  }
+};
 app.enterSketch = function (id) {
   if (app.command) app.command.cancel();
   app.select([]);
   app.sketcher.enter(id);
   app.scene.state.hideSketch = id;
   app.scene.syncSketches(store.view);
+  const sk = app.sketcher.sketch;
+  // turn Slice on by itself when the plane passes through a body (and no section is in use)
+  if (sk && !(app.section && app.section.on && !app.section.info.slice) && planeCutsBodies(sk.plane)) app.setSketchSlice(true);
   app.refreshUI("sketch");
 };
-app.exitSketch = function () {
+app.exitSketch = function (keepSlice = false) {
   if (!app.sketcher.active) return;
+  if (!keepSlice) app.setSketchSlice(false);
   app.sketcher.exit();
   app.scene.state.hideSketch = null;
   app.scene.syncSketches(store.view);
@@ -627,6 +674,11 @@ app.showAbout = function () {
         ["Maker workspace:", "drawer layouts, Gridfinity parts, measured pockets and printer-fit settings."],
         ["AR sharing:", "temporary QR links open models at actual size with iPhone AR Quick Look."],
       ]),
+      sec("Editor core 2.8.1.3 changes", [
+        ["3D Print Sim plate layout:", "move, rotate, scale, duplicate and arrange objects on the plate. These placements affect the simulation and G-code, not the design bodies."],
+        ["Floor Planner:", "ten guided tutorials, quick save, My plans, file import/export and recovery of the last plan."],
+        ["Design tools:", "Quick Hinge, expanded fasteners, 42 additional text fonts, and Architect window and landscape updates."],
+      ]),
       sec("Editor core 2.7.7 changes", [
         ["Shell for any shape:", "Shell and Hollow now work on complex shapes: shapes with holes through them, branches and bosses, joined shapes, free-form and organic bodies, tori, and curved openings (open a round side, not just a flat end). When the exact offset can't make the wall, a new distance-field method builds it from the distance to the kept faces, so it works on any closed shape; flat and round shapes keep their own surface exact. It takes a few seconds."],
         ["Shell options:", "pick opening faces on several shapes at once (each gets its own shell); Hollow can add 1, 2 or 4 drain holes through the bottom (for resin and powder printing) with the size you set; and Method (Auto, Exact offset, Slices, or Any shape with Normal or Fine detail) lets you choose how the wall is made. Auto tries them in turn."],
@@ -810,8 +862,9 @@ app.quickExtrude = function (opts = {}) {
   const sk = app.sketcher.active;
   if (sk && app.sketcher.state) app.sketcher.done();
   if (app.command) app.command.cancel();
-  if (sk) app.exitSketch();
+  if (sk) app.exitSketch(true); // keep the Slice while extruding (it ends with the command)
   app.advanced.extrude(sk ? { sketch: sk, ...opts } : {});
+  if (app.sketchSlice.on && !app.command) app.setSketchSlice(false);
 };
 // Beginner: as soon as a sketch has a new closed shape, Extrude opens on it (already 10 mm up,
 // with the big arrow); Cancel goes back to the sketch to keep drawing

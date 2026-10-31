@@ -6,7 +6,7 @@ import { showLen, parseLen } from "./units.js";
 import { ICON, shapeTile } from "./icons.js";
 import { LIB, textureThumb } from "./texture.js";
 import { FACEPAT } from "./facepat.js";
-import { FONT_NAMES } from "./fonts.js";
+import { FONT_NAMES, fontSelect } from "./fonts.js";
 import {
   M4, arr, makePrimBody, frameOnFace, deleteBodies, duplicateBodies, groupBodies, ungroupBody, transformBodies, setBodyProps, PRIM_DEFAULTS, nextName,
 } from "./ops.js";
@@ -167,9 +167,6 @@ export function initBeginner(app) {
     bar.append(el("span", { class: "sep" }));
     btn("sketch", "Sketch", "Draw a 2D sketch on the workplane or a flat face", () => app.advanced.createSketch(), "bb-sketch", true);
     btn("spline", "3D Sketch", "Draw lines in 3D on a shape, a virtual sphere or cube, or in the air", () => app.sketch3d.open(), "bb-sketch3d", true);
-    btn("cosforge", "CosForge", "Design a cosplay costume on a body built from your measurements, then cut it into printable pieces (opens in its own window)", () => app.cosforge.open(), "bb-cosforge", true);
-    btn("chipcarve", "Chip Carve", "Chip carve a board or a shape with knives, like real wood carving (pen pressure sets the depth)", () => app.carve.open(), "bb-chipcarve", true);
-    btn("lathe", "Lathe", "Turn a shape or a wood blank on a virtual lathe, with chisels, then hollow it out", () => app.lathe.open(), "bb-lathe", true);
     btn("extrude", "Extrude", "Extrude a sketch into a shape (E)", () => app.quickExtrude(), "bb-extrude", true);
     btn("import", "Import", "Import a 3D model (STL, 3MF or STEP), an SVG or DXF drawing (to extrude), or a picture to trace", () => app.insertFile("any"), "bb-import", true);
     bar.append(el("span", { class: "sep" }));
@@ -177,6 +174,7 @@ export function initBeginner(app) {
     btn("ungroup", "Ungroup", "Ungroup (Ctrl+Shift+G)", () => ungroup(), "bb-ungroup", true);
     btn("align", "Align", "Align (A)", () => app.advanced.align(), "bb-align", true);
     btn("pattern", "Pattern", "Make rows or circles of copies", () => app.advanced.pattern(), "bb-pattern", true);
+    btn("hinge", "Hinge", "Quick hinges: print-in-place, pin or living hinges, ready to put on your parts", () => app.advanced.hinge(), "bb-hinge", true);
     btn("mirror", "Mirror", "Mirror (M)", (e) => mirrorPopover(e.currentTarget), "bb-mirror", true);
     btn("drop", "Drop", "Drop to workplane (D)", () => drop(), "bb-drop", true);
     btn("texture", "Texture", "Add a surface texture (T)", () => app.advanced.texture(), "bb-texture", true);
@@ -193,6 +191,11 @@ export function initBeginner(app) {
     bar.append(el("span", { class: "sep" }));
     const mb = btn("select", "Multi-select", "Tap shapes to add them to the selection (same as Shift+click)", () => { multi = !multi; mb.setAttribute("aria-pressed", multi); }, "bb-multi", true);
     mb.setAttribute("aria-pressed", multi);
+    bar.append(el("span", { class: "sep" }));
+    btn("cosforge", "CosForge", "Design a cosplay costume on a body built from your measurements, then cut it into printable pieces (opens in its own window)", () => app.cosforge.open(), "bb-cosforge", true);
+    btn("chipcarve", "Chip Carve", "Chip carve a board or a shape with knives, like real wood carving (pen pressure sets the depth)", () => app.carve.open(), "bb-chipcarve", true);
+    btn("lathe", "Lathe", "Turn a shape or a wood blank on a virtual lathe, with chisels, then hollow it out", () => app.lathe.open(), "bb-lathe", true);
+    btn("stainedglass", "Stained Glass", "Turn a shape (or a lamp shade) into stained glass with a lead or copper frame, then paint the glass (opens in its own window)", () => app.stainedGlass.open(), "bb-sglass", true);
     bar.append(el("button", { class: "ibtn panel-toggle", onclick: () => $("shapes-tab").click() }, el("span", { class: "lbl" }, "Objects")));
     ribbon.append(bar);
     updateRibbon();
@@ -1141,7 +1144,7 @@ export function initBeginner(app) {
       txt.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") txt.blur(); });
       txt.addEventListener("change", () => { if (txt.value.trim()) updatePrim(b.id, { text: txt.value }, "Edit text"); });
       body.append(el("div", { class: "subhead" }, "Text"), txt);
-      const fs = el("select", { class: "num", id: "insp-font", "aria-label": "Font" }, ...Object.entries(FONT_NAMES).map(([v, l]) => el("option", { value: v, selected: v === (p.font || "sans") }, l)));
+      const fs = fontSelect("insp-font", p.font || "sans");
       fs.onchange = () => updatePrim(b.id, { font: fs.value }, "Font");
       body.append(fs);
       const r3 = el("div", { class: "row3" });

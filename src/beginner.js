@@ -6,7 +6,7 @@ import { showLen, parseLen } from "./units.js";
 import { ICON, shapeTile } from "./icons.js";
 import { LIB, textureThumb } from "./texture.js";
 import { FACEPAT } from "./facepat.js";
-import { FONT_NAMES } from "./fonts.js";
+import { fontSelect } from "./fonts.js";
 import { dragAngle, turnAbout, arcPoints, nearestArc, snapSwitch } from "./rotationui.js"; // jumpstart-3d: rotation access
 import {
   M4, arr, makePrimBody, frameOnFace, deleteBodies, duplicateBodies, groupBodies, ungroupBody, transformBodies, setBodyProps, PRIM_DEFAULTS, nextName,
@@ -1115,7 +1115,7 @@ export function initBeginner(app) {
       txt.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") txt.blur(); });
       txt.addEventListener("change", () => { if (txt.value.trim()) updatePrim(b.id, { text: txt.value }, "Edit text"); });
       body.append(el("div", { class: "subhead" }, "Text"), txt);
-      const fs = el("tool-choice", { class: "num", id: "insp-font", "aria-label": "Font" }, ...Object.entries(FONT_NAMES).map(([v, l]) => el("option", { value: v, selected: v === (p.font || "sans") }, l)));
+      const fs = fontSelect("insp-font", p.font || "sans");
       fs.onchange = () => updatePrim(b.id, { font: fs.value }, "Font");
       body.append(fs);
       const r3 = el("div", { class: "row3" });

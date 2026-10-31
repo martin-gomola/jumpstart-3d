@@ -1,3 +1,4 @@
 {
-  "app/src/camworker.bundle.txt": "our build compiles src/camworker.js; the archive's prebuilt worker text is not shipped"
+  "app/src/camworker.bundle.txt": "our build compiles src/camworker.js; the archive's prebuilt worker text is not shipped",
+  "app/src/fasteners.js": "the author module is adopted as src/fastener-parts.js to preserve our existing src/fasteners.js implementation"
 }

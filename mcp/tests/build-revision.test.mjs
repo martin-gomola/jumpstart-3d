@@ -20,7 +20,7 @@ test('Studio release is separate from the editor core and agrees with the npm lo
   const lock = JSON.parse(await readFile(new URL('../../package-lock.json', import.meta.url), 'utf8'));
   assert.equal(PRODUCT_NAME, 'JumpStart 3D Studio');
   assert.match(STUDIO_VERSION, /^\d+\.\d+\.\d+$/);
-  assert.equal(EDITOR_VERSION, '2.7.7');
+  assert.equal(EDITOR_VERSION, '2.8.1.3');
   assert.notEqual(STUDIO_VERSION, EDITOR_VERSION);
   assert.equal(lock.version, STUDIO_VERSION); assert.equal(lock.packages[''].version, STUDIO_VERSION);
 });

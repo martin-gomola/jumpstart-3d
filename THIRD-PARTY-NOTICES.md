@@ -9,6 +9,13 @@ JumpStart 3D includes the open-source software and fonts below. Their full licen
 - License: MIT
 - Project: https://github.com/mrdoob/three.js
 
+## three.js (r128)
+
+- Used for: The isolated Floor Planner page, generated into `src/floorplan.html` by `tools/make_floorplan.py`.
+- Copyright © 2010-2020 three.js authors
+- License: MIT (`LICENSES/MIT-three.js-r128.txt`)
+- Project: https://github.com/mrdoob/three.js/tree/r128
+
 ## replicad (1.1.0)
 
 - Used for: The CAD layer between the app and the geometry engine (sketches, extrude, fillets, STEP).
@@ -65,6 +72,13 @@ JumpStart 3D includes the open-source software and fonts below. Their full licen
 - Copyright © 2017 IBM Corp.
 - License: SIL Open Font License 1.1
 - Project: https://github.com/IBM/plex
+
+## Additional Text tool fonts
+
+- Used for: 42 additional Text tool fonts, embedded as subsets in `src/fonts_more.js`.
+- Copyright and license details: `LICENSES/fonts-more.txt`.
+- Licenses: SIL Open Font License 1.1 and Apache License 2.0 (`LICENSES/OFL-1.1-fonts.txt`, `LICENSES/Apache-2.0-fonts.txt`).
+- Source: Google Fonts, https://fonts.google.com/
 
 ## Flatqueue (3.1.0)
 

@@ -8,13 +8,21 @@ repositories is merged; changes are adapted file by file.
 - Author: [classyapps2026/jumpstart3d](https://github.com/classyapps2026/jumpstart3d), MIT.
   Keep the author's notice in `LICENSE` and `NOTICE.md`.
 - Releases now arrive as zip archives. `upstream/editor/` is the untouched
-  archive `src/` and `tools/` are based on (currently 2.7.7); file manifests are
+  archive `src/` and `tools/` are based on (currently 2.8.1.3); file manifests are
   in `test/fixtures/upstream-v*.json`. Update with the
   `.agents/skills/update-editor-source` skill.
 - Local changes to keep through merges: the author update checker and the
   prebuilt `camworker.bundle.txt` stay out; `parseSVG` (`importers.js`)
   sanitizes imported SVGs; `esc` (`tutorial_anims.js`) escapes quotes; the
   OCCT loader's virtual `HOME` is `/`.
+
+## Editor 2.8.1.3 archive update
+
+- Archive: `sources/JumpStart-3D-v2.8.1.3-full-source` (author full-source archive).
+- Manifest: [`test/fixtures/upstream-v2813.json`](test/fixtures/upstream-v2813.json), SHA-256 `612edfbd74419b213767270a4b02f97b099748367ee156dc6a4fcc8105f12861`.
+- Adopted the 2.8.1.3 editor changes, including print-plate arrangement and G-code timing, Floor Planner tutorials and saving, the expanded font set, Quick Hinge, and Architect changes. The Floor Planner build inputs and bundled three.js r128 source are included with their notices.
+- Kept the local React Beginner ribbon, Studio About/version label, MCP worker operations, and local geometry and persistence integrations. Floor Planner mutations are blocked from MCP while its embedded view or separate tab is open.
+- The archive's `app/src/fasteners.js` collided with the existing local parts tool; the archive implementation is adapted as `src/fastener-parts.js`. The author's update checker and prebuilt CAM worker remain excluded; the worker is built from `src/camworker.js`.
 
 ## Other sources
 

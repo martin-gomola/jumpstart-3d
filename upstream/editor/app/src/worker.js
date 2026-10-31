@@ -1,7 +1,7 @@
 // Web Worker hosting the OpenCascade kernel.
 import opencascade from "replicad-opencascadejs";
 import { gunzip } from "./inflate.js";
-import { initKernel, buildBodies, exportStep, clearCache, setAsset } from "./kernel.js";
+import { initKernel, buildBodies, exportStep, clearCache, setAsset, fontsReady } from "./kernel.js";
 
 let ready = null;
 
@@ -55,6 +55,7 @@ self.onmessage = async (ev) => {
       self.postMessage({ type: "ready" });
     } else if (msg.type === "build") {
       await ready;
+      await fontsReady();
       const res = buildBodies(msg.bodies, msg.quality || 1);
       const transfer = [];
       for (const r of res) if (r.ok) {

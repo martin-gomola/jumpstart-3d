@@ -82,9 +82,9 @@ export class KernelClient {
   pump() {
     if (!this.ready || this.inflight || !this.queue.size) return;
     // send small batches so the screen updates progressively
-    // heavy parts (imported meshes, face patterns, 3D Sketch tubes along free curves, very large feature trees) go
-    // one at a time, each with its own time limit, so a few of them never add up past the limit together
-    const heavy = (it) => { const j = JSON.stringify(it.node); return j.length > 40000 || j.includes('"asset"') || j.includes('"t":"facepat"') || j.includes('"logs":true') || (j.includes('"pipe"') && (j.includes('"bez"') || j.includes('"bsp"'))); };
+    // Imported meshes, face patterns, 3D Sketch tubes, large feature trees and large groups
+    // run alone so they cannot push several expensive requests past the request time limit.
+    const heavy = (it) => { const node = it.node; if (node && node.t === "group" && (node.children || []).length > 40) return true; const j = JSON.stringify(node); return j.length > 40000 || j.includes('"asset"') || j.includes('"t":"facepat"') || j.includes('"logs":true') || (j.includes('"pipe"') && (j.includes('"bez"') || j.includes('"bsp"'))); };
     const batch = [];
     for (const [k, it] of this.queue) {
       if (batch.length && (heavy(it) || heavy(batch[0]))) break;
